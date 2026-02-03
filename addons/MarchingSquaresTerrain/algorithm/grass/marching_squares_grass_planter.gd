@@ -1,3 +1,4 @@
+@icon("res://addons/MarchingSquaresTerrain/editor/icons/3D_planters_icon.png")
 @tool
 extends MultiMeshInstance3D
 class_name MarchingSquaresGrassPlanter

@@ -14,6 +14,7 @@ enum SettingType {
 	SLIDER,
 	OPTION,
 	TEXT,
+	POPULATE_BUTTON,
 	CHUNK,
 	TERRAIN,
 	PRESET,
@@ -88,6 +89,8 @@ var _terrain_settings_scroll_positions: Dictionary = {}
 
 var _heightmap_tool_selected_tab : int = 0
 var _heightmap_tool_scroll_positions : Dictionary = {}
+
+var selected_planter : MarchingSquaresPopulator
 
 var hbox_container
 
@@ -227,6 +230,7 @@ func show_tool_attributes(tool_index: int) -> void:
 		"checkbox": SettingType.CHECKBOX,
 		"option": SettingType.OPTION,
 		"text": SettingType.TEXT,
+		"populate_button": SettingType.POPULATE_BUTTON,
 		"chunk": SettingType.CHUNK,
 		"terrain": SettingType.TERRAIN,
 		"preset": SettingType.PRESET,
@@ -269,6 +273,10 @@ func show_tool_attributes(tool_index: int) -> void:
 		new_attributes.append(attribute_list.terrain_settings)
 	if tool_attributes.heightmap:
 		new_attributes.append(attribute_list.heightmap)
+	if tool_attributes.planter:
+		new_attributes.append(attribute_list.planter)
+	if tool_attributes.populate_terrain:
+		new_attributes.append(attribute_list.populate_terrain)
 
 	# Rebuild material names from the preset or fallback to defaults
 	var terrain_names : Array = []
@@ -280,7 +288,7 @@ func show_tool_attributes(tool_index: int) -> void:
 	for slot_idx in _get_vertex_paint_material_slots():
 		material_options.append(_get_vertex_paint_material_label(slot_idx, terrain_names))
 	attribute_list.material["options"] = material_options
-
+	
 	for attribute in new_attributes:
 		var setting_dict : Dictionary = attribute
 		if setting_dict.has("type") and setting_dict["type"] is String:
@@ -387,6 +395,10 @@ func add_setting(p_params: Dictionary) -> void:
 				for idx in range(mini(options.size(), material_slots.size())):
 					option_button.add_item(str(options[idx]))
 					option_button.set_item_metadata(option_button.item_count - 1, material_slots[idx])
+			elif setting_name == "planter":
+				for child in plugin.current_terrain_node.get_children():
+					if child is MarchingSquaresPopulator:
+						option_button.add_item(str(child.name))
 			else:
 				for option in options:
 					option_button.add_item(option)
@@ -409,6 +421,11 @@ func add_setting(p_params: Dictionary) -> void:
 					var slot_idx = option_button.get_item_metadata(index)
 					_on_setting_changed(setting_name, int(slot_idx))
 				)
+			elif setting_name == "planter":
+				option_button.item_selected.connect(func(planter):
+					option_button.item_selected.connect(func(index): _on_setting_changed(setting_name, index))
+					_on_populator_selected(option_button.get_item_text(planter))
+				)
 			else:
 				option_button.item_selected.connect(func(index): _on_setting_changed(setting_name, index))
 			option_button.set_custom_minimum_size(Vector2(65, 35))
@@ -429,6 +446,15 @@ func add_setting(p_params: Dictionary) -> void:
 			cont = CenterContainer.new()
 			cont.set_custom_minimum_size(Vector2(35, 35))
 			cont.add_child(line_edit, true)
+			hbox_container.add_child(cont, true)
+		SettingType.POPULATE_BUTTON:
+			var button = MarchingSquaresPopulateButton.new()
+			button.current_terrain_node = plugin.current_terrain_node
+			
+			cont = MarginContainer.new()
+			cont.add_theme_constant_override("margin_bottom", 2)
+			cont.set_custom_minimum_size(Vector2(65, 35))
+			cont.add_child(button, true)
 			hbox_container.add_child(cont, true)
 		SettingType.PRESET:
 			var preset_button := OptionButton.new()
@@ -1344,6 +1370,10 @@ func _get_setting_value(p_setting_name: String) -> Variant:
 			return plugin.current_quick_paint
 		"paint_walls":
 			return plugin.paint_walls_mode
+		"planter":
+			pass
+		"populate_terrain":
+			pass
 		"chunk_management":
 			pass
 		"terrain_settings":
@@ -1437,6 +1467,13 @@ func _apply_mode_to_all_chunks() -> void:
 		if child is MarchingSquaresTerrainChunk:
 			_change_chunk_mode(child, int(selected_chunk.merge_mode))
 			_change_chunk_grass_mode(child, int(selected_chunk.grass_mode))
+
+
+func _on_populator_selected(p_populator: String) -> void:
+	var terrain := plugin.current_terrain_node
+	var populator : MarchingSquaresPopulator = terrain.find_child(p_populator)
+	
+	selected_planter = populator
 
 
 func _on_chunk_mode_changed(m_mode: int) -> void:
