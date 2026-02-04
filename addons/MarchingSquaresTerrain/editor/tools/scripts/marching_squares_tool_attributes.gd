@@ -91,6 +91,7 @@ var _heightmap_tool_selected_tab : int = 0
 var _heightmap_tool_scroll_positions : Dictionary = {}
 
 var selected_planter : MarchingSquaresPopulator
+var selected_populator : MarchingSquaresPopulator
 
 var hbox_container
 
@@ -399,6 +400,8 @@ func add_setting(p_params: Dictionary) -> void:
 				for child in plugin.current_terrain_node.get_children():
 					if child is MarchingSquaresPopulator:
 						option_button.add_item(str(child.name))
+						if plugin.current_populator == null:
+							plugin.current_populator = child
 			else:
 				for option in options:
 					option_button.add_item(option)
@@ -1473,7 +1476,8 @@ func _on_populator_selected(p_populator: String) -> void:
 	var terrain := plugin.current_terrain_node
 	var populator : MarchingSquaresPopulator = terrain.find_child(p_populator)
 	
-	selected_planter = populator
+	selected_populator = populator
+	plugin.current_populator = populator
 
 
 func _on_chunk_mode_changed(m_mode: int) -> void:
@@ -1557,7 +1561,7 @@ func _make_vector_editor(type: String, value: Variant, setting_name: String) -> 
 	return hbox_cont
 
 
-func make_spinbox(val: float, step: float) -> SpinBox:
+func _make_spinbox(val: float, step: float) -> SpinBox:
 	var spin_box := SpinBox.new()
 	spin_box.set_step(step)
 	spin_box.set_value(float(val))

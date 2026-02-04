@@ -6,6 +6,7 @@ class_name MarchingSquaresUI
 @onready var TOOLBAR : Script = EngineWrapper.load_resource("uid://3d77dnetkeik") as Script
 @onready var TOOL_ATTRIBUTES : Script = EngineWrapper.load_resource("uid://buxevb44hutjm") as Script
 @onready var TEXTURE_SETTINGS : Script = EngineWrapper.load_resource("uid://blvx0jk6wxk5p") as Script
+@onready var POPULATOR_SETTINGS : Script = EngineWrapper.load_resource("uid://3d77dnetkeik") as Script
 
 #region texture setting property maps
 # Property names that map directly to terrain properties with same name
@@ -38,6 +39,7 @@ var plugin : MarchingSquaresTerrainPlugin
 var toolbar
 var tool_attributes
 var texture_settings
+var populator_settings
 var active_tool : int
 var visible : bool = false
 
@@ -70,20 +72,27 @@ func _deferred_enter_tree() -> void:
 	texture_settings.texture_setting_changed.connect(_on_texture_setting_changed)
 	texture_settings.plugin = plugin
 	texture_settings.hide()
-
+	
+	populator_settings = POPULATOR_SETTINGS.new()
+	populator_settings.plugin = plugin
+	populator_settings.hide()
+	
 	plugin.add_control_to_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_SIDE_LEFT, toolbar)
 	plugin.add_control_to_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_BOTTOM, tool_attributes)
 	plugin.add_control_to_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_SIDE_RIGHT, texture_settings)
+	plugin.add_control_to_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_SIDE_RIGHT, populator_settings)
 
 
 func _exit_tree() -> void:
 	plugin.remove_control_from_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_SIDE_LEFT, toolbar)
 	plugin.remove_control_from_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_BOTTOM, tool_attributes)
 	plugin.remove_control_from_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_SIDE_RIGHT, texture_settings)
-
+	plugin.remove_control_from_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_SIDE_RIGHT, populator_settings)
+	
 	toolbar.queue_free()
 	tool_attributes.queue_free()
 	texture_settings.queue_free()
+	populator_settings.queue_free()
 
 
 func set_visible(is_visible: bool) -> void:
@@ -94,6 +103,8 @@ func set_visible(is_visible: bool) -> void:
 		tool_attributes.set_visible(is_visible)
 	if texture_settings != null and is_instance_valid(texture_settings) and texture_settings.has_method("set_visible"):
 		texture_settings.set_visible(is_visible)
+	if populator_settings != null and is_instance_valid(populator_settings) and populator_settings.has_method("set_visible"):
+		populator_settings.set_visible(is_visible)
 
 	if is_visible:
 		await get_tree().create_timer(.01).timeout
@@ -117,8 +128,14 @@ func _on_tool_changed(tool_index: int) -> void:
 		texture_settings.show()
 		if not texture_settings.has_method("is_built_for_current_terrain") or not texture_settings.is_built_for_current_terrain():
 			texture_settings.add_texture_settings()
+	elif: tool_index == 6: # Populator:
+		tool_attributes.attribute_list = MarchingSquaresToolAttributesList.new()
+		populator_settings.show()
+		if not populator_settings.has_method("is_built_for_current_terrain") or not populator_settings.is_built_for_current_terrain():
+			populator_settings.add_populator_settings()
 	else:
 		texture_settings.hide()
+		populator_settings.hide()
 
 	if tool_index == 3: # Bridge tool:
 		plugin.falloff = false
