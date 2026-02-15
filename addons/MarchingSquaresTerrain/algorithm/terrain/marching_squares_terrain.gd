@@ -318,14 +318,18 @@ var flat_normals : bool = false:
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var noise_hmap : Noise
 
 # Grass settings
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var animation_fps : int = 0:
+@export_custom(PROPERTY_HINT_RANGE, "0, 30", PROPERTY_USAGE_STORAGE) var animation_fps : int = 0: # Also applies to flowers from the FlowerPlanter
 	set(value):
 		animation_fps = clamp(value, 0, 30)
 		var grass_mat := grass_mesh.material as ShaderMaterial
 		if grass_mat != null:
 			grass_mat.set_shader_parameter("fps", animation_fps)
 			grass_mat.set_shader_parameter("animate_active", true)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_subdivisions : int = 3:
+			for child in get_children():
+				if child is MarchingSquaresFlowerPlanter:
+					var flower_mat := child.multimesh.mesh.surface_get_material(0) as ShaderMaterial
+					flower_mat.set_shader_parameter("fps", clamp(value, 0, 30))
+@export_custom(PROPERTY_HINT_RANGE, "0, 4", PROPERTY_USAGE_STORAGE) var grass_subdivisions := 3:
 	set(value):
 		grass_subdivisions = value
 		if not is_inside_tree():
