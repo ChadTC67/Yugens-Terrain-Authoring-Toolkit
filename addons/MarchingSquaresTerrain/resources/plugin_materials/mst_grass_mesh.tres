@@ -3,7 +3,7 @@
 [ext_resource type="Shader" uid="uid://0fijvq5fdcep" path="res://addons/MarchingSquaresTerrain/resources/shaders/mst_grass.gdshader" id="1_jmvec"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_fa4te"]
-render_priority = 0
+render_priority = -1
 shader = ExtResource("1_jmvec")
 shader_parameter/has_prefab_colormap = false
 shader_parameter/use_floor_tex_array = false

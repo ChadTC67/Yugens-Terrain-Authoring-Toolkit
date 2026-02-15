@@ -1078,6 +1078,7 @@ func _enter_tree() -> void:
 	_deferred_enter_tree.call_deferred()
 
 
+
 func _initialize_data_directory() -> void:
 	var copy_from_dir := ""
 	if EngineWrapper.instance.is_editor() and not data_directory.is_empty():
@@ -1151,6 +1152,14 @@ func _deferred_enter_tree() -> void:
 			chunks[chunk.chunk_coords] = chunk
 			chunk.terrain_system = self
 			chunk.grass_planter = null
+		elif child is MarchingSquaresPopulator: # Prep the populators
+			child.terrain_system = self
+
+	for child in get_children():
+		if child is MarchingSquaresPopulator:
+			child.rebuild_cell_data()
+			if child is MarchingSquaresFlowerPlanter:
+				child.regenerate_flowers()
 
 	_warn_storage_expectations()
 
