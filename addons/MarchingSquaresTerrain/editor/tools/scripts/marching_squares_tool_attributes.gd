@@ -404,6 +404,13 @@ func add_setting(p_params: Dictionary) -> void:
 						option_button.add_item(str(child.name))
 						if plugin.current_populator == null:
 							plugin.current_populator = child
+				var index : int = -1
+				for child in plugin.current_terrain_node.get_children():
+					if child is MarchingSquaresPopulator:
+						index += 1
+						if child == selected_populator:
+							default_value = index
+							break
 			else:
 				for option in options:
 					option_button.add_item(option)

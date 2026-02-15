@@ -1348,6 +1348,18 @@ func remove_chunk(x: int, z: int, plugin):
 	plugin.ui.tool_attributes.show_tool_attributes(plugin.TerrainToolMode.CHUNK_MANAGEMENT)
 	plugin.gizmo_plugin.trigger_redraw(self)
 
+	if not Engine.is_editor_hint():
+		return
+	
+	for child in get_children():
+		if child is MarchingSquaresFlowerPlanter:
+			if child.planted_chunks.has(chunk_coords):
+				child.planted_chunks.erase(chunk_coords)
+				child.populated_chunks.erase(chunk)
+				child.cell_data.erase(chunk_coords)
+				child.setup(false)
+				child.regenerate_flowers()
+
 
 # Remove a chunk but still keep it in memory (so that undo can restore it)
 func remove_chunk_from_tree(x: int, z: int, plugin):
@@ -1368,6 +1380,18 @@ func remove_chunk_from_tree(x: int, z: int, plugin):
 				break
 	plugin.ui.tool_attributes.show_tool_attributes(plugin.TerrainToolMode.CHUNK_MANAGEMENT)
 	plugin.gizmo_plugin.trigger_redraw(self)
+
+	if not Engine.is_editor_hint():
+		return
+	
+	for child in get_children():
+		if child is MarchingSquaresFlowerPlanter:
+			if child.planted_chunks.has(chunk_coords):
+				child.planted_chunks.erase(chunk_coords)
+				child.populated_chunks.erase(chunk)
+				child.cell_data.erase(chunk_coords)
+				child.setup(false)
+				child.regenerate_flowers()
 
 
 func add_chunk(coords: Vector2i, chunk: MarchingSquaresTerrainChunk, plugin, regenerate_mesh: bool = true) -> void:
