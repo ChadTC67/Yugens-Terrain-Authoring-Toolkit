@@ -210,6 +210,9 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 		"paint_walls":
 			if p_value is bool:
 				plugin.paint_walls_mode = p_value
+		"remove_selection":
+			if p_value is bool:
+				plugin.remove_selection = p_value
 		"hm_heightmap_image":
 			plugin.hm_heightmap_image = p_value if p_value is Texture2D else null
 		"hm_grass_image":
@@ -314,7 +317,6 @@ func _apply_preset_to_terrain(preset: MarchingSquaresTexturePreset, terrain: Mar
 	terrain.tex4_has_grass = t.has_grass[2]
 	terrain.tex5_has_grass = t.has_grass[3]
 	terrain.tex6_has_grass = t.has_grass[4]
-
 
 
 func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> void:
