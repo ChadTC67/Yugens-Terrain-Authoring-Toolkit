@@ -1744,8 +1744,17 @@ func apply_composite_pattern_action(terrain: MarchingSquaresTerrain, patterns: D
 	# Regenerate mesh ONCE for each affected chunk (instead of 6 times!)
 	for chunk in affected_chunks.values():
 		chunk.regenerate_mesh()
+	
+	# Make affected populators regenerate
+	if patterns.has("height"):
+		for child in terrain.get_children():
+			if child is MarchingSquaresFlowerPlanter:
+				for chunk in affected_chunks.values():
+					if child.cell_data.has(chunk):
+						child.recalculate_cells_in_pattern(patterns.height)
+						child.regenerate_flowers()
+						break ## TODO: Make this cell based instead of chunk based
 
-#endregion
 
 #region heightmap related
 
@@ -1912,6 +1921,7 @@ func draw_populator_mask_pattern_action(terrain: MarchingSquaresTerrain, pattern
 		printerr("Couldn't identify a known populator type to draw to")
 		return
 
+#endregion
 
 func _get_flower_cell_data(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -> Dictionary:
 	if not chunk.cell_geometry or not chunk.cell_geometry.has(cell):
