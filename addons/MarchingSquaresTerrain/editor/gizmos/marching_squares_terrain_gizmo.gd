@@ -327,6 +327,29 @@ func _redraw():
 							pass
 						else:
 							add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
+	
+	# Show the current_populator's cell selection
+	if terrain_plugin.mode == terrain_plugin.TerrainToolMode.POPULATE and Input.is_key_pressed(KEY_CTRL):
+		var current_populator : MarchingSquaresPopulator = terrain_plugin.current_populator
+		if current_populator == null:
+			return
+		
+		for populator_chunk: MarchingSquaresTerrainChunk in current_populator.cell_data.keys():
+			var populator_chunk_coords := populator_chunk.chunk_coords
+			if not terrain_system.chunks.has(populator_chunk_coords):
+				continue
+			
+			var chunk_dict: Dictionary = current_populator.cell_data[populator_chunk]
+			for cell_coords: Vector2i in chunk_dict.keys():
+				var draw_x := (populator_chunk_coords.x * (terrain_system.dimensions.x - 1) + cell_coords.x) * terrain_system.cell_size.x
+				var draw_z := (populator_chunk_coords.y * (terrain_system.dimensions.z - 1) + cell_coords.y) * terrain_system.cell_size.y
+				var draw_y = populator_chunk.height_map[cell_coords.y][cell_coords.x]
+				
+				var sample: float = 1.0
+				
+				var draw_position = Vector3(draw_x, draw_y, draw_z)
+				var draw_transform = Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
+				add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
 
 
 func _create_brush_basis(normal: Vector3, brush_size: float) -> Basis:
