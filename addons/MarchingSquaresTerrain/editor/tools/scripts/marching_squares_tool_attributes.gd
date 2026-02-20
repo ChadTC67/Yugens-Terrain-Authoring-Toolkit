@@ -276,6 +276,8 @@ func show_tool_attributes(tool_index: int) -> void:
 		new_attributes.append(attribute_list.heightmap)
 	if tool_attributes.planter:
 		new_attributes.append(attribute_list.planter)
+	if tool_attributes.populator:
+		new_attributes.append(attribute_list.populator)
 	if tool_attributes.remove_selection:
 		new_attributes.append(attribute_list.remove_selection)
 	if tool_attributes.populate_terrain:
@@ -399,11 +401,16 @@ func add_setting(p_params: Dictionary) -> void:
 					option_button.add_item(str(options[idx]))
 					option_button.set_item_metadata(option_button.item_count - 1, material_slots[idx])
 			elif setting_name == "planter":
+				for option in options:
+					option_button.add_item(option)
+			if setting_name == "populator":
 				for child in plugin.current_terrain_node.get_children():
 					if child is MarchingSquaresPopulator:
 						option_button.add_item(str(child.name))
 						if plugin.current_populator == null:
 							plugin.current_populator = child
+			var default_value
+			if setting_name == "populator" and selected_populator:
 				var index : int = -1
 				for child in plugin.current_terrain_node.get_children():
 					if child is MarchingSquaresPopulator:
@@ -437,6 +444,19 @@ func add_setting(p_params: Dictionary) -> void:
 				option_button.item_selected.connect(func(planter):
 					option_button.item_selected.connect(func(index): _on_setting_changed(setting_name, index))
 					_on_populator_selected(option_button.get_item_text(planter))
+				)
+			elif setting_name == "populator":
+				option_button.item_selected.connect(func(populator):
+					var selected_populator = null
+					var index : int = -1
+					for child in plugin.current_terrain_node.get_children():
+						if child is MarchingSquaresPopulator:
+							index += 1
+							if index == populator:
+								selected_populator = child
+								break
+					plugin.current_populator = selected_populator
+					_on_setting_changed(setting_name, selected_populator)
 				)
 			else:
 				option_button.item_selected.connect(func(index): _on_setting_changed(setting_name, index))
@@ -1382,7 +1402,7 @@ func _get_setting_value(p_setting_name: String) -> Variant:
 			return plugin.current_quick_paint
 		"paint_walls":
 			return plugin.paint_walls_mode
-		"planter":
+		"populator":
 			pass
 		"remove_selection":
 			return plugin.remove_selection
@@ -1489,6 +1509,7 @@ func _on_populator_selected(p_populator: String) -> void:
 	
 	selected_populator = populator
 	plugin.current_populator = populator
+	plugin.ui.populator_settings.add_populator_settings()
 
 
 func _on_chunk_mode_changed(m_mode: int) -> void:
