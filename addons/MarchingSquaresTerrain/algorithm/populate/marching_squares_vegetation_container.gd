@@ -63,3 +63,7 @@ func store_mesh_data(mesh: Mesh, material: Material, local_transform: Transform3
 		"material": material,
 		"local_transform": local_transform
 	})
+
+
+func rebuild_cell_data() -> void:
+	pass

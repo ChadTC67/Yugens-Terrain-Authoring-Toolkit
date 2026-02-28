@@ -53,7 +53,3 @@ func setup(redo: bool = true):
 	multimesh.mesh.size = mesh_size
 	
 	cast_shadow = SHADOW_CASTING_SETTING_ON
-
-
-func rebuild_cell_data() -> void:
-	pass
