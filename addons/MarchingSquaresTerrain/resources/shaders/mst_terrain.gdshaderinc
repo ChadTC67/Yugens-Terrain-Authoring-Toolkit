@@ -5,49 +5,15 @@ uniform float wall_threshold : hint_range(0.0, 0.5) = 0.0; // Experimental featu
 group_uniforms;
 
 group_uniforms Visuals.Albedo;
-uniform vec4 tex_albedo_1 : source_color = vec4(0.392, 0.471, 0.318, 1.0);
-uniform vec4 tex_albedo_2 : source_color = vec4(0.322, 0.482, 0.384, 1.0);
-uniform vec4 tex_albedo_3 : source_color = vec4(0.373, 0.424, 0.294, 1.0);
-uniform vec4 tex_albedo_4 : source_color = vec4(0.392, 0.475, 0.255, 1.0);
-uniform vec4 tex_albedo_5 : source_color = vec4(0.29, 0.494, 0.365, 1.0);
-uniform vec4 tex_albedo_6 : source_color = vec4(0.443, 0.447, 0.365, 1.0);
+uniform vec3 albedo_array [256] : source_color;
 group_uniforms;
 
 group_uniforms Visuals.Vertex_Painting;
-uniform sampler2D vc_tex_rr : source_color, filter_nearest;
-uniform sampler2D vc_tex_rg : source_color, filter_nearest;
-uniform sampler2D vc_tex_rb : source_color, filter_nearest;
-uniform sampler2D vc_tex_ra : source_color, filter_nearest;
-uniform sampler2D vc_tex_gr : source_color, filter_nearest;
-uniform sampler2D vc_tex_gg : source_color, filter_nearest;
-uniform sampler2D vc_tex_gb : source_color, filter_nearest;
-uniform sampler2D vc_tex_ga : source_color, filter_nearest;
-uniform sampler2D vc_tex_br : source_color, filter_nearest;
-uniform sampler2D vc_tex_bg : source_color, filter_nearest;
-uniform sampler2D vc_tex_bb : source_color, filter_nearest;
-uniform sampler2D vc_tex_ba : source_color, filter_nearest;
-uniform sampler2D vc_tex_ar : source_color, filter_nearest;
-uniform sampler2D vc_tex_ag : source_color, filter_nearest;
-uniform sampler2D vc_tex_ab : source_color, filter_nearest;
-uniform sampler2D vc_tex_aa : source_color, filter_nearest;
+uniform sampler2DArray vc_tex_array : source_color, filter_nearest;
 group_uniforms;
 
 group_uniforms Visuals.Texture_Scales;
-uniform float tex_scale_1 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_2 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_3 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_4 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_5 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_6 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_7 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_8 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_9 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_10 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_11 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_12 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_13 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_14 : hint_range(0.1, 20.0, 0.1) = 1.0;
-uniform float tex_scale_15 : hint_range(0.1, 20.0, 0.1) = 1.0;
+uniform float tex_scale_array [256];
 group_uniforms;
 
 group_uniforms Effects.Blending;
@@ -153,52 +119,17 @@ int get_material_index(vec4 vc_col_0, vec4 vc_col_1) {
 
 // Get per-texture UV scale
 float get_texture_scale(int index) {
-	switch(index) {
-		case 0: return tex_scale_1;
-		case 1: return tex_scale_2;
-		case 2: return tex_scale_3;
-		case 3: return tex_scale_4;
-		case 4: return tex_scale_5;
-		case 5: return tex_scale_6;
-		case 6: return tex_scale_7;
-		case 7: return tex_scale_8;
-		case 8: return tex_scale_9;
-		case 9: return tex_scale_10;
-		case 10: return tex_scale_11;
-		case 11: return tex_scale_12;
-		case 12: return tex_scale_13;
-		case 13: return tex_scale_14;
-		case 14: return tex_scale_15;
-		default: return 1.0;
-	}
+	return clamp(tex_scale_array[index], 0.0, 1.0);
 }
 
 // Sample material by index with albedo tints and per-texture scaling applied
 vec4 sample_material_by_index(int index, vec2 base_uv) {
 	float scale = 1.0;
-	if (index != 15)
+	if (index != 255)
 		scale = get_texture_scale(index);
 	vec2 uv = base_uv * scale;
-	vec4 result;
-	switch(index) {
-		case 0: result = texture(vc_tex_rr, uv) * tex_albedo_1; break;
-		case 1: result = texture(vc_tex_rg, uv) * tex_albedo_2; break;
-		case 2: result = texture(vc_tex_rb, uv) * tex_albedo_3; break;
-		case 3: result = texture(vc_tex_ra, uv) * tex_albedo_4; break;
-		case 4: result = texture(vc_tex_gr, uv) * tex_albedo_5; break;
-		case 5: result = texture(vc_tex_gg, uv) * tex_albedo_6; break;
-		case 6: result = texture(vc_tex_gb, uv); break;
-		case 7: result = texture(vc_tex_ga, uv); break;
-		case 8: result = texture(vc_tex_br, uv); break;
-		case 9: result = texture(vc_tex_bg, uv); break;
-		case 10: result = texture(vc_tex_bb, uv); break;
-		case 11: result = texture(vc_tex_ba, uv); break;
-		case 12: result = texture(vc_tex_ar, uv); break;
-		case 13: result = texture(vc_tex_ag, uv); break;
-		case 14: result = texture(vc_tex_ab, uv); break;
-		case 15: result = texture(vc_tex_aa, uv); break;  // VOID: fully transparent, no color contribution to blending
-		default: result = texture(vc_tex_rr, uv) * tex_albedo_1; break;
-	}
+	vec4 result = texture(vc_tex_array, vec3(uv.x, uv.y, float(index))); // TODO: Im not sure how to reference the correct UV and layer here
+	result.rgb *= albedo_array[index];
 	return result;
 }
 
@@ -225,11 +156,6 @@ vec4 snap_to_dominant(vec4 c) {
 // Blend wall materials using vertex color weights (for soft blend mode)
 // Now uses all 16 textures from the unified texture pool
 vec4 blend_wall_materials(vec2 uv, vec4 vc0, vec4 vc1, float sharpness) {
-	// Snap interpolated colors to dominant channels to prevent bleeding
-	// between floor and wall texture encodings at triangle boundaries
-	vec4 snapped_vc0 = snap_to_dominant(vc0);
-	vec4 snapped_vc1 = snap_to_dominant(vc1);
-
 	float weights[16];
 
 	vec4 wall_color = vec4(0.0);
