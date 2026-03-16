@@ -162,7 +162,7 @@ var should_mask_grass : bool = false
 # Used to reference populator data in the populator tool
 var current_populator : MarchingSquaresPopulator = null
 
-var remove_flowers : bool = false
+var remove_selection : bool = false
 
 # Currently selected preset for vertex textures (DOES change the global terrain)
 var _current_texture_preset : MarchingSquaresTexturePreset = EMPTY_TEXTURE_PRESET
@@ -224,11 +224,6 @@ var vertex_color_idx : int = 0:
 var vertex_color_0 : Color = Color(1.0, 0.0, 0.0, 0.0)
 var vertex_color_1 : Color = Color(1.0, 0.0, 0.0, 0.0)
 #endregion
-
-# Used to reference populator data in the populator tool
-var current_populator : MarchingSquaresPopulator = null
-
-var remove_selection : bool = false
 
 #region draw-related vars
 # A dictionary with keys for each tile that is currently being drawn to with the brush

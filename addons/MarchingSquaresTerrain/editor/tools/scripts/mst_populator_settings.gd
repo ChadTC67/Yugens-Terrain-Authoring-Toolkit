@@ -74,7 +74,7 @@ const VEGETATION_VAR_DATA : Array[Dictionary] = [
 
 
 func _ready() -> void:
-	set_custom_minimum_size(Vector2(183, 0))
+	set_custom_minimum_size(Vector2(168, 0))
 	add_theme_constant_override("separation", 5)
 	add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
@@ -118,10 +118,10 @@ func add_populator_settings() -> void:
 					editor_r_picker.set_base_type("Texture2D")
 				editor_r_picker.edited_resource = selected_populator.get(var_name)
 				editor_r_picker.resource_changed.connect(func(resource): _on_populator_setting_changed(var_name, resource))
-				editor_r_picker.set_custom_minimum_size(Vector2(250, 25))
+				editor_r_picker.set_custom_minimum_size(Vector2(155, 25))
 				
 				ts_cont = CenterContainer.new()
-				ts_cont.set_custom_minimum_size(Vector2(260, 35))
+				ts_cont.set_custom_minimum_size(Vector2(165, 35))
 				ts_cont.add_child(editor_r_picker, true)
 				vbox.add_child(ts_cont, true)
 			"Vector2":
@@ -161,10 +161,10 @@ func add_populator_settings() -> void:
 				var c_pick_button = ColorPickerButton.new()
 				c_pick_button.color = selected_populator.get(var_name)
 				c_pick_button.color_changed.connect(func(color): _on_populator_setting_changed(var_name, color))
-				c_pick_button.set_custom_minimum_size(Vector2(200, 35))
+				c_pick_button.set_custom_minimum_size(Vector2(125, 35))
 				
 				ts_cont = CenterContainer.new()
-				ts_cont.set_custom_minimum_size(Vector2(210, 35))
+				ts_cont.set_custom_minimum_size(Vector2(135, 35))
 				ts_cont.add_child(c_pick_button, true)
 				vbox.add_child(ts_cont, true)
 		
