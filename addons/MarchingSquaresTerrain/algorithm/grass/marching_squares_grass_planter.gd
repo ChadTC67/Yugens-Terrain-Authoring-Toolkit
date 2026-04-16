@@ -34,6 +34,14 @@ func setup(chunk: MarchingSquaresTerrainChunk, redo: bool = true):
 	cast_shadow = SHADOW_CASTING_SETTING_OFF
 
 
+func ensure_multimesh_count() -> void:
+	if not multimesh or not _chunk:
+		return
+	if multimesh.instance_count != (_chunk.dimensions.x-1) * (_chunk.dimensions.z-1) * terrain_system.grass_subdivisions * terrain_system.grass_subdivisions:
+			multimesh.instance_count = (_chunk.dimensions.x-1) * (_chunk.dimensions.z-1) * terrain_system.grass_subdivisions * terrain_system.grass_subdivisions
+			regenerate_all_cells()	
+
+
 func regenerate_all_cells() -> void:
 	# Safety checks
 	if not _chunk:
@@ -78,6 +86,8 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 	if not cell_geometry.has("verts") or not cell_geometry.has("uvs") or not cell_geometry.has("color_0s") or not cell_geometry.has("color_1s") or not cell_geometry.has("custom_1_values") or not cell_geometry.has("is_floor"):
 		push_error("cell_geometry doesn't have one of the following required data: 1) verts, 2) uvs, 3) colors, 4) custom_1_values, 5) is_floor")
 		return
+		
+	ensure_multimesh_count()	
 	
 	var points : PackedVector2Array = []
 	var count = terrain_system.grass_subdivisions * terrain_system.grass_subdivisions

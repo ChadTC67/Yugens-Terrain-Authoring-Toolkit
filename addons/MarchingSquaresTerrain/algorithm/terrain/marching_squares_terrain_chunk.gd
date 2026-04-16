@@ -110,9 +110,10 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 			grass_planter = get_node_or_null("GrassPlanter")
 		grass_planter.terrain_system = terrain_system
 		grass_planter._chunk = self
-	
+		
 	if _temp_grass_multimesh:
 		grass_planter.multimesh = _temp_grass_multimesh
+	grass_planter.ensure_multimesh_count()
 	if not grass_planter.multimesh:
 		grass_planter.setup(self)
 		grass_planter.regenerate_all_cells()
