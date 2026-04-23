@@ -60,7 +60,8 @@ func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool = false) -> 
 	colors["color_1"] = _interpolate_vertex_color(vertex.x, vertex.y, vertex.z, source_map_1, diag_midpoint, lower_1, upper_1)
 	
 	# is_ridge & is_ledge are already calculated above
-	var c_1_val: Color = Color(chunk.grass_mask_map[cell.cell_coords.y*chunk.dimensions.x + cell.cell_coords.x]) # Grass mask
+	var c_1_val: Color
+	c_1_val.r = 1.0 if cell.floor_mode else 0.0
 	c_1_val.g = 1.0 if is_ridge else 0.0
 	c_1_val.b = 1.0 if is_ledge else 0.0
 	

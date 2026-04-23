@@ -129,9 +129,9 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 	if not grass_mask_map:
 		generate_grass_mask_map()
 	
-	if not mesh and should_regenerate_mesh:
+	if (not mesh or mesh.get_surface_count() == 0) and should_regenerate_mesh:
 		regenerate_mesh(true)
-	elif mesh:
+	elif mesh and mesh.get_surface_count() >= 1:
 		if terrain_system:
 			mesh.surface_set_material(0, terrain_system.terrain_material)
 		if not _temp_collision_shapes.is_empty():
@@ -162,10 +162,13 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 				mat = bake_material.duplicate()
 				baker.transfer_shader_props(terrain_system.terrain_material, mat)
 			
+			var src_mat := terrain_system.terrain_material
 			if mat is StandardMaterial3D:
 				mat.albedo_texture = ImageTexture.create_from_image(img)
 			elif mat is ShaderMaterial:
 				mat.set_shader_parameter("texture_albedo", ImageTexture.create_from_image(img))
+				mat.set_shader_parameter("tex_prefab_colormap", src_mat.get_shader_parameter("tex_prefab_colormap"))
+				mat.set_shader_parameter("has_prefab_colormap", src_mat.get_shader_parameter("has_prefab_colormap"))
 			mesh.surface_set_material(0, mat)
 		, CONNECT_ONE_SHOT)
 		baker.bake_geometry_texture(self, get_tree())
@@ -267,7 +270,7 @@ func _exit_tree() -> void:
 
 func regenerate_mesh(use_threads: bool = false):
 	st = SurfaceTool.new()
-	if mesh:
+	if mesh and mesh.get_surface_count() > 0:
 		st.create_from(mesh, 0)
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA_FLOAT)
@@ -305,10 +308,10 @@ func regenerate_mesh(use_threads: bool = false):
 func generate_terrain_cells(use_threads: bool):
 	if not cell_geometry:
 		cell_geometry = {}
-	
 	global_position_cached = global_position if is_inside_tree() else position
 	var thread_pool := MarchingSquaresThreadPool.new(max(1, OS.get_processor_count()))
-	
+	if grass_planter and grass_planter.terrain_system:
+		grass_planter.fetch_texture_data()
 	for z in range(dimensions.z - 1):
 		for x in range(dimensions.x - 1):
 			var cell_coords = Vector2i(x, z)
@@ -357,9 +360,12 @@ func generate_terrain_cells(use_threads: bool):
 				"mat_blend": PackedColorArray(),
 				"is_floor": [],
 			}
-			
+			var cell : MarchingSquaresTerrainCell
 			var color_helper := MarchingSquaresTerrainVertexColorHelper.new()
-			var cell := MarchingSquaresTerrainCell.new(self, color_helper, height_map[z][x], height_map[z][x+1], height_map[z+1][x], height_map[z+1][x+1], merge_threshold)
+			if terrain_system.prefab_set:
+				cell = MarchingSquaresPrefabCell.new(self, color_helper, height_map[z][x], height_map[z][x+1], height_map[z+1][x], height_map[z+1][x+1], merge_threshold)
+			else:
+				cell = MarchingSquaresTerrainCell.new(self, color_helper, height_map[z][x], height_map[z][x+1], height_map[z+1][x], height_map[z+1][x+1], merge_threshold)
 			color_helper.chunk = self
 			color_helper.cell = cell
 			

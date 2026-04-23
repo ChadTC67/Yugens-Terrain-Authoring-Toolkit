@@ -67,6 +67,14 @@ enum StorageMode {
 ## Used for overriding the material of the baked terrain texture.
 @export var bake_material_override : Material
 
+
+@export var prefab_set : MarchingSquaresPrefabSet:
+	set(value):
+		prefab_set = value
+		for chunk: MarchingSquaresTerrainChunk in chunks.values():
+			chunk.regenerate_all_cells(true)
+		
+
 ## True after external storage has been initialized.
 ## Used to detect when migration from embedded data is needed.
 @export_storage var _storage_initialized : bool = false
@@ -374,6 +382,18 @@ enum StorageMode {
 #endregion
 
 #region texture albedos
+@export var texture_prefab_colormap : Texture2D:
+	set(value):
+		texture_prefab_colormap = value
+		if not is_batch_updating:
+			var has_map := true if value else false
+			terrain_material.set_shader_parameter("tex_prefab_colormap", value)
+			terrain_material.set_shader_parameter("has_prefab_colormap", has_map)
+			for chunk: MarchingSquaresTerrainChunk in chunks.values():
+				var mat := chunk.mesh.surface_get_material(0) as ShaderMaterial
+				mat.set_shader_parameter("tex_prefab_colormap", value)
+				mat.set_shader_parameter("has_prefab_colormap", has_map)
+					
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_albedo_1 : Color = Color("647851ff"):
 	set(value):
 		texture_albedo_1 = value
@@ -715,56 +735,6 @@ func add_chunk(coords: Vector2i, chunk: MarchingSquaresTerrainChunk, plugin, reg
 
 #region texture (set) functions
 
-# WARNING: this function is currently not being used anymore. [Q] Yūgen: was that intentional?
-# This (legacy) function is mainly there to ensure the plugin works on startup in a new project
-func _ensure_textures() -> void:
-	var grass_mat := grass_mesh.material as ShaderMaterial
-	if not grass_mat.get_shader_parameter("use_base_color_1") and terrain_material.get_shader_parameter("vc_tex_rr") == null:
-		terrain_material.set_shader_parameter("vc_tex_rr", texture_1)
-	if not grass_mat.get_shader_parameter("use_base_color_2") and terrain_material.get_shader_parameter("vc_tex_rg") == null:
-		terrain_material.set_shader_parameter("vc_tex_rg", texture_2)
-	if not grass_mat.get_shader_parameter("use_base_color_3") and terrain_material.get_shader_parameter("vc_tex_rb") == null:
-		terrain_material.set_shader_parameter("vc_tex_rb", texture_3)
-	if not grass_mat.get_shader_parameter("use_base_color_4") and terrain_material.get_shader_parameter("vc_tex_ra") == null:
-		terrain_material.set_shader_parameter("vc_tex_ra", texture_4)
-	if not grass_mat.get_shader_parameter("use_base_color_5") and terrain_material.get_shader_parameter("vc_tex_gr") == null:
-		terrain_material.set_shader_parameter("vc_tex_gr", texture_5)
-	if not grass_mat.get_shader_parameter("use_base_color_6") and terrain_material.get_shader_parameter("vc_tex_gg") == null:
-		terrain_material.set_shader_parameter("vc_tex_gg", texture_6)
-	
-	if grass_mat.get_shader_parameter("use_grass_tex_2") and terrain_material.get_shader_parameter("vc_tex_rg") == null:
-		terrain_material.set_shader_parameter("vc_tex_rg", texture_2)
-	if grass_mat.get_shader_parameter("use_grass_tex_3") and terrain_material.get_shader_parameter("vc_tex_rb") == null:
-		terrain_material.set_shader_parameter("vc_tex_rb", texture_3)
-	if grass_mat.get_shader_parameter("use_grass_tex_4") and terrain_material.get_shader_parameter("vc_tex_ra") == null:
-		terrain_material.set_shader_parameter("vc_tex_ra", texture_4)
-	if grass_mat.get_shader_parameter("use_grass_tex_5") and terrain_material.get_shader_parameter("vc_tex_gr") == null:
-		terrain_material.set_shader_parameter("vc_tex_gr", texture_5)
-	if grass_mat.get_shader_parameter("use_grass_tex_6") and terrain_material.get_shader_parameter("vc_tex_gg") == null:
-		terrain_material.set_shader_parameter("vc_tex_gg", texture_6)
-	
-	if grass_sprite_tex_1 and grass_mat.get_shader_parameter("grass_texture_1") == null:
-		grass_mat.set_shader_parameter("grass_texture_1", grass_sprite_tex_1)
-	if grass_sprite_tex_2 and grass_mat.get_shader_parameter("grass_texture_2") == null:
-		grass_mat.set_shader_parameter("grass_texture_2", grass_sprite_tex_2)
-	if grass_sprite_tex_3 and grass_mat.get_shader_parameter("grass_texture_3") == null:
-		grass_mat.set_shader_parameter("grass_texture_3", grass_sprite_tex_3)
-	if grass_sprite_tex_4 and grass_mat.get_shader_parameter("grass_texture_4") == null:
-		grass_mat.set_shader_parameter("grass_texture_4", grass_sprite_tex_4)
-	if grass_sprite_tex_5 and grass_mat.get_shader_parameter("grass_texture_5") == null:
-		grass_mat.set_shader_parameter("grass_texture_5", grass_sprite_tex_5)
-	if grass_sprite_tex_6 and grass_mat.get_shader_parameter("grass_texture_6") == null:
-		grass_mat.set_shader_parameter("grass_texture_6", grass_sprite_tex_6)
-	
-	if terrain_material.get_shader_parameter("vc_tex_aa") == null:
-		terrain_material.set_shader_parameter("vc_tex_aa", void_texture)
-	
-	if grass_mat.get_shader_parameter("wind_texture") == null:
-		grass_mat.set_shader_parameter("wind_texture", placeholder_wind_texture)
-	if terrain_material.get_shader_parameter("rl_noise_texture") == null:
-		terrain_material.set_shader_parameter("rl_noise_texture", placeholder_rl_noise_texture)
-
-
 ## Applies all shader parameters and regenerates grass once
 ## Call this after setting is_batch_updating = true and changing properties
 func force_batch_update() -> void:
@@ -791,6 +761,12 @@ func force_batch_update() -> void:
 	terrain_material.set_shader_parameter("vc_tex_ag", texture_14)
 	terrain_material.set_shader_parameter("vc_tex_ab", texture_15)
 	
+	terrain_material.set_shader_parameter("tex_prefab_colormap", texture_prefab_colormap)
+	if texture_prefab_colormap:
+		terrain_material.set_shader_parameter("has_prefab_colormap", true)
+	else:
+		terrain_material.set_shader_parameter("has_prefab_colormap", false)
+	
 	# TERRAIN MATERIAL - Ground Colors (used for both floor and wall in unified system)
 	terrain_material.set_shader_parameter("tex_albedo_1", texture_albedo_1)
 	terrain_material.set_shader_parameter("tex_albedo_2", texture_albedo_2)
@@ -798,7 +774,7 @@ func force_batch_update() -> void:
 	terrain_material.set_shader_parameter("tex_albedo_4", texture_albedo_4)
 	terrain_material.set_shader_parameter("tex_albedo_5", texture_albedo_5)
 	terrain_material.set_shader_parameter("tex_albedo_6", texture_albedo_6)
-	
+
 	# TERRAIN MATERIAL - Per-Texture UV Scales
 	terrain_material.set_shader_parameter("tex_scale_1", texture_scale_1)
 	terrain_material.set_shader_parameter("tex_scale_2", texture_scale_2)
