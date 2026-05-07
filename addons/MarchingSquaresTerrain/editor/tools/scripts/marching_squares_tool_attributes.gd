@@ -32,11 +32,15 @@ var terrain_settings_data : Dictionary = {
 	"animation_fps": "SpinBox",
 	"grass_subdivisions": "SpinBox",
 	"grass_size": "Vector2",
+	# Normal settings
+	"use_flat_normals": "CheckBox",
 	# Special texture settings
 	"use_ridge_texture": "CheckBox",
 	"use_ledge_texture": "CheckBox",
 	"ridge_threshold": "EditorSpinSlider",
 	"ledge_threshold": "EditorSpinSlider",
+	# Lighting settings
+	"use_cell_shading": "CheckBox",
 }
 
 var plugin : MarchingSquaresTerrainPlugin

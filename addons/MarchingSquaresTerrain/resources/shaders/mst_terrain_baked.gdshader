@@ -3,11 +3,26 @@ render_mode diffuse_toon, depth_draw_opaque, cull_disabled;
 
 uniform sampler2D texture_albedo : source_color, filter_linear_mipmap, repeat_enable;
 
+group_uniforms Visuals.Normals;
+uniform bool use_flat_normals = false;
+group_uniforms;
+
+group_uniforms Effects.Experimental;
+uniform float wall_threshold : hint_range(0.0, 0.5) = 0.0; // Experimental feature (used for rounding merge thresholds)
+group_uniforms;
+
 group_uniforms CellShading;
+uniform bool use_cell_shading = true;
 uniform vec4 shadow_color : source_color;
 uniform int bands : hint_range(1, 10) = 5;
 uniform float shadow_intensity : hint_range(-1.0, 0.5, 0.05) = 0.0;
 group_uniforms;
+
+void vertex() {
+	bool is_floor = dot(NORMAL, vec3(0.0, 1.0, 0.0)) > wall_threshold;
+	if (use_flat_normals && is_floor)
+		NORMAL = vec3(0.0, 1.0, 0.0);
+}
 
 void fragment() {
 	vec4 albedo_tex = texture(texture_albedo, UV);
@@ -18,12 +33,15 @@ void light() {
 	float NdotL = dot(NORMAL, LIGHT);
 	NdotL = clamp(NdotL, 0.0, 1.0);
 
-	float stepped = ceil(NdotL * float(bands)) / float(bands);
-	float toon_light = mix(shadow_intensity, 0.3, stepped);
+	float toon_light;
+	if (use_cell_shading) {
+		float stepped = ceil(NdotL * float(bands)) / float(bands);
+		toon_light = mix(shadow_intensity, 0.3, stepped);
+	}
+	else 
+		toon_light = NdotL * 0.3;
 
 	toon_light *= ATTENUATION;
-
 	vec3 light_color = mix(shadow_color.rgb, LIGHT_COLOR.rgb, toon_light);
-
 	DIFFUSE_LIGHT += light_color;
 }

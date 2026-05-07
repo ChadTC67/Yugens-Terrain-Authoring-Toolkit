@@ -151,6 +151,7 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 	
 	if not EngineWrapper.instance.is_editor() and terrain_system.enable_runtime_texture_baking:
 		var baker := MarchingSquaresGeometryBaker.new()
+		baker.terrain_system = terrain_system
 		baker.polygon_texture_resolution = terrain_system.polygon_texture_resolution
 		baker.finished.connect(func(mesh_: Mesh, _original: MeshInstance3D, img: Image):
 			mesh = mesh_
@@ -159,6 +160,7 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 				mat = terrain_system.bake_material_override.duplicate()
 			else:
 				mat = bake_material.duplicate()
+				baker.transfer_shader_props(terrain_system.terrain_material, mat)
 			
 			if mat is StandardMaterial3D:
 				mat.albedo_texture = ImageTexture.create_from_image(img)
@@ -431,14 +433,14 @@ func _add_point(cell_coords: Vector2i, vert: Vector3, uv: Vector2, uv2: Vector2,
 
 #region cell_geometry generators (on being empty)
 
-func generate_height_map():
+func generate_height_map(base_height: float = 0.0):
 	height_map = []
 	height_map.resize(dimensions.z)
 	for z in range(dimensions.z):
 		height_map[z] = []
 		height_map[z].resize(dimensions.x)
 		for x in range(dimensions.x):
-			height_map[z][x] = 0.0
+			height_map[z][x] = base_height
 	
 	var noise := terrain_system.noise_hmap
 	if noise:

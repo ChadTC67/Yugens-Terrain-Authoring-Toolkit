@@ -40,6 +40,7 @@ shader_parameter/tex_scale_12 = 1.0
 shader_parameter/tex_scale_13 = 1.0
 shader_parameter/tex_scale_14 = 1.0
 shader_parameter/tex_scale_15 = 1.0
+shader_parameter/use_flat_normals = false
 shader_parameter/use_hard_textures = false
 shader_parameter/blend_mode = 0
 shader_parameter/blend_sharpness = 5.0

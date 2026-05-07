@@ -127,7 +127,9 @@ func _redraw():
 				basis.z = Vector3.ZERO
 			brush_transform = Transform3D(basis, pos)
 		
-		if terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING:
+		if terrain_plugin.mode == terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
+			pass
+		elif terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING:
 			if terrain_plugin.paint_walls_mode:
 				add_mesh(terrain_plugin.BRUSH_RADIUS_VISUAL, null, brush_transform)
 		elif terrain_plugin.mode != terrain_plugin.TerrainToolMode.SMOOTH and terrain_plugin.mode != terrain_plugin.TerrainToolMode.GRASS_MASK and terrain_plugin.mode != terrain_plugin.TerrainToolMode.DEBUG_BRUSH:
@@ -170,7 +172,7 @@ func _redraw():
 						var draw_position := Vector3(world_pos.x, y, world_pos.y)
 						var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
 						# Only draw ground brush squares if NOT in wall paint mode
-						if not is_wall_painting:
+						if not is_wall_painting and terrain_plugin.mode != terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
 							add_mesh(terrain_plugin.BRUSH_VISUAL, brush_material, draw_transform)
 						
 						# Draw to current pattern

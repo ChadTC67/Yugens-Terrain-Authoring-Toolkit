@@ -60,6 +60,10 @@ uniform float blend_noise_scale : hint_range(0.0, 50.0, 1.0) = 10.0;
 uniform float blend_noise_strength : hint_range(0.0, 1.0, 0.05) = 0.0;
 group_uniforms;
 
+group_uniforms Visuals.Normals;
+uniform bool use_flat_normals = false;
+group_uniforms;
+
 group_uniforms Effects.Ridge_Ledge_Texture;
 // Used for wall textures continuing onto floors
 uniform bool use_ridge_texture = true;
@@ -76,6 +80,7 @@ group_uniforms Effects.Hanging_Floor_Texture;
 group_uniforms;
 
 group_uniforms CellShading;
+uniform bool use_cell_shading = true;
 uniform vec4 shadow_color : source_color;
 uniform int bands : hint_range(1, 10) = 5;
 uniform float shadow_intensity : hint_range(-1.0, 0.5, 0.05) = 0.00;
@@ -340,6 +345,10 @@ void vertex() {
 	mat_indices.z = CUSTOM2.g;  // mat_c (already /15)
 	mat_weights = vec2(CUSTOM2.b, CUSTOM2.a);  // weight_a, weight_b (interpolated for smooth blending)
 	use_vertex_colors = CUSTOM2.a >= 1.5 ? 1.0 : 0.0;  // A=2.0 signals vertex colors
+
+	bool is_floor = dot(vertex_normal, vec3(0.0, 1.0, 0.0)) > wall_threshold;
+	if (use_flat_normals && is_floor)
+		NORMAL = vec3(0.0, 1.0, 0.0);
 }
 
 void fragment() {
@@ -521,10 +530,15 @@ void light() {
 	float NdotL = dot(NORMAL, LIGHT);
 	NdotL = clamp(NdotL, 0.0, 1.0);
 
-	float stepped = ceil(NdotL * float(bands)) / float(bands);
-	float toon_light = mix(shadow_intensity, 0.3, stepped);
-	toon_light *= ATTENUATION;
+	float toon_light;
+	if (use_cell_shading) {
+		float stepped = ceil(NdotL * float(bands)) / float(bands);
+		toon_light = mix(shadow_intensity, 0.3, stepped);
+	}
+	else 
+		toon_light = NdotL * 0.3;
 
+	toon_light *= ATTENUATION;
 	vec3 light_color = mix(shadow_color.rgb, LIGHT_COLOR.rgb, toon_light);
 	DIFFUSE_LIGHT += light_color;
 }

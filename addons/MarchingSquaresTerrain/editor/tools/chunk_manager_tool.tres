@@ -6,6 +6,7 @@
 
 [sub_resource type="Resource" id="Resource_w6p77"]
 script = ExtResource("1_ewlj6")
+height = true
 chunk_management = true
 metadata/_custom_type_script = "uid://b6jopat61dbd3"
 
@@ -26,6 +27,7 @@ Chunk cell merge modes:
 • SPHERICAL: All the terrain will become smooth. This mode looks the most unnatural for the algorithm.
 
 [SHORTCUTS]
-• CTRL+LMB: Change the currently selected chunk to the hovered chunk."
+• CTRL+LMB: Set the base height at which chunks will be generated.
+• CTRL+ALT: Change the currently selected chunk to the hovered chunk."
 attributes = SubResource("Resource_w6p77")
 metadata/_custom_type_script = "uid://brkjbcthwswel"

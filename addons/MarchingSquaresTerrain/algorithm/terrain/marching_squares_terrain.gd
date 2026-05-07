@@ -102,6 +102,19 @@ enum StorageMode {
 		extra_collision_layer = value
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
 			chunk.regenerate_all_cells(true)
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_flat_normals : bool = false:
+	set(value):
+		use_flat_normals = value
+		terrain_material.set_shader_parameter("use_flat_normals", value)
+		for chunk: MarchingSquaresTerrainChunk in chunks.values():
+			chunk.grass_planter.regenerate_all_cells()
+			chunk.mark_dirty()
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_cell_shading : bool = true:
+	set(value):
+		use_cell_shading = value
+		terrain_material.set_shader_parameter("use_cell_shading", value)
+		var grass_mat := grass_mesh.material as ShaderMaterial
+		grass_mat.set_shader_parameter("use_cell_shading", value)
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wall_threshold : float = 0.0: # Determines what part of the terrain's mesh are walls
 	set(value):
 		wall_threshold = value
@@ -591,6 +604,7 @@ func add_new_chunk(chunk_x: int, chunk_z: int, plugin):
 	var new_chunk := MarchingSquaresTerrainChunk.new()
 	new_chunk.name = "Chunk "+str(chunk_coords)
 	new_chunk.terrain_system = self
+	new_chunk.generate_height_map(plugin.height)
 	new_chunk.mark_dirty()
 	add_chunk(chunk_coords, new_chunk, plugin, false)
 	

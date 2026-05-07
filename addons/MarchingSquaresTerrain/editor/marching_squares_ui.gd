@@ -226,6 +226,12 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 		"grass_size":
 			if p_value is Vector2:
 				terrain.grass_size = p_value
+		"use_flat_normals":
+			if p_value is bool:
+				terrain.use_flat_normals = p_value
+		"use_cell_shading":
+			if p_value is bool:
+				terrain.use_cell_shading = p_value
 		"ridge_threshold":
 			if p_value is float:
 				terrain.ridge_threshold = p_value

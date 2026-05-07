@@ -8,6 +8,9 @@ signal finished(mesh: Mesh, original: MeshInstance3D, img: Image)
 @export var polygon_texture_resolution : int = 32
 static var MAX_TEXTURE_SIZE := 4096
 
+var terrain_system : MarchingSquaresTerrain
+
+
 func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 	if not inst or not scene_tree or not inst.mesh is ArrayMesh:
 		return
@@ -234,7 +237,7 @@ func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 		| (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM3_SHIFT))
 	var mat := ShaderMaterial.new()
 	mat.shader = load("uid://b32t80p1iesdd") as Shader
-	_transfer_shader_props(mesh.surface_get_material(0), mat)
+	transfer_shader_props(mesh.surface_get_material(0), mat)
 	bake_mesh.surface_set_material(0, mat)
 	
 	bake_inst.position = Vector3(-0.5, 0.5, -1)
@@ -287,7 +290,7 @@ func _vector2_to_float_array(arr: PackedVector2Array) -> PackedFloat32Array:
 	return ret
 
 
-func _transfer_shader_props(from: ShaderMaterial, to: ShaderMaterial) -> void:
+func transfer_shader_props(from: ShaderMaterial, to: ShaderMaterial) -> void:
 	# Get uniform list from source shader
 	var uniforms := from.shader.get_shader_uniform_list()
 	
@@ -300,6 +303,7 @@ func _transfer_shader_props(from: ShaderMaterial, to: ShaderMaterial) -> void:
 		
 		# Check if target shader has the same parameter
 		if to_uniforms.has(prop_name):
+			print(prop_name)
 			var value = from.get_shader_parameter(prop_name)
 			to.set_shader_parameter(prop_name, value)
 

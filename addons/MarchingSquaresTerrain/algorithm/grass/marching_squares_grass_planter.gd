@@ -86,8 +86,8 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 	if not cell_geometry.has("verts") or not cell_geometry.has("uvs") or not cell_geometry.has("color_0s") or not cell_geometry.has("color_1s") or not cell_geometry.has("custom_1_values") or not cell_geometry.has("is_floor"):
 		push_error("cell_geometry doesn't have one of the following required data: 1) verts, 2) uvs, 3) colors, 4) custom_1_values, 5) is_floor")
 		return
-		
-	ensure_multimesh_count()	
+	
+	ensure_multimesh_count()
 	
 	var points : PackedVector2Array = []
 	var count = terrain_system.grass_subdivisions * terrain_system.grass_subdivisions
@@ -328,7 +328,11 @@ func _format_needs_conversion(fmt: Image.Format) -> bool:
 func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vector3, c: Vector3, texture_id: int) -> void:
 	var edge1 := b - a
 	var edge2 := c - a
-	var normal := edge1.cross(edge2).normalized()
+	var normal : Vector3
+	if terrain_system.use_flat_normals:
+		normal = -Vector3.UP
+	else:
+		normal = edge1.cross(edge2).normalized()
 	
 	var right := Vector3.FORWARD.cross(normal).normalized()
 	var forward := normal.cross(Vector3.RIGHT).normalized()

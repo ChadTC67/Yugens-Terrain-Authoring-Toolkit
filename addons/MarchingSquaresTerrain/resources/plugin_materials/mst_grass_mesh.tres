@@ -38,6 +38,7 @@ shader_parameter/wind_scale = 0.02
 shader_parameter/wind_speed = 0.14
 shader_parameter/is_merge_round = false
 shader_parameter/wall_threshold = 0.0
+shader_parameter/use_cell_shading = true
 shader_parameter/shadow_color = Color(0, 0, 0, 1)
 shader_parameter/bands = 5
 shader_parameter/shadow_intensity = 0.0
