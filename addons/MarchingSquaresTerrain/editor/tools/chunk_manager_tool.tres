@@ -26,6 +26,9 @@ Chunk cell merge modes:
 • ROUNDED POLYHEDRON: A good 50/50 mix between having smooth and blocky terrain.
 • SEMI ROUND: Mostly smooth terrain with the occasional blocky cells.
 • SPHERICAL: All the terrain will become smooth. This mode looks the most unnatural for the algorithm.
+Other info:
+• The currently selected chunk is displayed via a blue square box at the base of the chunk.
+• The currently selected quick paint determines what the chunk will look like when generated for the first time.
 
 [SHORTCUTS]
 • CTRL+LMB: Set the base height at which chunks will be generated.

@@ -95,6 +95,11 @@ func show_tool_attributes(tool_index: int) -> void:
 	}
 	
 	var new_attributes := []
+	if tool_attributes.chunk_management:
+		new_attributes.append(attribute_list.chunk_management)
+	if tool_attributes.terrain_settings:
+		new_attributes.append(attribute_list.terrain_settings)
+	
 	if tool_attributes.brush_type:
 		new_attributes.append(attribute_list.brush_type)
 	if tool_attributes.size:
@@ -121,10 +126,6 @@ func show_tool_attributes(tool_index: int) -> void:
 		new_attributes.append(attribute_list.quick_paint_selection)
 	if tool_attributes.paint_walls:
 		new_attributes.append(attribute_list.paint_walls)
-	if tool_attributes.chunk_management:
-		new_attributes.append(attribute_list.chunk_management)
-	if tool_attributes.terrain_settings:
-		new_attributes.append(attribute_list.terrain_settings)
 	
 	for attribute in new_attributes:
 		var setting_dict : Dictionary = attribute
