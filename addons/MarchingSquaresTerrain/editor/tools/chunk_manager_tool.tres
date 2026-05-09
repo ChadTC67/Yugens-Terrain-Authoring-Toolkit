@@ -7,6 +7,7 @@
 [sub_resource type="Resource" id="Resource_w6p77"]
 script = ExtResource("1_ewlj6")
 height = true
+quick_paint_selection = true
 chunk_management = true
 metadata/_custom_type_script = "uid://b6jopat61dbd3"
 
@@ -22,8 +23,8 @@ Used to create, delete and change chunk settings.
 Chunk cell merge modes:
 • CUBIC: The most blocky of all the modes. Has minimal smoothing between cells.
 • POLYHEDRON: Blocky terrain with slight cell smoothing (DEFAULT CHUNK STATE).
-• ROUNDED_POLYHEDRON: A good 50/50 mix between having smooth and blocky terrain.
-• SEMI_ROUND: Mostly smooth terrain with the occasional blocky cells.
+• ROUNDED POLYHEDRON: A good 50/50 mix between having smooth and blocky terrain.
+• SEMI ROUND: Mostly smooth terrain with the occasional blocky cells.
 • SPHERICAL: All the terrain will become smooth. This mode looks the most unnatural for the algorithm.
 
 [SHORTCUTS]

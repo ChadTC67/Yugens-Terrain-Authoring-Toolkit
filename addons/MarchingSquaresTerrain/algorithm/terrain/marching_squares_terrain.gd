@@ -604,9 +604,23 @@ func add_new_chunk(chunk_x: int, chunk_z: int, plugin):
 	var new_chunk := MarchingSquaresTerrainChunk.new()
 	new_chunk.name = "Chunk "+str(chunk_coords)
 	new_chunk.terrain_system = self
+	
 	new_chunk.generate_height_map(plugin.height)
 	new_chunk.mark_dirty()
+	
 	add_chunk(chunk_coords, new_chunk, plugin, false)
+	
+	if plugin.current_quick_paint:
+		plugin.current_draw_pattern.clear()
+		plugin.current_draw_pattern[chunk_coords] = {}
+		
+		for z in range(dimensions.x):
+			for x in range(dimensions.z):
+				var cell := Vector2i(x, z)
+				plugin.current_draw_pattern[chunk_coords][cell] = 1.0
+		
+		plugin.draw_pattern(self) # Apply the current selected quick paint to the new chunk on creation
+		plugin.current_draw_pattern.clear()
 	
 	var chunk_left : MarchingSquaresTerrainChunk = chunks.get(Vector2i(chunk_x-1, chunk_z))
 	if chunk_left:
