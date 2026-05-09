@@ -472,6 +472,10 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 		
 		# On click, add or remove chunk if in chunk_management mode
 		if mode == TerrainToolMode.CHUNK_MANAGEMENT and event is InputEventMouseButton and event.is_pressed() and event.button_index == MouseButton.MOUSE_BUTTON_LEFT:
+			# Early return for height selecting.
+			if Input.is_key_pressed(KEY_CTRL):
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			
 			# Select chunk
 			if Input.is_key_pressed(KEY_ALT):
 				selected_chunk = terrain.chunks.get(current_hovered_chunk)
