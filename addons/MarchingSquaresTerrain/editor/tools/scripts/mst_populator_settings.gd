@@ -31,6 +31,18 @@ const FLOWER_VAR_DATA : Array[Dictionary] = [
 		"label": "Should Billboard",
 		"type": "CheckBox",
 	},
+	{
+		"name": "base_height_offset",
+		"label": "Base Height Offset",
+		"type": "SpinBox",
+	},
+	{
+		"name": "rng_height_range",
+		"label": "RNG Height Range",
+		"type": "HSlider",
+		"range_min": 0,
+		"range_max": 2,
+	},
 ]
 
 const VEGETATION_VAR_DATA : Array[Dictionary] = [
@@ -139,6 +151,8 @@ func add_populator_settings() -> void:
 			"SpinBox":
 				var spin_box := SpinBox.new()
 				spin_box.value = selected_populator.get(var_name)
+				if var_name == "base_height_offset":
+					spin_box.step = 0.01
 				spin_box.value_changed.connect(func(value): _on_populator_setting_changed(var_name, value))
 				spin_box.set_custom_minimum_size(Vector2(25, 25))
 				
@@ -166,6 +180,19 @@ func add_populator_settings() -> void:
 				ts_cont = CenterContainer.new()
 				ts_cont.set_custom_minimum_size(Vector2(135, 35))
 				ts_cont.add_child(c_pick_button, true)
+				vbox.add_child(ts_cont, true)
+			"HSlider":
+				var h_slider = HSlider.new()
+				h_slider.min_value = var_data[i].get("range_min")
+				h_slider.max_value = var_data[i].get("range_max")
+				h_slider.step = 0.1
+				h_slider.value = selected_populator.get(var_name)
+				h_slider.set_custom_minimum_size(Vector2(120, 20))
+				h_slider.value_changed.connect(func(value): _on_populator_setting_changed(var_name, value))
+				
+				ts_cont = CenterContainer.new()
+				ts_cont.set_custom_minimum_size(Vector2(130, 35))
+				ts_cont.add_child(h_slider, true)
 				vbox.add_child(ts_cont, true)
 		
 		if i != var_data.size() - 1:

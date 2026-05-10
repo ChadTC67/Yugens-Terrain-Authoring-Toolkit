@@ -1351,7 +1351,7 @@ func remove_chunk(x: int, z: int, plugin):
 				break
 	plugin.ui.tool_attributes.show_tool_attributes(plugin.TerrainToolMode.CHUNK_MANAGEMENT)
 	plugin.gizmo_plugin.trigger_redraw(self)
-
+	
 	if not Engine.is_editor_hint():
 		return
 	
@@ -1361,6 +1361,7 @@ func remove_chunk(x: int, z: int, plugin):
 				child.planted_chunks.erase(chunk_coords)
 				child.populated_chunks.erase(chunk)
 				child.cell_data.erase(chunk_coords)
+				child.terrain_system = self
 				child.setup(false)
 				child.regenerate_flowers()
 

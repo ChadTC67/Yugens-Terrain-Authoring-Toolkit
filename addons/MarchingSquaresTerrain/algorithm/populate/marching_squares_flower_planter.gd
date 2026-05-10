@@ -18,18 +18,6 @@ var terrain_system : MarchingSquaresTerrain
 			flower_mat.set_shader_parameter("use_custom_color", true)
 		else:
 			flower_mat.set_shader_parameter("use_custom_color", false)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var should_billboard : bool = true:
-	set(value):
-		should_billboard = value
-		var flower_mat := flower_mesh.material as ShaderMaterial
-		if value == true:
-			flower_mesh.orientation = PlaneMesh.FACE_Z
-			flower_mat.set_shader_parameter("should_billboard", true)
-			multimesh.mesh.center_offset.y = multimesh.mesh.size.y
-		else:
-			flower_mesh.orientation = PlaneMesh.FACE_Y
-			flower_mat.set_shader_parameter("should_billboard", false)
-			multimesh.mesh.center_offset.y = multimesh.mesh.size.y / 2
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var flower_sprite : CompressedTexture2D = preload("uid://ld4ildjiaxlw"):
 	set(value):
 		flower_sprite = value
@@ -39,16 +27,33 @@ var terrain_system : MarchingSquaresTerrain
 	set(value):
 		sprite_size = value
 		multimesh.mesh.size = value
-		if should_billboard:
-			multimesh.mesh.center_offset.y = value.y
-		else:
-			multimesh.mesh.center_offset.y = 0.75
+		multimesh.mesh.center_offset.y = base_height_offset + value.y / 2
 @export_custom(PROPERTY_HINT_RANGE, "0, 8", PROPERTY_USAGE_STORAGE) var flower_subdivisions : int = 3:
 	set(value):
 		flower_subdivisions = value
-		if Engine.is_editor_hint():
+		if Engine.is_editor_hint() and terrain_system:
 			setup(false)
 			regenerate_flowers()
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var should_billboard : bool = true:
+	set(value):
+		should_billboard = value
+		var flower_mat := flower_mesh.material as ShaderMaterial
+		if value == true:
+			flower_mesh.orientation = PlaneMesh.FACE_Z
+			flower_mat.set_shader_parameter("should_billboard", true)
+		else:
+			flower_mesh.orientation = PlaneMesh.FACE_Y
+			flower_mat.set_shader_parameter("should_billboard", false)
+		multimesh.mesh.center_offset.y = base_height_offset + multimesh.mesh.size.y / 2
+		if Engine.is_editor_hint():
+			MarchingSquaresTerrainPlugin.instance.ui.populator_settings.add_populator_settings()
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var base_height_offset : float = 0.75:
+	set(value):
+		base_height_offset = value
+		multimesh.mesh.center_offset.y = base_height_offset + multimesh.mesh.size.y / 2
+@export_custom(PROPERTY_HINT_RANGE, "-2, 2", PROPERTY_USAGE_STORAGE) var rng_height_range : float = 0.0:
+	set(value):
+		rng_height_range = value
 
 @export_storage var planted_chunks : Dictionary = {} 
 var populated_chunks : Array[MarchingSquaresTerrainChunk]
@@ -92,7 +97,7 @@ func _init() -> void:
 
 
 func regenerate_flowers() -> void:
-	if not cell_data:
+	if not planted_chunks.is_empty() and not cell_data and not MarchingSquaresTerrainPlugin.instance.remove_selection:
 		printerr("No cell data set while regenerating cells")
 		return
 	
