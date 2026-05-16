@@ -149,8 +149,7 @@ func add_populator_settings() -> void:
 				ts_cont.add_child(editor_vec3, true)
 				vbox.add_child(ts_cont, true)
 			"SpinBox":
-				var spin_box := SpinBox.new()
-				spin_box.value = selected_populator.get(var_name)
+				var spin_box := _make_spinbox(selected_populator.get(var_name), 0.001)
 				if var_name == "base_height_offset":
 					spin_box.step = 0.01
 				spin_box.value_changed.connect(func(value): _on_populator_setting_changed(var_name, value))
