@@ -32,6 +32,8 @@ var terrain_settings_data : Dictionary = {
 	"animation_fps": "SpinBox",
 	"grass_subdivisions": "SpinBox",
 	"grass_size": "Vector2",
+	# Vertex painter visuals
+	"outline_width": "EditorSpinSlider",
 	# Special texture settings
 	"use_ridge_texture": "CheckBox",
 	"use_ledge_texture": "CheckBox",
@@ -456,12 +458,17 @@ func add_setting(p_params: Dictionary) -> void:
 					"EditorSpinSlider":
 						var spin_slider := EditorSpinSlider.new()
 						spin_slider.set_flat(true)
-						spin_slider.set_min(0.0)
-						if setting == "wall_threshold":
-							spin_slider.set_max(0.5)
+						if setting == "outline_width":
+							spin_slider.set_min(0.25)
+							spin_slider.set_max(32.0)
+							spin_slider.set_step(0.25)
 						else:
-							spin_slider.set_max(1.0)
-						spin_slider.set_step(0.01)
+							spin_slider.set_min(0.0)
+							if setting == "wall_threshold":
+								spin_slider.set_max(0.5)
+							else:
+								spin_slider.set_max(1.0)
+							spin_slider.set_step(0.01)
 						spin_slider.set_value(s_value)
 						spin_slider.value_changed.connect(func(value): _on_terrain_setting_changed(setting, value))
 						spin_slider.set_custom_minimum_size(Vector2(105, 35))
