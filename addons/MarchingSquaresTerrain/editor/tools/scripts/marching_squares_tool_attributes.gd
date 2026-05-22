@@ -122,14 +122,20 @@ func show_tool_attributes(tool_index: MarchingSquaresTerrainPlugin.TerrainToolMo
 		new_attributes.append(attribute_list.mask_mode)
 	if tool_attributes.material:
 		new_attributes.append(attribute_list.material)
-	if tool_attributes.texture_name:
-		new_attributes.append(attribute_list.texture_name)
 	if tool_attributes.texture_preset:
 		new_attributes.append(attribute_list.texture_preset)
 	if tool_attributes.quick_paint_selection:
 		new_attributes.append(attribute_list.quick_paint_selection)
 	if tool_attributes.paint_walls:
 		new_attributes.append(attribute_list.paint_walls)
+	
+	# Rebuild material names from the preset or fallback to defaults
+	var terrain_names : Array = []
+	if plugin.current_terrain_node and plugin.current_terrain_node.current_texture_preset and plugin.current_terrain_node.current_texture_preset.new_tex_names:
+		terrain_names = plugin.current_terrain_node.current_texture_preset.new_tex_names.texture_names
+	else:
+		terrain_names = attribute_list.vp_tex_names.texture_names  # fallback
+	attribute_list.material["options"] = terrain_names
 	
 	for attribute in new_attributes:
 		var setting_dict : Dictionary = attribute
@@ -616,8 +622,6 @@ func _get_setting_value(p_setting_name: String) -> Variant:
 			return plugin.should_mask_grass
 		"material":
 			return plugin.vertex_color_idx
-		"texture_name":
-			pass
 		"texture_preset":
 			return plugin.current_texture_preset
 		"quick_paint_selection":
