@@ -66,9 +66,9 @@ var mode : TerrainToolMode = TerrainToolMode.BRUSH:
 	set(value):
 		mode = value
 		current_draw_pattern.clear()
-		if mode == TerrainToolMode.VERTEX_PAINTING:
-			falloff = false
-			BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", false)
+		if mode in [TerrainToolMode.VERTEX_PAINTING]:
+			falloff = true
+			BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", true)
 #endregion
 
 #region tool attribute vars
@@ -83,7 +83,7 @@ var falloff : bool = true
 var should_mask_grass : bool = false
 
 # Currently selected preset for vertex textures (DOES change the global terrain)
-var current_texture_preset : MarchingSquaresTexturePreset = EMPTY_TEXTURE_PRESET.duplicate():
+var current_texture_preset : MarchingSquaresTexturePreset = EMPTY_TEXTURE_PRESET:
 	set(value):
 		current_texture_preset = value
 		current_quick_paint = null
@@ -127,6 +127,9 @@ var draw_height : float
 
 # Is set to true when the user clicks on a tile that is part of the current draw pattern, will enter heightdrag setting mode
 var is_setting : bool
+
+# Variable for keeping the brush tool static when restarting the plugin
+var _is_reselecting: bool = false
 
 var is_making_bridge : bool
 var bridge_start_pos : Vector3
@@ -187,12 +190,21 @@ func _safe_initialize() -> bool:
 		initialization_error = "Failed to load algorithm scripts"
 		return false
 	
-	if gizmo_plugin:
-		add_node_3d_gizmo_plugin(gizmo_plugin)
-	else:
-		initialization_error = "Failed to create gizmo plugin"
-		return false
+	if not gizmo_plugin:
+		gizmo_plugin = MarchingSquaresTerrainGizmoPlugin.new()
 	
+	# Clear stale/detached gizmo instances from before restart
+	gizmo_plugin._terrain_gizmos.clear()
+	gizmo_plugin._chunk_gizmos.clear()
+	
+	add_node_3d_gizmo_plugin(gizmo_plugin)
+	
+	
+	if not is_instance_valid(toolbar):
+		toolbar = MarchingSquaresToolbar.new()
+	if not is_instance_valid(tool_attributes):
+		tool_attributes = MarchingSquaresToolAttributes.new()
+
 	if not ui:
 		ui = UI.new()
 		if ui:
@@ -201,8 +213,9 @@ func _safe_initialize() -> bool:
 		else:
 			initialization_error = "Failed to create UI system"
 			return false
-	
+
 	is_initialized = true
+	call_deferred("_refresh_editor_state")
 	return true
 
 
@@ -215,12 +228,24 @@ func _exit_tree():
 	remove_custom_type("MarchingSquaresTerrainChunk")
 	
 	if gizmo_plugin:
+		gizmo_plugin._terrain_gizmos.clear()
+		gizmo_plugin._chunk_gizmos.clear()
 		remove_node_3d_gizmo_plugin(gizmo_plugin)
-		gizmo_plugin = null
 	
 	is_initialized = false
 	initialization_error = ""
 
+
+func _refresh_editor_state() -> void:
+	# Re-arm gizmos and _edit() for any currently-selected/edited terrain
+	var root := EditorInterface.get_edited_scene_root()
+	if not root:
+		return
+	for node in root.find_children("", "Node3D", true, false):
+		if node is MarchingSquaresTerrain or node is MarchingSquaresTerrainChunk:
+			node.update_gizmos()
+			if node is MarchingSquaresTerrain and node in EditorInterface.get_selection().get_selected_nodes():
+				EditorInterface.edit_node(node)
 
 func _ready():
 	BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", falloff)
@@ -275,12 +300,13 @@ func _edit(object: Object) -> void:
 			current_texture_preset = object.current_texture_preset
 			_syncing_from_terrain = false
 	else:
-		if ui:
-			ui.set_visible(false)
-		current_draw_pattern.clear()
-		is_drawing = false
-		draw_height_set = false
-		gizmo_plugin.clear()
+		if not _is_reselecting:
+			if ui:
+				ui.set_visible(false)
+			current_draw_pattern.clear()
+			is_drawing = false
+			draw_height_set = false
+			gizmo_plugin.clear()
 
 
 # This function handles the mouse click in the 3D viewport
@@ -324,7 +350,7 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 	var shift_held := Input.is_key_pressed(KEY_SHIFT)
 	
 	# If not in a settings mode, perform terrain raycast
-	if mode == TerrainToolMode.BRUSH or mode == TerrainToolMode.GRASS_MASK or mode == TerrainToolMode.LEVEL or mode == TerrainToolMode.SMOOTH or mode == TerrainToolMode.BRIDGE or mode == TerrainToolMode.VERTEX_PAINTING or mode == TerrainToolMode.DEBUG_BRUSH:
+	if mode in [TerrainToolMode.BRUSH, TerrainToolMode.GRASS_MASK, TerrainToolMode.LEVEL, TerrainToolMode.SMOOTH, TerrainToolMode.BRIDGE, TerrainToolMode.VERTEX_PAINTING, TerrainToolMode.DEBUG_BRUSH, TerrainToolMode.CHUNK_MANAGEMENT]:
 		var draw_position
 		var draw_area_hovered : bool = false
 		
@@ -386,22 +412,23 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 		if event is InputEventMouseButton and event.button_index == MouseButton.MOUSE_BUTTON_LEFT:
 			if event.is_pressed() and draw_area_hovered:
 				draw_height_set = false
-				if mode == TerrainToolMode.BRIDGE and not is_making_bridge:
+				if mode in [TerrainToolMode.BRIDGE] and not is_making_bridge:
 					flatten = false
 					is_making_bridge = true
 					bridge_start_pos = brush_position
-				if mode == TerrainToolMode.SMOOTH and falloff == false:
+				if mode in [TerrainToolMode.SMOOTH] and falloff == false:
 					falloff = true
-				if (mode == TerrainToolMode.GRASS_MASK or mode == TerrainToolMode.DEBUG_BRUSH) and falloff == true:
+				if mode in [TerrainToolMode.GRASS_MASK, TerrainToolMode.DEBUG_BRUSH] and falloff == true:
 					falloff = false
-				if (mode == TerrainToolMode.GRASS_MASK or mode == TerrainToolMode.VERTEX_PAINTING or mode == TerrainToolMode.DEBUG_BRUSH) and flatten == true:
+				if mode in [TerrainToolMode.GRASS_MASK, TerrainToolMode.VERTEX_PAINTING, TerrainToolMode.DEBUG_BRUSH] and flatten == true:
 					flatten = false
-				if mode == TerrainToolMode.LEVEL and Input.is_key_pressed(KEY_CTRL):
+				if mode in [TerrainToolMode.LEVEL, TerrainToolMode.CHUNK_MANAGEMENT] and Input.is_key_pressed(KEY_CTRL):
 					height = brush_position.y
-				elif Input.is_key_pressed(KEY_SHIFT):
+					ui.tool_attributes.show_tool_attributes(ui.active_tool)
+				elif Input.is_key_pressed(KEY_SHIFT) and mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
 					is_drawing = true
 					brush_position = draw_position
-				else:
+				elif mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
 					is_setting = true
 					if not flatten:
 						draw_height = draw_position.y
@@ -410,10 +437,10 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 					is_making_bridge = false
 				if is_drawing:
 					is_drawing = false
-					if mode == TerrainToolMode.GRASS_MASK or mode == TerrainToolMode.LEVEL or mode == TerrainToolMode.BRIDGE or mode == TerrainToolMode.DEBUG_BRUSH:
+					if mode in [TerrainToolMode.GRASS_MASK, TerrainToolMode.LEVEL, TerrainToolMode.BRIDGE, TerrainToolMode.DEBUG_BRUSH, TerrainToolMode.VERTEX_PAINTING]:
 						draw_pattern(terrain)
 						current_draw_pattern.clear()
-					if mode == TerrainToolMode.SMOOTH or mode == TerrainToolMode.VERTEX_PAINTING:
+					if mode in [TerrainToolMode.SMOOTH]:
 						current_draw_pattern.clear()
 				if is_setting:
 					is_setting = false
@@ -423,10 +450,11 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 					else:
 						current_draw_pattern.clear()
 			gizmo_plugin.trigger_redraw(terrain)
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
+			if mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
 		
 		# Adjust brush size
-		if event is InputEventMouseButton and Input.is_key_pressed(KEY_SHIFT):
+		if event is InputEventMouseButton and Input.is_key_pressed(KEY_SHIFT) and mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
 			var cell_scale_factor := clamp(((terrain.cell_size.x + terrain.cell_size.y) / 4.0), 0.3, 1.0)
 			var dimensions_scale_factor := clamp((((terrain.dimensions.x / 33) + (terrain.dimensions.z / 33)) / 2.0), 0.5, 2.0)
 			var size_scale_factor : float = dimensions_scale_factor * cell_scale_factor
@@ -436,22 +464,23 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 				if brush_size > 50 * size_scale_factor:
 					brush_size = 50 * size_scale_factor
 				gizmo_plugin.trigger_redraw(terrain)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
 			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 				brush_size -= (0.5 * size_scale_factor) * factor
 				if brush_size < 1.0 * size_scale_factor:
 					brush_size = 1.0 * size_scale_factor
 				gizmo_plugin.trigger_redraw(terrain)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			ui.tool_attributes.show_tool_attributes(ui.active_tool)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		
 		if draw_area_hovered and event is InputEventMouseMotion:
 			brush_position = draw_position
-			if is_drawing and (mode == TerrainToolMode.SMOOTH or mode == TerrainToolMode.VERTEX_PAINTING or mode == TerrainToolMode.GRASS_MASK):
+			if is_drawing and mode in [TerrainToolMode.SMOOTH, TerrainToolMode.GRASS_MASK]:
 				draw_pattern(terrain)
 				current_draw_pattern.clear()
 		
 		gizmo_plugin.trigger_redraw(terrain)
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
+		if mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
 	
 	# Check for hovering over/clicking a new chunk
 	var chunk_plane := Plane(Vector3.UP, Vector3.ZERO)
@@ -469,8 +498,12 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 		
 		# On click, add or remove chunk if in chunk_management mode
 		if mode == TerrainToolMode.CHUNK_MANAGEMENT and event is InputEventMouseButton and event.is_pressed() and event.button_index == MouseButton.MOUSE_BUTTON_LEFT:
-			# Select chunk
+			# Early return for height selecting.
 			if Input.is_key_pressed(KEY_CTRL):
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			
+			# Select chunk
+			if Input.is_key_pressed(KEY_ALT):
 				selected_chunk = terrain.chunks.get(current_hovered_chunk)
 				ui.tool_attributes.show_tool_attributes(TerrainToolMode.CHUNK_MANAGEMENT)
 				ui.tool_attributes.selected_chunk = selected_chunk
@@ -660,8 +693,10 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 				else:
 					restore_value = chunk.get_color_0(draw_cell_coords)
 					restore_value_cc = chunk.get_color_1(draw_cell_coords)
-				draw_value = vertex_color_0
-				draw_value_cc = vertex_color_1
+				
+				var t := clamp(sample * strength, 0.0, 1.0)
+				draw_value = restore_value.lerp(vertex_color_0, t)
+				draw_value_cc = restore_value_cc.lerp(vertex_color_1, t)
 			elif mode == TerrainToolMode.DEBUG_BRUSH:
 				var g_pos := chunk.to_global(Vector3(float(draw_cell_coords.x), chunk.get_height(draw_cell_coords), float(draw_cell_coords.y)))
 				var normal := get_cell_normal(chunk, draw_cell_coords)
@@ -682,7 +717,7 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 			if mode == TerrainToolMode.VERTEX_PAINTING:
 				restore_pattern_cc[draw_chunk_coords][draw_cell_coords] = restore_value_cc
 				pattern_cc[draw_chunk_coords][draw_cell_coords] = draw_value_cc
-	if mode == TerrainToolMode.DEBUG_BRUSH:
+	if mode in [TerrainToolMode.DEBUG_BRUSH]:
 		return
 	for draw_chunk_coords: Vector2i in current_draw_pattern.keys():
 		var draw_chunk_dict = current_draw_pattern[draw_chunk_coords]
@@ -1189,6 +1224,8 @@ func _set_new_textures(_preset: MarchingSquaresTexturePreset) -> void:
 			0: # terrain_textures (unified for both floor and wall painting)
 				for i_tex in range(_preset.new_textures.terrain_textures.size()):
 					var tex : Texture2D = _preset.new_textures.terrain_textures[i_tex]
+					if tex == null:
+						continue
 					match i_tex:
 						0:
 							current_terrain_node.texture_1 = tex
@@ -1272,24 +1309,8 @@ func _set_new_textures(_preset: MarchingSquaresTexturePreset) -> void:
 							current_terrain_node.grass_sprite_tex_5 = tex
 						5:
 							current_terrain_node.grass_sprite_tex_6 = tex
-			3: # grass_colors
-				for i_grass_col in range(_preset.new_textures.grass_colors.size()):
-					var col : Color = _preset.new_textures.grass_colors[i_grass_col]
-					if col == null:
-						continue
-					match i_grass_col:
-						0:
-							current_terrain_node.texture_albedo_1 = col
-						1:
-							current_terrain_node.texture_albedo_2 = col
-						2:
-							current_terrain_node.texture_albedo_3 = col
-						3:
-							current_terrain_node.texture_albedo_4 = col
-						4:
-							current_terrain_node.texture_albedo_5 = col
-						5:
-							current_terrain_node.texture_albedo_6 = col
+			3: # grass_colors (palette system)
+				current_terrain_node.load_from_preset(_preset)
 			4: # has_grass
 				for i_has_grass in range(_preset.new_textures.has_grass.size()):
 					var val : bool = _preset.new_textures.has_grass[i_has_grass]
@@ -1305,7 +1326,6 @@ func _set_new_textures(_preset: MarchingSquaresTexturePreset) -> void:
 						4:
 							current_terrain_node.tex6_has_grass = val
 	
-	vp_texture_names.texture_names = _preset.new_tex_names.texture_names
 	
 	# Apply a batch update
 	current_terrain_node.force_batch_update()

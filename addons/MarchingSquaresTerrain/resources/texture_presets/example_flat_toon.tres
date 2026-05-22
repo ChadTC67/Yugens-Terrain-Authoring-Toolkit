@@ -4,54 +4,22 @@
 [ext_resource type="Texture2D" uid="uid://cxvnfgy865wsk" path="res://addons/MarchingSquaresTerrain/resources/plugin_materials/grass_leaf_sprite.png" id="2_j2uhx"]
 [ext_resource type="Script" uid="uid://c5yuywww81uee" path="res://addons/MarchingSquaresTerrain/editor/tools/scripts/marching_squares_texture_list.gd" id="3_xmhuy"]
 [ext_resource type="Script" uid="uid://mtlf02qfkqp5" path="res://addons/MarchingSquaresTerrain/editor/tools/scripts/marching_squares_quick_paint.gd" id="4_6uohx"]
-[ext_resource type="Script" path="res://addons/MarchingSquaresTerrain/editor/tools/scripts/marching_squares_texture_preset.gd" id="5_rysht"]
+[ext_resource type="Script" uid="uid://fvb3vi413siv" path="res://addons/MarchingSquaresTerrain/editor/tools/scripts/marching_squares_texture_preset.gd" id="5_rysht"]
 
 [sub_resource type="Resource" id="Resource_8s2fj"]
 script = ExtResource("1_41tud")
 metadata/_custom_type_script = "uid://dqeuj3gddfm65"
 
-[sub_resource type="Texture2D" id="Texture2D_vynns"]
-resource_local_to_scene = false
-resource_name = ""
-
-[sub_resource type="Texture2D" id="Texture2D_p1dug"]
-resource_local_to_scene = false
-resource_name = ""
-
-[sub_resource type="Texture2D" id="Texture2D_38l2j"]
-resource_local_to_scene = false
-resource_name = ""
-
-[sub_resource type="Texture2D" id="Texture2D_ta716"]
-resource_local_to_scene = false
-resource_name = ""
-
-[sub_resource type="Texture2D" id="Texture2D_1nue7"]
-resource_local_to_scene = false
-resource_name = ""
-
-[sub_resource type="Texture2D" id="Texture2D_iuhot"]
-resource_local_to_scene = false
-resource_name = ""
-
-[sub_resource type="Texture2D" id="Texture2D_vk8tc"]
-resource_local_to_scene = false
-resource_name = ""
-
-[sub_resource type="Texture2D" id="Texture2D_11ep3"]
-resource_local_to_scene = false
-resource_name = ""
-
-[sub_resource type="Texture2D" id="Texture2D_fpfsv"]
-resource_local_to_scene = false
-resource_name = ""
-
 [sub_resource type="Resource" id="Resource_xs5jl"]
 script = ExtResource("3_xmhuy")
-terrain_textures = Array[Texture2D]([null, null, null, null, null, null, SubResource("Texture2D_vynns"), SubResource("Texture2D_p1dug"), SubResource("Texture2D_38l2j"), SubResource("Texture2D_ta716"), SubResource("Texture2D_1nue7"), SubResource("Texture2D_iuhot"), SubResource("Texture2D_vk8tc"), SubResource("Texture2D_11ep3"), SubResource("Texture2D_fpfsv")])
+texture_scales = Array[float]([1.0, 1.0, 1.1, 1.0, 1.0, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+grass_colors = Array[Color]([Color(0.39110786, 0.75625, 0.047265626, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.853125, 0.5218726, 0.09597657, 1), Color(0.08087891, 0.63125, 0.13591596, 1), Color(0.684375, 0.41490236, 0.010693359, 1), Color(0.7621695, 0.834375, 0.69357425, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1), Color(0.39215687, 0.47058824, 0.31764707, 1)])
+has_grass = Array[bool]([true, true, true, true, false])
 
 [resource]
 script = ExtResource("5_rysht")
 preset_name = "Flat Toon"
 new_tex_names = SubResource("Resource_8s2fj")
 new_textures = SubResource("Resource_xs5jl")
+slot_color_indices = [[0, 6], [1, 8], [2], [3], [4], [5, 7], [], [], [], [], [], [], [], [], []]
+slot_blend_modes = Array[int]([3, 0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3])

@@ -141,13 +141,7 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 				if child is StaticBody3D:
 					child.free()
 			create_trimesh_collision()
-			for child in get_children():
-				if child is StaticBody3D:
-					child.collision_layer = 17
-					child.set_collision_layer_value(terrain_system.extra_collision_layer, true)
-					for _child in child.get_children():
-						if _child is CollisionShape3D:
-							_child.set_visible(false)
+			_apply_collision_layers()
 	
 	if not EngineWrapper.instance.is_editor() and terrain_system.enable_runtime_texture_baking:
 		var baker := MarchingSquaresGeometryBaker.new()
@@ -237,8 +231,11 @@ func _notification(what: int) -> void:
 
 
 func _enter_tree() -> void:
+	if not terrain_system:
+		return
 	if get_parent() != terrain_system:
 		push_error("Chunk must remain within its parent!")
+		return
 	terrain_system.chunks[chunk_coords] = self
 
 
@@ -288,13 +285,7 @@ func regenerate_mesh(use_threads: bool = false):
 		if child is StaticBody3D:
 			child.free()
 	create_trimesh_collision()
-	for child in get_children():
-		if child is StaticBody3D:
-			child.collision_layer = 17
-			child.set_collision_layer_value(terrain_system.extra_collision_layer, true)
-			for _child in child.get_children():
-				if _child is CollisionShape3D:
-					_child.set_visible(false)
+	_apply_collision_layers()
 	
 	var elapsed_time : int = Time.get_ticks_msec() - start_time
 	print_verbose("Generated terrain in "+str(elapsed_time)+"ms")
@@ -431,14 +422,14 @@ func _add_point(cell_coords: Vector2i, vert: Vector3, uv: Vector2, uv2: Vector2,
 
 #region cell_geometry generators (on being empty)
 
-func generate_height_map():
+func generate_height_map(p_base_height: float = 0.0):
 	height_map = []
 	height_map.resize(dimensions.z)
 	for z in range(dimensions.z):
 		height_map[z] = []
 		height_map[z].resize(dimensions.x)
 		for x in range(dimensions.x):
-			height_map[z][x] = 0.0
+			height_map[z][x] = p_base_height
 	
 	var noise := terrain_system.noise_hmap
 	if noise:
@@ -447,7 +438,7 @@ func generate_height_map():
 				var noise_x = (chunk_coords.x * (dimensions.x - 1)) + x
 				var noise_z = (chunk_coords.y * (dimensions.z -1)) + z
 				var noise_sample = noise.get_noise_2d(noise_x, noise_z)
-				height_map[z][x] = noise_sample * dimensions.y
+				height_map[z][x] = p_base_height + (noise_sample * dimensions.y)
 
 
 func generate_color_maps():
@@ -617,6 +608,16 @@ func _recreate_collision_body() -> void:
 		for group in get_groups():
 			if group.begins_with("navmesh_"):
 				body.add_to_group(group)
+
+
+func _apply_collision_layers() -> void:
+	for child in get_children():
+		if child is StaticBody3D:
+			child.collision_layer = 17
+			child.set_collision_layer_value(terrain_system.extra_collision_layer, true)
+			for _child in child.get_children():
+				if _child is CollisionShape3D:
+					_child.set_visible(false)
 
 
 func regenerate_all_cells(use_threads: bool):
