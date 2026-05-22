@@ -18,6 +18,7 @@ enum SettingType {
 	TERRAIN,
 	PRESET,
 	QUICK_PAINT,
+	HEIGHTMAP_IMPORTER,
 	ERROR,
 }
 
@@ -226,6 +227,7 @@ func show_tool_attributes(tool_index: int) -> void:
 		"terrain": SettingType.TERRAIN,
 		"preset": SettingType.PRESET,
 		"quick_paint": SettingType.QUICK_PAINT,
+		"heightmap_importer": SettingType.HEIGHTMAP_IMPORTER,
 	}
 
 	var new_attributes := []
@@ -297,7 +299,8 @@ func add_setting(p_params: Dictionary) -> void:
 			hbox_container.add_child(VSeparator.new())
 
 	var add_label := true
-	if setting_type == SettingType.CHUNK or setting_type == SettingType.TERRAIN:
+	if setting_type == SettingType.CHUNK or setting_type == SettingType.TERRAIN \
+			or setting_type == SettingType.HEIGHTMAP_IMPORTER:
 		add_label = false
 	if add_label:
 		var label := Label.new()
@@ -986,6 +989,20 @@ func _get_setting_value(p_setting_name: String) -> Variant:
 			pass
 		"terrain_settings":
 			pass
+		"hm_heightmap_image":
+			return plugin.hm_heightmap_image
+		"hm_chunks_x":
+			return plugin.hm_chunks_x
+		"hm_chunks_z":
+			return plugin.hm_chunks_z
+		"hm_max_height":
+			return plugin.hm_max_height
+		"hm_merge_mode":
+			return plugin.hm_merge_mode
+		"heightmap_importer":
+			pass
+		"import_heightmap":
+			pass
 		_:
 			push_error("Couldn't find tool attributes setting name: " + p_setting_name)
 	return "ERROR"
@@ -1162,6 +1179,45 @@ func _make_editor_name(var_name: String) -> String:
 func _hide_textures(texture_node: Node) -> void:
 	var texture_button := texture_node.get_child(0) as Button
 	texture_button.visible = false
+
+
+func _make_importer_spinbox_row(label_text: String, setting_name: String, current_val: int, min_val: int, max_val: int) -> HBoxContainer:
+	var hbox := HBoxContainer.new()
+	var label := Label.new()
+	label.set_text(label_text)
+	label.set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER)
+	label.set_custom_minimum_size(Vector2(80, 25))
+	var lcc := CenterContainer.new()
+	lcc.set_custom_minimum_size(Vector2(80, 35))
+	lcc.add_child(label, true)
+	hbox.add_child(lcc, true)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(spacer, true)
+	var spin := SpinBox.new()
+	spin.min_value = min_val
+	spin.max_value = max_val
+	spin.step = 1
+	spin.value = current_val
+	spin.value_changed.connect(func(v): _on_importer_setting_changed(setting_name, int(v)))
+	spin.set_custom_minimum_size(Vector2(70, 25))
+	var sc := CenterContainer.new()
+	sc.set_custom_minimum_size(Vector2(80, 35))
+	sc.add_child(spin, true)
+	hbox.add_child(sc, true)
+	return hbox
+
+
+func _on_importer_setting_changed(p_name: String, p_value: Variant) -> void:
+	emit_signal("setting_changed", p_name, p_value)
+
+
+func _on_import_heightmap_pressed() -> void:
+	emit_signal("setting_changed", "import_heightmap", true)
+
+
+func _on_clear_chunks_pressed() -> void:
+	emit_signal("setting_changed", "clear_chunks", true)
 
 
 func _format_constant_string(text: String) -> String:

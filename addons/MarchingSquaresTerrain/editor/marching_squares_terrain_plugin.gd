@@ -119,6 +119,7 @@ enum TerrainToolMode {
 	DEBUG_BRUSH = 6,
 	CHUNK_MANAGEMENT = 7,
 	TERRAIN_SETTINGS = 8,
+	HEIGHTMAP_IMPORTER = 9,
 }
 
 var _mode : TerrainToolMode = TerrainToolMode.BRUSH
@@ -183,6 +184,16 @@ var _vertex_color_idx : int = 0
 var vertex_color_idx : int:
 	get():
 		return _vertex_color_idx
+
+#region heightmap importer vars
+var hm_heightmap_image : Texture2D = null
+var hm_chunks_x : int = 4
+var hm_chunks_z : int = 4
+var hm_max_height : int = 32
+var hm_merge_mode : int = 1
+#endregion
+
+var vertex_color_idx : int = 0:
 	set(value):
 		_vertex_color_idx = value
 		_set_vertex_colors(value)
@@ -1655,6 +1666,34 @@ func apply_composite_pattern_action(terrain: MarchingSquaresTerrain, patterns: D
 	# Regenerate mesh ONCE for each affected chunk (instead of 6 times!)
 	for chunk in affected_chunks.values():
 		chunk.regenerate_mesh()
+
+#endregion
+
+#region heightmap import
+
+func run_heightmap_import() -> void:
+	if not current_terrain_node:
+		push_error("MarchingSquaresTerrainPlugin: No terrain selected for heightmap import.")
+		return
+	await MarchingSquaresHeightmapImporter.run(
+		current_terrain_node,
+		hm_heightmap_image,
+		hm_chunks_x,
+		hm_chunks_z,
+		hm_max_height,
+		hm_merge_mode,
+		self
+	)
+
+
+func run_clear_chunks() -> void:
+	if not current_terrain_node:
+		push_error("MarchingSquaresTerrainPlugin: No terrain selected for clear chunks.")
+		return
+	var terrain := current_terrain_node
+	var coords_to_remove := terrain.chunks.keys()
+	for coords in coords_to_remove:
+		terrain.remove_chunk(coords.x, coords.y, self)
 
 #endregion
 
