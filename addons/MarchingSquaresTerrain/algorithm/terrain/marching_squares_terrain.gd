@@ -109,7 +109,8 @@ enum StorageMode {
 		var grass_mat := grass_mesh.material as ShaderMaterial
 		grass_mat.set_shader_parameter("wall_threshold", value)
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
-			chunk.grass_planter.regenerate_all_cells()
+			if chunk.grass_planter:
+				chunk.grass_planter.regenerate_all_cells()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var ridge_threshold: float = 1.0:
 	set(value):
 		ridge_threshold = value
@@ -137,6 +138,8 @@ enum StorageMode {
 	set(value):
 		grass_subdivisions = value
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
+			if not chunk.grass_planter or not chunk.grass_planter.multimesh:
+				continue
 			chunk.grass_planter.multimesh.instance_count = (dimensions.x-1) * (dimensions.z-1) * grass_subdivisions * grass_subdivisions
 			chunk.grass_planter.regenerate_all_cells()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_size : Vector2 = Vector2(1.0, 1.0):
@@ -144,7 +147,16 @@ enum StorageMode {
 		grass_size = value
 		var scale_factor := (cell_size.x + cell_size.y) / 4.0
 		var scaled_value := value * scale_factor
+
+		# Update the shared grass mesh first (safe even before chunks initialize).
+		if grass_mesh:
+			grass_mesh.size = scaled_value
+			grass_mesh.center_offset.y = scaled_value.y / 2.0
+
+		# Chunks may not have created GrassPlanter/Multimesh yet during early startup.
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
+			if not chunk or not chunk.grass_planter or not chunk.grass_planter.multimesh or not chunk.grass_planter.multimesh.mesh:
+				continue
 			chunk.grass_planter.multimesh.mesh.size = scaled_value
 			chunk.grass_planter.multimesh.mesh.center_offset.y = scaled_value.y / 2.0
 #endregion
@@ -559,16 +571,16 @@ func _deferred_enter_tree() -> void:
 		# Auto-migrate embedded data to external storage (editor only)
 		MSTDataHandler.migrate_to_external_storage(self)
 	
-	# Initialize all chunks (regenerate mesh/grass from loaded data)
-	for chunk : MarchingSquaresTerrainChunk in chunks.values():
-		chunk.initialize_terrain(true)
-		
 	# Apply all persisted textures/colors to this terrain's unique shader materials
 	# This is needed because _init() creates fresh duplicated materials that don't have
 	# the terrain's saved texture values - only the base resource defaults
+	# IMPORTANT: do this BEFORE chunk initialization so runtime texture baking sees correct uniforms.
 	migrate_colors_to_palette()
 	force_batch_update()
-	grass_size = grass_size
+	
+	# Initialize all chunks (regenerate mesh/grass from loaded data)
+	for chunk : MarchingSquaresTerrainChunk in chunks.values():
+		chunk.initialize_terrain(true)
 	
 	load_finished.emit()
 
