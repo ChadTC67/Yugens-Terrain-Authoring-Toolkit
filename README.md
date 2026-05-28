@@ -69,6 +69,12 @@ Watch the [YouTube](https://www.youtube.com/playlist?list=PLXcmz5ZRdiyTpf_Jk9gGN
 
 1. d3d12 doesn't load terrain material properly when in game on some devices
 
+## Supported Pipelines
+
+As of right now the plugin only supports `Forward+` and limited `Compatibility` rendering with both `Mobile` and `Web` rendering not supported.
+
+Which one you should use is dependent on your personal project but also your GPU as some GPU's work better with `Forward+` than `Compatibility`.
+
 ## PR Workflow
 
 Please target and base your PR's on `public-testing` instead of `main` otherwise we cannot review or aprove them!
