@@ -1675,8 +1675,26 @@ func run_heightmap_import() -> void:
 	if not current_terrain_node:
 		push_error("MarchingSquaresTerrainPlugin: No terrain selected for heightmap import.")
 		return
+	var terrain := current_terrain_node
+
+	# Calculate which coords the import will touch (mirrors the importer's offset logic)
+	@warning_ignore("integer_division")
+	var offset_x : int = -(hm_chunks_x / 2)
+	@warning_ignore("integer_division")
+	var offset_z : int = -(hm_chunks_z / 2)
+	var import_coords : Array = []
+	for cz in hm_chunks_z:
+		for cx in hm_chunks_x:
+			import_coords.append(Vector2i(cx + offset_x, cz + offset_z))
+
+	# Snapshot existing chunks at those coords before the import
+	var before_snapshot : Dictionary = {}
+	for coords in import_coords:
+		if terrain.chunks.has(coords):
+			before_snapshot[coords] = MSTDataHandler.export_chunk_data(terrain.chunks[coords])
+
 	await MarchingSquaresHeightmapImporter.run(
-		current_terrain_node,
+		terrain,
 		hm_heightmap_image,
 		hm_chunks_x,
 		hm_chunks_z,
@@ -1685,15 +1703,58 @@ func run_heightmap_import() -> void:
 		self
 	)
 
+	# Snapshot newly created chunks after the import
+	var after_snapshot : Dictionary = {}
+	for coords in import_coords:
+		if terrain.chunks.has(coords):
+			after_snapshot[coords] = MSTDataHandler.export_chunk_data(terrain.chunks[coords])
+
+	var undo_redo := get_undo_redo()
+	undo_redo.create_action("heightmap import")
+	undo_redo.add_do_method(self, "_replace_chunks_action", terrain, import_coords, after_snapshot)
+	undo_redo.add_undo_method(self, "_replace_chunks_action", terrain, import_coords, before_snapshot)
+	undo_redo.commit_action(false)
+
 
 func run_clear_chunks() -> void:
 	if not current_terrain_node:
 		push_error("MarchingSquaresTerrainPlugin: No terrain selected for clear chunks.")
 		return
 	var terrain := current_terrain_node
-	var coords_to_remove := terrain.chunks.keys()
-	for coords in coords_to_remove:
-		terrain.remove_chunk(coords.x, coords.y, self)
+	if terrain.chunks.is_empty():
+		return
+
+	var coords_to_clear : Array = terrain.chunks.keys().duplicate()
+
+	# Snapshot all current chunks before clearing
+	var before_snapshot : Dictionary = {}
+	for coords in coords_to_clear:
+		before_snapshot[coords] = MSTDataHandler.export_chunk_data(terrain.chunks[coords])
+
+	var undo_redo := get_undo_redo()
+	undo_redo.create_action("clear all chunks")
+	undo_redo.add_do_method(self, "_replace_chunks_action", terrain, coords_to_clear, {})
+	undo_redo.add_undo_method(self, "_replace_chunks_action", terrain, coords_to_clear, before_snapshot)
+	undo_redo.commit_action()
+
+
+# Removes all chunks at coords_to_clear, then reconstructs from snapshot data.
+# Used by undo/redo for heightmap import and clear-all-chunks operations.
+func _replace_chunks_action(terrain: MarchingSquaresTerrain, coords_to_clear: Array, snapshot: Dictionary) -> void:
+	for coords in coords_to_clear:
+		if terrain.chunks.has(coords):
+			var chunk : MarchingSquaresTerrainChunk = terrain.chunks[coords]
+			terrain.chunks.erase(coords)
+			chunk.queue_free()
+	for coords in snapshot.keys():
+		var data : MSTChunkData = snapshot[coords]
+		var chunk := MarchingSquaresTerrainChunk.new()
+		chunk.name = "Chunk %s" % str(coords)
+		chunk.terrain_system = terrain
+		MSTDataHandler.import_chunk_data(chunk, data)
+		chunk._data_dirty = true
+		terrain.add_chunk(coords, chunk, null, true)
+	gizmo_plugin.trigger_redraw(terrain)
 
 #endregion
 
