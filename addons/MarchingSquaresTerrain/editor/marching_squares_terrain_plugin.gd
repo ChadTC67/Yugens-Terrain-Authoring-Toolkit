@@ -85,6 +85,8 @@ var should_mask_grass : bool = false
 # Currently selected preset for vertex textures (DOES change the global terrain)
 var current_texture_preset : MarchingSquaresTexturePreset = EMPTY_TEXTURE_PRESET.duplicate():
 	set(value):
+		if value == current_texture_preset:
+			return
 		current_texture_preset = value
 		current_quick_paint = null
 		if not _syncing_from_terrain:
@@ -558,7 +560,7 @@ func update_draw_pattern(b_pos: Vector3):
 
 
 func draw_pattern(terrain: MarchingSquaresTerrain):
-	var undo_redo := MarchingSquaresTerrainPlugin.instance.get_undo_redo()
+	var undo_redo := get_undo_redo()
 	
 	var pattern := {}
 	var pattern_cc := {}
@@ -676,6 +678,9 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 					", color id = " + str(chunk.get_color_0(draw_cell_coords)) + " " + str(chunk.get_color_1(draw_cell_coords)) +
 					", normal = " + str(normal))
 				continue
+			elif mode == TerrainToolMode.CHUNK_MANAGEMENT:
+				restore_value = chunk.get_height(draw_cell_coords)
+				draw_value = chunk.get_height(draw_cell_coords)
 			else: # Brush tool
 				restore_value = chunk.get_height(draw_cell_coords)
 				if flatten:
@@ -784,7 +789,7 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 		undo_redo.add_undo_method(self, "draw_grass_mask_pattern_action", terrain, restore_pattern)
 		undo_redo.commit_action()
 	else:
-		# Handle BRUSH, LEVEL, SMOOTH, BRIDGE modes
+		# Handle BRUSH, LEVEL, SMOOTH, BRIDGE, CHUNK_MANAGEMENT modes
 		if current_quick_paint:
 			# QUICK PAINT MODE: Apply all changes as ONE atomic undo/redo action
 			# This fixes the issue where 6 separate actions are created
@@ -912,10 +917,13 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 				"color_1": color_restore_cc
 			}
 			
-			undo_redo.create_action("terrain brush with quick paint")
-			undo_redo.add_do_method(self, "apply_composite_pattern_action", terrain, do_patterns)
-			undo_redo.add_undo_method(self, "apply_composite_pattern_action", terrain, undo_patterns)
-			undo_redo.commit_action()
+			if mode == TerrainToolMode.CHUNK_MANAGEMENT:
+				apply_composite_pattern_action(terrain, do_patterns)
+			else:
+				undo_redo.create_action("terrain brush with quick paint")
+				undo_redo.add_do_method(self, "apply_composite_pattern_action", terrain, do_patterns)
+				undo_redo.add_undo_method(self, "apply_composite_pattern_action", terrain, undo_patterns)
+				undo_redo.commit_action()
 		else:
 			# NON-QUICK PAINT MODE: Apply height + default wall texture
 			# Use the terrain's default_wall_texture for wall colors
@@ -1090,7 +1098,7 @@ func apply_composite_pattern_action(terrain: MarchingSquaresTerrain, patterns: D
 					chunk.draw_wall_color_1(cell_coords.x, cell_coords.y, patterns.wall_color_1[chunk_coords][cell_coords])
 	
 	# Apply height changes (triggers ridge creation which uses wall colors)
-	if patterns.has("height"):
+	if patterns.has("height") and mode != TerrainToolMode.CHUNK_MANAGEMENT:
 		for chunk_coords: Vector2i in patterns.height:
 			var chunk : MarchingSquaresTerrainChunk = terrain.chunks.get(chunk_coords)
 			if chunk:

@@ -77,7 +77,7 @@ func show_tool_attributes(tool_index: int) -> void:
 	if not plugin.toolbar.toolbox:
 		return
 	
-	if tool_index == 7 and plugin.selected_chunk == null and not plugin.current_terrain_node.chunks.is_empty(): # Chunk management tool
+	if (plugin.selected_chunk == null or selected_chunk == null) and not plugin.current_terrain_node.chunks.is_empty(): # Chunk management tool
 		plugin.selected_chunk = plugin.current_terrain_node.chunks.values().pick_random()
 		selected_chunk = plugin.selected_chunk
 	

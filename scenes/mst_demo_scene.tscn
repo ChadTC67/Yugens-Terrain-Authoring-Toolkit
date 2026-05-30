@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://bhr82jo0k7guh" path="res://scripts/rotating_camera.gd" id="1_0xhur"]
 [ext_resource type="Script" uid="uid://6pvgykbbdsmg" path="res://scripts/demo_scene.gd" id="1_rcx4y"]
-[ext_resource type="Script" uid="uid://cddg1xr5hye1d" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain.gd" id="3_3qla6"]
+[ext_resource type="Script" uid="uid://cddg1xr5hye1d" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain.gd" id="3_0450b"]
 [ext_resource type="Script" uid="uid://cql4d8s5t5xcx" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_chunk.gd" id="4_0450b"]
 [ext_resource type="Script" uid="uid://22l7ysgniux3" path="res://addons/MarchingSquaresTerrain/algorithm/grass/marching_squares_grass_planter.gd" id="5_0xhur"]
 
@@ -56,16 +56,16 @@ size = 55.0
 near = 0.003
 far = 1200.0
 
-[node name="MarchingSquaresTerrain" type="Node3D" parent="SubViewportContainer/SubViewport" unique_id=1336289655]
-script = ExtResource("3_3qla6")
-data_directory = "res://scenes/mst_demo_scene_TerrainData/MarchingSquaresTerrain_724b1c9b"
+[node name="MarchingSquaresTerrain" type="Node3D" parent="SubViewportContainer/SubViewport" unique_id=919972573]
+script = ExtResource("3_0450b")
+data_directory = "res://scenes/mst_demo_scene_TerrainData/MarchingSquaresTerrain_c18e0552"
 _storage_initialized = true
 metadata/_custom_type_script = "uid://cddg1xr5hye1d"
 
-[node name="Chunk (0, 0)" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/MarchingSquaresTerrain" unique_id=1267020324 node_paths=PackedStringArray("terrain_system")]
+[node name="Chunk (0, 0)" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/MarchingSquaresTerrain" unique_id=1002256238 node_paths=PackedStringArray("terrain_system")]
 script = ExtResource("4_0450b")
 terrain_system = NodePath("..")
 
-[node name="GrassPlanter" type="MultiMeshInstance3D" parent="SubViewportContainer/SubViewport/MarchingSquaresTerrain/Chunk (0, 0)" unique_id=880234171]
+[node name="GrassPlanter" type="MultiMeshInstance3D" parent="SubViewportContainer/SubViewport/MarchingSquaresTerrain/Chunk (0, 0)" unique_id=1088210594]
 cast_shadow = 0
 script = ExtResource("5_0xhur")

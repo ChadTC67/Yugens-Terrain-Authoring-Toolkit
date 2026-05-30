@@ -651,7 +651,7 @@ func remove_chunk(x: int, z: int, plugin):
 	chunks.erase(chunk_coords)  # Use chunk_coords, not chunk object
 	chunk.free()
 	
-	if plugin.selected_chunk and plugin.selected_chunk.chunk_coords == chunk.chunk_coords:
+	if plugin.selected_chunk and plugin.selected_chunk == chunk and plugin.selected_chunk.chunk_coords == chunk.chunk_coords:
 		var temp_chunk := MarchingSquaresTerrainChunk.new()
 		temp_chunk.chunk_coords = Vector2i(99999, 99999)
 		plugin.selected_chunk = temp_chunk
