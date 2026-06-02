@@ -11,6 +11,9 @@ class_name MarchingSquaresToolAttributeSettings
 @export var flatten : bool = false
 @export var falloff : bool = false
 
+# Vertex Paint only: hard vs dithered edge (does not lerp colors).
+@export var vp_falloff_mode : bool = false
+
 # Brush specific attributes
 @export var curve3d_mode : bool = false
 @export var mask_mode : bool = false

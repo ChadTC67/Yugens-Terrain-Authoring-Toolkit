@@ -8,6 +8,7 @@
 script = ExtResource("1_rbatu")
 brush_type = true
 size = true
+vp_falloff_mode = true
 material = true
 texture_name = true
 texture_preset = true

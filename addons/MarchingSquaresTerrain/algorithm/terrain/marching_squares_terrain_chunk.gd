@@ -465,10 +465,79 @@ func generate_wall_color_maps():
 	wall_color_map_1 = PackedColorArray()
 	wall_color_map_0.resize(dimensions.z * dimensions.x)
 	wall_color_map_1.resize(dimensions.z * dimensions.x)
+	var default_idx := 0
+	if terrain_system != null:
+		default_idx = int(terrain_system.default_wall_texture)
+	var cols := MSTVertexColorHelper.texture_index_to_colors(default_idx)
+	var c0 : Color = cols[0]
+	var c1 : Color = cols[1]
 	for z in range(dimensions.z):
 		for x in range(dimensions.x):
-			wall_color_map_0[z*dimensions.x + x] = Color(1,0,0,0)  # Default to texture slot 0
-			wall_color_map_1[z*dimensions.x + x] = Color(1,0,0,0)
+			wall_color_map_0[z*dimensions.x + x] = c0
+			wall_color_map_1[z*dimensions.x + x] = c1
+
+
+func apply_default_wall_texture(old_idx: int, new_idx: int) -> bool:
+	if not wall_color_map_0 or not wall_color_map_1:
+		return false
+	if old_idx == new_idx:
+		return false
+	var cols := MSTVertexColorHelper.texture_index_to_colors(new_idx)
+	var c0 : Color = cols[0]
+	var c1 : Color = cols[1]
+	var changed := false
+	for i in range(wall_color_map_0.size()):
+		var idx := MSTVertexColorHelper.get_texture_index_from_colors(wall_color_map_0[i], wall_color_map_1[i])
+		if idx == old_idx:
+			wall_color_map_0[i] = c0
+			wall_color_map_1[i] = c1
+			changed = true
+	if changed:
+		mark_dirty()
+	return changed
+
+
+func apply_default_wall_to_unpainted(new_idx: int) -> bool:
+	# "Unpainted" is defined as wall map still matching ground map.
+	if not wall_color_map_0 or not wall_color_map_1:
+		return false
+	if not color_map_0 or not color_map_1:
+		return false
+	var cols := MSTVertexColorHelper.texture_index_to_colors(new_idx)
+	var c0 : Color = cols[0]
+	var c1 : Color = cols[1]
+	var changed := false
+	var count := min(wall_color_map_0.size(), color_map_0.size())
+	for i in range(count):
+		var wall_idx := MSTVertexColorHelper.get_texture_index_from_colors(wall_color_map_0[i], wall_color_map_1[i])
+		var ground_idx := MSTVertexColorHelper.get_texture_index_from_colors(color_map_0[i], color_map_1[i])
+		if wall_idx == ground_idx:
+			wall_color_map_0[i] = c0
+			wall_color_map_1[i] = c1
+			changed = true
+	if changed:
+		mark_dirty()
+	return changed
+
+
+func apply_default_wall_to_legacy_init(new_idx: int) -> bool:
+	# Legacy wall map initialization used Color(1,0,0,0) for BOTH channels to mean "texture 0".
+	# This breaks default wall texture behavior and should be treated as unpainted.
+	if not wall_color_map_0 or not wall_color_map_1:
+		return false
+	var legacy := Color(1, 0, 0, 0)
+	var cols := MSTVertexColorHelper.texture_index_to_colors(new_idx)
+	var c0 : Color = cols[0]
+	var c1 : Color = cols[1]
+	var changed := false
+	for i in range(wall_color_map_0.size()):
+		if wall_color_map_0[i] == legacy and wall_color_map_1[i] == legacy:
+			wall_color_map_0[i] = c0
+			wall_color_map_1[i] = c1
+			changed = true
+	if changed:
+		mark_dirty()
+	return changed
 
 
 func generate_grass_mask_map():

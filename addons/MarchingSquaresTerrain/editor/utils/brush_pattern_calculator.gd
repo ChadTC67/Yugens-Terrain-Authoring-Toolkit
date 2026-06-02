@@ -13,14 +13,16 @@ class BrushBounds:
 static func calculate_bounds(pos: Vector3, brush_size: float, terrain: MarchingSquaresTerrain) -> BrushBounds:
 	var bounds := BrushBounds.new()
 	
+	# brush_size is treated as a radius everywhere (gizmo scale, UI). Using /2 here caused
+	# the painted region to be much smaller/sparser than the visible brush circle.
 	var pos_tl := Vector2(
-		pos.x + terrain.cell_size.x - brush_size / 2,
-		pos.z + terrain.cell_size.y - brush_size / 2
-		)
+		pos.x - brush_size,
+		pos.z - brush_size
+	)
 	var pos_br := Vector2(
-		pos.x + terrain.cell_size.x + brush_size / 2,
-		pos.z + terrain.cell_size.y + brush_size / 2
-		)
+		pos.x + brush_size,
+		pos.z + brush_size
+	)
 	
 	var chunk_size_x : float = (terrain.dimensions.x - 1) * terrain.cell_size.x
 	var chunk_size_z : float = (terrain.dimensions.z - 1) * terrain.cell_size.y
@@ -32,20 +34,22 @@ static func calculate_bounds(pos: Vector3, brush_size: float, terrain: MarchingS
 		floori(pos_tl.x / terrain.cell_size.x - bounds.chunk_tl.x * (terrain.dimensions.x - 1)),
 		floori(pos_tl.y / terrain.cell_size.y - bounds.chunk_tl.y * (terrain.dimensions.z - 1))
 	)
+	# +1 so that x_max/z_max can be used as an exclusive range bound.
 	bounds.cell_br = Vector2i(
-		floori(pos_br.x / terrain.cell_size.x - bounds.chunk_br.x * (terrain.dimensions.x - 1)),
-		floori(pos_br.y / terrain.cell_size.y - bounds.chunk_br.y * (terrain.dimensions.z - 1))
+		floori(pos_br.x / terrain.cell_size.x - bounds.chunk_br.x * (terrain.dimensions.x - 1)) + 1,
+		floori(pos_br.y / terrain.cell_size.y - bounds.chunk_br.y * (terrain.dimensions.z - 1)) + 1
 	)
 	
 	return bounds
 
 
 static func calculate_max_distance(brush_size: float, brush_index: int) -> float:
-	var max_distance : float = brush_size / 2
+	# brush_size is a radius.
+	var max_distance : float = brush_size
 	match brush_index:
 		0: # Round brush
 			max_distance *= max_distance
-		1: # Square brush
+		1: # Square brush (use bounding circle of the square)
 			max_distance *= max_distance * 2
 	return max_distance
 
@@ -67,24 +71,32 @@ static func calculate_falloff_sample(
 	if not use_falloff:
 		return 1.0
 	
-	var t : float
+	var t : float = 0.0
 	match brush_index:
-		0: # Round brush
-			var d : float = (max_distance - distance_squared) / max_distance
-			t = clamp(d, 0.0, 1.0)
+		0: # Round brush (linear by radius, not squared-distance)
+			var denom: float = max(brush_size, 0.0001)
+			var dist: float = sqrt(distance_squared)
+			t = 1.0 - clamp(dist / denom, 0.0, 1.0)
 		1: # Square brush
-			var local := world_pos - brush_pos
-			var uv := local / (brush_size * 0.5)
+			var local: Vector2 = world_pos - brush_pos
+			var denom: float = max(brush_size, 0.0001)
+			var uv: Vector2 = local / denom
 			var d : float = max(abs(uv.x), abs(uv.y))
-			t = 1.0 - clamp(d, 0.2, 1.0)
+			t = 1.0 - clamp(d, 0.0, 1.0)
 	
-	return falloff_curve.sample(clamp(t, 0.001, 0.999))
+	# IMPORTANT: allow true endpoints so a full-strength stroke can reach the target.
+	return falloff_curve.sample(clamp(t, 0.0, 1.0))
 
 
-## Calculate world position for a cell in a chunk
-static func cell_to_world_pos(chunk_coords: Vector2i, cell_coords: Vector2i, terrain: MarchingSquaresTerrain) -> Vector2:
+## Calculate world position for a cell in a chunk.
+## p_centered=true returns the center of the cell (half-cell offset). This is useful for Vertex Paint
+## so round brushes look less octagon-y on low-resolution grids.
+static func cell_to_world_pos(chunk_coords: Vector2i, cell_coords: Vector2i, terrain: MarchingSquaresTerrain, p_centered: bool = false) -> Vector2:
 	var world_x : float = (chunk_coords.x * (terrain.dimensions.x - 1) + cell_coords.x) * terrain.cell_size.x
 	var world_z : float = (chunk_coords.y * (terrain.dimensions.z - 1) + cell_coords.y) * terrain.cell_size.y
+	if p_centered:
+		world_x += terrain.cell_size.x * 0.5
+		world_z += terrain.cell_size.y * 0.5
 	return Vector2(world_x, world_z)
 
 

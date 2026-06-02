@@ -19,6 +19,7 @@ Used to tweak global terrain settings.
 
 [INFO]
 • The \"Blend Mode\" dropdown menu allows you to set the terrain's texture blending mode to suit your liking.
+• \"Blend Noise Enabled\" toggles subtle boundary waviness (on) vs clean/flat blending (off).
 • Setting a \"Noise Hmap\" makes the base chunk height generation procedural instead of flat. 
 • Setting the \"Animation Fps\" value to more than 0 makes the grass sprites move with limited fps.
     • Keeping it at 0 gives the grass a smooth wind based effect.

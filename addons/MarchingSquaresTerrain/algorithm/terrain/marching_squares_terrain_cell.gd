@@ -284,8 +284,10 @@ func add_point(x: float, y: float, z: float, u: float, v: float, u2: float, v2: 
 		z = temp
 	
 	# UV - used for ledge detection. X = closeness to top terrace, Y = closeness to bottom of terrace
-	# Walls will always have UV of 1, 1
-	var uv = Vector2(u, v) if floor_mode else Vector2(1, 1)
+	# Walls are tagged via UV sentinel (2,2) so the shader can reliably detect wall fragments.
+	# Wall vertices are tagged via UV sentinel so the shader can reliably detect walls.
+	# Floor vertices keep their regular UVs.
+	var uv = Vector2(u, v) if floor_mode else Vector2(2, 2)
 	
 	# Same calculations from here
 	var vert = Vector3((cell_coords.x+x) * chunk.cell_size.x, y, (cell_coords.y+z) * chunk.cell_size.y)

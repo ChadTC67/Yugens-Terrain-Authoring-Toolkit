@@ -26,6 +26,10 @@ var cell_mat_b : int = 0
 var cell_mat_c : int = 0
 var cell_weight_b : float = 0.0
 
+# Track which map (floor vs wall) cell_mat_a/b/c was derived from.
+# Walls must derive their dominant mats from wall_color_map, not the ground color_map.
+var _mat_pair_is_floor: bool = true
+
 # NOTE: Untyped to avoid @tool cyclic load issues (chunk <-> helper <-> cell).
 var chunk
 var cell
@@ -51,6 +55,13 @@ func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool = false) -> 
 	var rl_source_map_0 : PackedColorArray = sources[2]
 	var rl_source_map_1 : PackedColorArray = sources[3]
 	var use_wall_colors = (source_map_0 == chunk.wall_color_map_0)
+	
+	# Ensure dominant material selection matches the map we are currently sampling.
+	# Without this, wall vertices can incorrectly use floor material pairs (regression).
+	var want_floor_pair: bool = bool(cell.floor_mode)
+	if want_floor_pair != _mat_pair_is_floor:
+		calculate_cell_material_pair(source_map_0, source_map_1)
+		_mat_pair_is_floor = want_floor_pair
 	
 	# Terrain texturing is driven by CUSTOM2 (and weight_b in CUSTOM0.r).
 	# COLOR/CUSTOM0 are no longer used to encode the material index directly.
@@ -105,8 +116,10 @@ func calculate_corner_colors():
 	# Determine if this is a boundary cell (significant height variation)
 	cell_is_boundary = (cell_max_height - cell_min_height) > cell.merge_threshold
 	
-	# Calculate the 2 dominant textures for this cell
+	# Default to FLOOR material selection at cell start.
+	# Wall vertices will switch this on-demand in blend_colors().
 	calculate_cell_material_pair(chunk.color_map_0, chunk.color_map_1)
+	_mat_pair_is_floor = true
 	
 	if cell_is_boundary:
 		# Identify corners at each height level for height-based color sampling
@@ -265,7 +278,7 @@ static func get_dominant_color(c: Color) -> Color:
 
 # Convert color pair to texture index (0-255).
 # Supports both legacy 4×4 channel encoding (0-15) and the new byte encoding.
-func get_texture_index_from_colors(c0: Color, c1: Color) -> int:
+static func get_texture_index_from_colors(c0: Color, c1: Color) -> int:
 	var c0_sum = c0.r + c0.g + c0.b + c0.a
 	var c1_sum = c1.r + c1.g + c1.b + c1.a
 	var c0_max = max(max(c0.r, c0.g), max(c0.b, c0.a))
@@ -290,7 +303,7 @@ func get_texture_index_from_colors(c0: Color, c1: Color) -> int:
 
 
 # Convert texture index (0-255) to color pair.
-func texture_index_to_colors(idx: int) -> Array[Color]:
+static func texture_index_to_colors(idx: int) -> Array[Color]:
 	idx = clampi(idx, 0, 255)
 	return [Color(float(idx) / 255.0, 0, 0, 0), Color(0, 0, 0, 0)]
 
@@ -380,5 +393,129 @@ func calculate_material_blend_data(vert_x: float, vert_z: float, source_map_0: P
 	
 	cell_weight_b = weight_mat_b
 	return Color(float(cell_mat_a), float(cell_mat_b), float(cell_mat_c), weight_mat_a)
+
+#endregion
+
+
+#region terrain palette + texture array helpers
+
+const PS_LOG_NORMALIZATION_WARNINGS := "mst/debug/log_texture_array_normalization_warnings"
+
+static func get_decompressed_image(tex: Texture2D) -> Image:
+	if tex == null:
+		return null
+	var img := tex.get_image()
+	if img == null:
+		return null
+	if img.is_compressed():
+		var d := img.duplicate()
+		d.decompress()
+		# Some Godot builds don't return an Error code from decompress(), so verify via state.
+		if d.is_compressed():
+			return null
+		img = d
+	return img
+
+
+static func warn_once(cache: Dictionary, key, message: String) -> void:
+	# These mismatches are auto-healed by normalization. To avoid noisy editor logs,
+	# we only warn if the user explicitly enables this debug ProjectSetting.
+	if not bool(ProjectSettings.get_setting(PS_LOG_NORMALIZATION_WARNINGS, false)):
+		return
+	if cache.has(key):
+		return
+	cache[key] = true
+	push_warning(message)
+
+
+static func normalize_image_for_texture_array(src: Image, w: int, h: int) -> Image:
+	# Ensure a stable, uncompressed format (RGBA8), matching size, and no mipmaps.
+	if src == null:
+		return null
+	var img := src
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img = img.duplicate()
+		img.convert(Image.FORMAT_RGBA8)
+	if img.get_width() != w or img.get_height() != h:
+		img = img.duplicate()
+		# Nearest keeps pixel art crisp if a texture has the wrong size.
+		img.resize(w, h, Image.INTERPOLATE_NEAREST)
+
+	# Strip mipmaps by copying only the base layer into a fresh image.
+	var out := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	out.blit_rect(img, Rect2i(0, 0, w, h), Vector2i(0, 0))
+	return out
+
+
+static func rebuild_palette_uniforms(terrain) -> void:
+	var max_slots: int = int(terrain.MAX_TEXTURE_SLOTS)
+	var void_slot: int = int(terrain.VOID_TEXTURE_SLOT)
+
+	var img_colors := Image.create_empty(8, max_slots, false, Image.FORMAT_RGBAF)
+	var img_weights := Image.create_empty(8, max_slots, false, Image.FORMAT_RGBAF)
+	var img_meta := Image.create_empty(1, max_slots, false, Image.FORMAT_RGBA8)
+	var img_outline_width := Image.create_empty(1, max_slots, false, Image.FORMAT_RGBAF)
+	var img_slot_tex_index := Image.create_empty(1, max_slots, false, Image.FORMAT_R8)
+
+	# Palette colors are edited/stored as sRGB-style values.
+	# Shaders operate in linear space, so convert to linear before uploading.
+	var fallback := Color(0.392, 0.471, 0.318, 1.0).srgb_to_linear()
+
+	for slot in range(max_slots):
+		var indices: Array = terrain.slot_color_indices[slot]
+		var count := mini(indices.size(), 8)
+		var out_count := maxi(count, 1)
+
+		# Meta packing (0..255 per channel)
+		var mode := clampi(int(terrain.slot_blend_modes[slot]), 0, 3)
+		var has_outline := 1 if bool(terrain.slot_has_outline[slot]) else 0
+		var outline_mode := clampi(int(terrain.slot_outline_modes[slot]), 0, 1)
+		img_meta.set_pixel(0, slot, Color(float(out_count) / 255.0, float(mode) / 255.0, float(has_outline) / 255.0, float(outline_mode) / 255.0))
+		var wet_on := 1.0 if bool(terrain.slot_wet_enabled[slot]) else 0.0
+		var wet_mode := float(clampi(int(terrain.slot_wet_modes[slot]), 0, 1))
+		img_outline_width.set_pixel(0, slot, Color(float(terrain.slot_outline_widths[slot]), float(terrain.slot_roughnesses[slot]), wet_on, wet_mode))
+
+		# Slot->base texture mapping (0..15 stored as 0..255)
+		var base_idx := 0
+		if slot == void_slot:
+			base_idx = void_slot
+		else:
+			var s = terrain.texture_slots[slot] if slot < terrain.texture_slots.size() else null
+			if s != null and s.get("terrain_texture_index") != null:
+				base_idx = clampi(int(s.terrain_texture_index), 0, 15)
+			else:
+				base_idx = slot if slot < 15 else 0
+		img_slot_tex_index.set_pixel(0, slot, Color(float(base_idx) / 255.0, 0.0, 0.0, 1.0))
+
+		for i in range(8):
+			var c := Color(1.0, 1.0, 1.0, 1.0)
+			var w := 0.0
+			if i < count and indices[i] < terrain.palette_colors.size():
+				c = terrain.palette_colors[indices[i]].srgb_to_linear()
+				w = (float(terrain.palette_weights[indices[i]]) / 100.0) if indices[i] < terrain.palette_weights.size() else 1.0
+			elif i == 0 and count == 0:
+				# Ensure every slot has at least 1 entry for the shader.
+				c = fallback
+				w = 1.0
+			img_colors.set_pixel(i, slot, c)
+			img_weights.set_pixel(i, slot, Color(w, 0.0, 0.0, 1.0))
+
+	var tex_colors := ImageTexture.create_from_image(img_colors)
+	var tex_weights := ImageTexture.create_from_image(img_weights)
+	var tex_meta := ImageTexture.create_from_image(img_meta)
+	var tex_outline_width := ImageTexture.create_from_image(img_outline_width)
+	var tex_slot_tex_index := ImageTexture.create_from_image(img_slot_tex_index)
+
+	terrain.terrain_material.set_shader_parameter("palette_colors_tex", tex_colors)
+	terrain.terrain_material.set_shader_parameter("palette_weights_tex", tex_weights)
+	terrain.terrain_material.set_shader_parameter("palette_meta_tex", tex_meta)
+	terrain.terrain_material.set_shader_parameter("palette_outline_width_tex", tex_outline_width)
+	terrain.terrain_material.set_shader_parameter("slot_tex_index_tex", tex_slot_tex_index)
+
+	var grass_mat := terrain.grass_mesh.material as ShaderMaterial
+	grass_mat.set_shader_parameter("palette_colors_tex", tex_colors)
+	grass_mat.set_shader_parameter("palette_weights_tex", tex_weights)
+	grass_mat.set_shader_parameter("palette_meta_tex", tex_meta)
+	grass_mat.set_shader_parameter("palette_outline_width_tex", tex_outline_width)
 
 #endregion

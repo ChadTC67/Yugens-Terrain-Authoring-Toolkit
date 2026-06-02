@@ -58,11 +58,13 @@ uniform float ledge_threshold : hint_range(0.0, 1.0) = 1.0;
 uniform sampler2D rl_noise_texture : source_color, filter_nearest;
 uniform float rl_noise_tile_size : hint_range(0.01, 1.0) = 0.075;
 uniform float rl_noise_strength : hint_range(0.0, 10.0) = 10.0;
-uniform float global_noise_scale = 0.08;
-uniform float global_noise_strength = 0.3;
+uniform float global_noise_scale = 0.037;
+uniform float global_noise_strength = 1.0;
 // 0..1 multiplier for scroll speed (0 = off)
 uniform float global_noise_scroll = 0.0;
 uniform sampler2D global_noise_texture : hint_default_white, repeat_enable, filter_linear;
+
+// Palette color selection always uses the global-noise texture (internally remapped).
 
 // Used to keep terrain global-noise scroll aligned with grass wind.
 uniform vec2 wind_direction = vec2(1.0, 1.0);
@@ -319,11 +321,17 @@ vec4 get_palette_color(int tex_idx, vec2 world_xz) {
 
 	int mode = _palette_blend_mode(tex_idx);
 
-	// Single cheap noise sample — replaces 3x fbm calls
-	vec2 p = vec2(
-		world_xz.x * 0.06 + world_xz.y * 0.041 + world_pos.y * 0.06,
-		world_xz.y * 0.06 - world_xz.x * 0.037 + world_pos.y * 0.038);
-	float n = cheap_noise(p);
+	float n = 0.0;
+	// Internal remap for palette blending: fixed higher-frequency sampling + inverted.
+	// This keeps the UI Global Noise settings independent of palette blending behavior.
+	float palette_gn_scale = 0.002;
+	vec2 scroll = vec2(0.0);
+	if (global_noise_scroll > 0.0) {
+		vec2 dir = normalize(wind_direction);
+		scroll = dir * TIME * wind_speed * 3.0 * global_noise_scroll;
+	}
+	vec2 uv = fract((world_xz + scroll) * palette_gn_scale);
+	n = 1.0 - texture(global_noise_texture, uv).r;
 	n = smoothstep(0.0, 1.0, n);
 
 	// Weighted distribution (values are normalized per slot).
@@ -558,7 +566,13 @@ void fragment() {
 
 	vec3 abs_normal = abs(vertex_normal);
 	vec3 tri_weights = vec3(abs_normal.x, 0.0, abs_normal.z);
-	tri_weights /= (tri_weights.x + tri_weights.z);
+	float tri_denom = tri_weights.x + tri_weights.z;
+	if (tri_denom > 0.00001) {
+		tri_weights /= tri_denom;
+	} else {
+		// Perfectly vertical normal would yield 0/0; pick a stable fallback.
+		tri_weights = vec3(0.5, 0.0, 0.5);
+	}
 
 	vec4 floor_color;
 	vec3 wall_color;
@@ -574,18 +588,21 @@ void fragment() {
 
 	if (is_floor) {
 		floor_uv = UV2 * tiling_factor_floor;
+		int alpha_mat = 15;
 
 		if (use_hard_textures) {
 			if (blend_mode == 2) {
 				out_roughness = _palette_roughness(material_index);
 				out_wet_enabled = _palette_wet_enabled(material_index);
 				out_wet_mode = _palette_wet_mode(material_index);
+				alpha_mat = material_index;
 				floor_color = sample_material_by_index(material_index, floor_uv);
 			} else {
 				int cell_dominant_mat = int(round(mat_indices.x));
 				out_roughness = _palette_roughness(cell_dominant_mat);
 				out_wet_enabled = _palette_wet_enabled(cell_dominant_mat);
 				out_wet_mode = _palette_wet_mode(cell_dominant_mat);
+				alpha_mat = cell_dominant_mat;
 				floor_color = sample_material_by_index(cell_dominant_mat, floor_uv);
 			}
 		}
@@ -605,9 +622,21 @@ void fragment() {
 				weight_c /= weight_sum;
 			}
 
+			// Keep a "clean" copy of weights for outlines (pre-jitter), so outlines can stay stable.
+			float weight_a_clean = weight_a;
+			float weight_b_clean = weight_b;
+			float weight_c_clean = weight_c;
+
 			if (blend_noise_strength > 0.0) {
+				// Add a subtle waviness to material boundaries without disturbing solid interiors.
+				float max_w = max(weight_a, max(weight_b, weight_c));
+				float min_w = min(weight_a, min(weight_b, weight_c));
+				float mid_w = (weight_a + weight_b + weight_c) - max_w - min_w;
+				float top12_diff = max_w - mid_w; // ~0 on boundaries, ~1 when one material dominates
+				float edge_factor = 1.0 - smoothstep(0.15, 0.55, top12_diff);
+
 				float n = noise(world_pos.xz * blend_noise_scale);
-				float noise_offset = (n - 0.5) * blend_noise_strength;
+				float noise_offset = (n - 0.5) * blend_noise_strength * edge_factor;
 				weight_a = clamp(weight_a + noise_offset, 0.0, 1.0);
 				weight_b = clamp(weight_b - noise_offset * 0.5, 0.0, 1.0);
 				weight_c = clamp(weight_c - noise_offset * 0.5, 0.0, 1.0);
@@ -617,13 +646,21 @@ void fragment() {
 
 			if (blend_sharpness > 0.0) {
 				float power = 1.0 + blend_sharpness;
+
 				weight_a = pow(weight_a, power);
 				weight_b = pow(weight_b, power);
 				weight_c = pow(weight_c, power);
 				float total = weight_a + weight_b + weight_c;
 				if (total > 0.001) { weight_a /= total; weight_b /= total; weight_c /= total; }
+
+				weight_a_clean = pow(weight_a_clean, power);
+				weight_b_clean = pow(weight_b_clean, power);
+				weight_c_clean = pow(weight_c_clean, power);
+				float total_clean = weight_a_clean + weight_b_clean + weight_c_clean;
+				if (total_clean > 0.001) { weight_a_clean /= total_clean; weight_b_clean /= total_clean; weight_c_clean /= total_clean; }
 			}
 
+			// Top materials for blending/alpha (uses possibly-jittered weights).
 			int top1_idx = mat_a;
 			int top2_idx = mat_b;
 			float top1_w = weight_a;
@@ -642,10 +679,30 @@ void fragment() {
 				top2_w = weight_c;
 			}
 
-			edge_mat_a = top1_idx;
-			edge_mat_b = top2_idx;
-			edge_weight_a = top1_w;
-			edge_weight_b = top2_w;
+			// Top materials for outlines (optionally uses jittered weights).
+			int top1_idx_clean = mat_a;
+			int top2_idx_clean = mat_b;
+			float top1_w_clean = weight_a_clean;
+			float top2_w_clean = weight_b_clean;
+			if (top2_w_clean > top1_w_clean) {
+				int ti = top1_idx_clean; top1_idx_clean = top2_idx_clean; top2_idx_clean = ti;
+				float tw = top1_w_clean; top1_w_clean = top2_w_clean; top2_w_clean = tw;
+			}
+			if (weight_c_clean > top1_w_clean) {
+				top2_idx_clean = top1_idx_clean;
+				top2_w_clean = top1_w_clean;
+				top1_idx_clean = mat_c;
+				top1_w_clean = weight_c_clean;
+			} else if (weight_c_clean > top2_w_clean) {
+				top2_idx_clean = mat_c;
+				top2_w_clean = weight_c_clean;
+			}
+
+			// Outlines always use clean (non-jittered) weights.
+			edge_mat_a = top1_idx_clean;
+			edge_mat_b = top2_idx_clean;
+			edge_weight_a = top1_w_clean;
+			edge_weight_b = top2_w_clean;
 
 			floor_color = sample_material_by_index(mat_a, floor_uv) * weight_a
 						+ sample_material_by_index(mat_b, floor_uv) * weight_b
@@ -655,10 +712,12 @@ void fragment() {
 						+ _palette_roughness(mat_c) * weight_c;
 			out_wet_enabled = _palette_wet_enabled(top1_idx);
 			out_wet_mode = _palette_wet_mode(top1_idx);
+			alpha_mat = top1_idx;
 		}
 
 		ALBEDO = floor_color.rgb;
-		ALPHA = floor_color.a;
+		// Alpha is used as an occupancy mask (VOID slot 15).
+		ALPHA = (alpha_mat == 15) ? 0.0 : 1.0;
 	}
 	else {
 		vec2 uv_x = (vertex_pos.zy / cell_size.yx) * tiling_factor_wall;
@@ -680,8 +739,15 @@ void fragment() {
 		}
 
 		if (blend_noise_strength > 0.0) {
+			// Add a subtle waviness to material boundaries without disturbing solid interiors.
+			float max_w = max(weight_a, max(weight_b, weight_c));
+			float min_w = min(weight_a, min(weight_b, weight_c));
+			float mid_w = (weight_a + weight_b + weight_c) - max_w - min_w;
+			float top12_diff = max_w - mid_w; // ~0 on boundaries, ~1 when one material dominates
+			float edge_factor = 1.0 - smoothstep(0.15, 0.55, top12_diff);
+
 			float n = noise(world_pos.xz * blend_noise_scale);
-			float noise_offset = (n - 0.5) * blend_noise_strength;
+			float noise_offset = (n - 0.5) * blend_noise_strength * edge_factor;
 			weight_a = clamp(weight_a + noise_offset, 0.0, 1.0);
 			weight_b = clamp(weight_b - noise_offset * 0.5, 0.0, 1.0);
 			weight_c = clamp(weight_c - noise_offset * 0.5, 0.0, 1.0);
@@ -802,8 +868,9 @@ void fragment() {
 		float gn_wall = texture(global_noise_texture, uv_x).r * tri_weights.x + texture(global_noise_texture, uv_z).r * tri_weights.z;
 		float gn = is_floor ? gn_floor : gn_wall;
 
-		float mult = mix(1.0 - global_noise_strength, 1.0, clamp(gn, 0.0, 1.0));
-		ALBEDO *= mult;
+		// Centered multiplier: darkens and brightens around 1.0.
+		float mult = mix(1.0 - global_noise_strength, 1.0 + global_noise_strength, clamp(gn, 0.0, 1.0));
+		ALBEDO *= max(mult, 0.0);
 	}
 
 	// Wetness modes (per-slot). Uses slot roughness as the "wet" roughness target.

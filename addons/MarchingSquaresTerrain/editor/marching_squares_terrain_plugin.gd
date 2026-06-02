@@ -8,6 +8,9 @@ static var instance : MarchingSquaresTerrainPlugin
 
 const MAX_TEXTURE_SLOTS := 256
 
+# Vertex Paint dither: solid core + dithered outer ring.
+const VP_DITHER_CORE_SAMPLE := 0.8
+
 
 static func _ensure_texture_names_resource(res: Resource) -> void:
 	if res == null:
@@ -104,9 +107,7 @@ var mode : TerrainToolMode = TerrainToolMode.BRUSH:
 	set(value):
 		mode = value
 		current_draw_pattern.clear()
-		if mode in [TerrainToolMode.VERTEX_PAINTING]:
-			falloff = true
-			BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", true)
+		_update_falloff_visual()
 #endregion
 
 #region tool attribute vars
@@ -120,6 +121,18 @@ var falloff : bool = true
 
 # Determines if the Bridge Tool calculations will use a Curve3D point based system or a shortest distance based system
 var curve3d_mode : bool = false
+	
+enum VertexPaintFalloffMode {
+	HARD = 0,
+	DITHERED = 1,
+}
+var _vp_falloff_mode : int = VertexPaintFalloffMode.HARD
+var vp_falloff_mode : int:
+	get():
+		return _vp_falloff_mode
+	set(value):
+		_vp_falloff_mode = clampi(int(value), 0, 1)
+		_update_falloff_visual()
 
 var should_mask_grass : bool = false
 
@@ -299,6 +312,8 @@ func _refresh_editor_state() -> void:
 
 func _ready():
 	if BRUSH_RADIUS_MATERIAL:
+		# Avoid mutating the shared .tres resource on disk.
+		BRUSH_RADIUS_MATERIAL = BRUSH_RADIUS_MATERIAL.duplicate(true)
 		BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", falloff)
 
 
@@ -605,6 +620,95 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 
 #region draw-related functions
 
+# Calculates brush pattern and updates current_draw_pattern
+func update_draw_pattern(b_pos: Vector3):
+	var terrain_system : MarchingSquaresTerrain = current_terrain_node
+	
+	var bounds := BrushPatternCalculator.calculate_bounds(b_pos, brush_size, terrain_system)
+	var max_distance : float = BrushPatternCalculator.calculate_max_distance(brush_size, current_brush_index)
+	var brush_pos : Vector2 = Vector2(b_pos.x, b_pos.z)
+	
+	for chunk_z in range(bounds.chunk_tl.y, bounds.chunk_br.y + 1):
+		for chunk_x in range(bounds.chunk_tl.x, bounds.chunk_br.x + 1):
+			var cursor_chunk_coords : Vector2i = Vector2i(chunk_x, chunk_z)
+			if not terrain_system.chunks.has(cursor_chunk_coords):
+				continue
+			
+			var cell_range : Dictionary = BrushPatternCalculator.get_cell_range_for_chunk(cursor_chunk_coords, bounds, terrain_system)
+			
+			for z in range(cell_range.z_min, cell_range.z_max):
+				for x in range(cell_range.x_min, cell_range.x_max):
+					var cursor_cell_coords : Vector2i = Vector2i(x, z)
+					var world_pos : Vector2 = BrushPatternCalculator.cell_to_world_pos(
+						cursor_chunk_coords,
+						cursor_cell_coords,
+						terrain_system,
+						mode == TerrainToolMode.VERTEX_PAINTING
+					)
+					
+					var use_falloff := falloff
+					if mode == TerrainToolMode.VERTEX_PAINTING:
+						use_falloff = (_vp_falloff_mode == VertexPaintFalloffMode.DITHERED)
+					var sample : float = BrushPatternCalculator.calculate_falloff_sample(
+						world_pos, brush_pos, brush_size, current_brush_index,
+						max_distance, use_falloff, falloff_curve
+					)
+					
+					if sample < 0:
+						continue  # Outside brush
+					
+					# Store largest sample
+					if not current_draw_pattern.has(cursor_chunk_coords):
+						current_draw_pattern[cursor_chunk_coords] = {}
+					if current_draw_pattern[cursor_chunk_coords].has(cursor_cell_coords):
+						var prev_sample = current_draw_pattern[cursor_chunk_coords][cursor_cell_coords]
+						if sample > prev_sample:
+							current_draw_pattern[cursor_chunk_coords][cursor_cell_coords] = sample
+					else:
+						current_draw_pattern[cursor_chunk_coords][cursor_cell_coords] = sample
+
+
+static func _fract(p_x: float) -> float:
+	return p_x - floor(p_x)
+
+
+# “Blue-noise-ish” hashless noise (interleaved gradient noise). This avoids low-bit patterns
+# that can create checkerboard-like flat runs on the brush edge.
+static func _blue_noise_unit_2i(p_x: int, p_y: int) -> float:
+	# Scramble the integer lattice a bit to avoid axis-aligned artifacts.
+	var sx := float(p_x * 2 + p_y * 3)
+	var sy := float(p_x * 5 - p_y * 7)
+	var v := _fract(0.06711056 * sx + 0.00583715 * sy)
+	return _fract(52.9829189 * v)
+
+
+func _vp_dither_should_paint(terrain: MarchingSquaresTerrain, chunk_coords: Vector2i, cell_coords: Vector2i, p_sample: float) -> bool:
+	# Want a solid core + dithered outer ring (soft edge).
+	# p_sample is a (0..1) falloff sample where higher means closer to brush center.
+	if p_sample >= VP_DITHER_CORE_SAMPLE:
+		return true
+	if p_sample <= 0.0:
+		return false
+
+	# Remap outer-ring probability so core -> 1.0 (always) and 0.0 -> 0.0 (never).
+	var prob := clampf(p_sample / VP_DITHER_CORE_SAMPLE, 0.0, 1.0)
+
+	# Use global grid coords so the pattern is stable across chunk boundaries.
+	var gx: int = chunk_coords.x * (terrain.dimensions.x - 1) + cell_coords.x
+	var gz: int = chunk_coords.y * (terrain.dimensions.z - 1) + cell_coords.y
+	var r := _blue_noise_unit_2i(gx, gz)
+	return r <= prob
+
+
+func _update_falloff_visual() -> void:
+	if BRUSH_RADIUS_MATERIAL == null:
+		return
+	if mode == TerrainToolMode.VERTEX_PAINTING:
+		BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", _vp_falloff_mode == VertexPaintFalloffMode.DITHERED)
+	else:
+		BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", falloff)
+
+
 func draw_pattern(terrain: MarchingSquaresTerrain):
 	var undo_redo := get_undo_redo()
 	
@@ -625,7 +729,7 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 		var draw_chunk_dict = current_draw_pattern[draw_chunk_coords]
 		for draw_cell_coords: Vector2i in draw_chunk_dict:
 			var chunk : MarchingSquaresTerrainChunk = terrain.chunks[draw_chunk_coords]
-			var sample : float = clamp(draw_chunk_dict[draw_cell_coords], 0.001, 0.999)
+			var sample : float = clamp(draw_chunk_dict[draw_cell_coords], 0.0, 1.0)
 			var restore_value
 			var draw_value
 			var restore_value_cc
@@ -737,6 +841,9 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 					restore_value = chunk.get_height(draw_cell_coords)
 					draw_value = bridge_height
 			elif mode == TerrainToolMode.VERTEX_PAINTING:
+				if _vp_falloff_mode == VertexPaintFalloffMode.DITHERED and not _vp_dither_should_paint(terrain, draw_chunk_coords, draw_cell_coords, sample):
+					continue
+				
 				if paint_walls_mode:
 					restore_value = chunk.get_wall_color_0(draw_cell_coords)
 					restore_value_cc = chunk.get_wall_color_1(draw_cell_coords)
@@ -744,9 +851,9 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 					restore_value = chunk.get_color_0(draw_cell_coords)
 					restore_value_cc = chunk.get_color_1(draw_cell_coords)
 				
-				var t := clamp(sample * strength, 0.0, 1.0)
-				draw_value = restore_value.lerp(vertex_color_0, t)
-				draw_value_cc = restore_value_cc.lerp(vertex_color_1, t)
+				# Overwrite (matches origin/main). Lerp creates unintended texture indices.
+				draw_value = vertex_color_0
+				draw_value_cc = vertex_color_1
 			elif mode == TerrainToolMode.DEBUG_BRUSH:
 				var g_pos := chunk.to_global(Vector3(float(draw_cell_coords.x), chunk.get_height(draw_cell_coords), float(draw_cell_coords.y)))
 				var normal := get_cell_normal(chunk, draw_cell_coords)
@@ -775,7 +882,10 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 	for draw_chunk_coords: Vector2i in current_draw_pattern.keys():
 		var draw_chunk_dict = current_draw_pattern[draw_chunk_coords]
 		for draw_cell_coords: Vector2i in draw_chunk_dict:
-			var sample : float = clamp(draw_chunk_dict[draw_cell_coords], 0.001, 0.999)
+			# VP dither mode can skip cells. Only expand borders for cells that were actually painted.
+			if not pattern.has(draw_chunk_coords) or not pattern[draw_chunk_coords].has(draw_cell_coords):
+				continue
+			var sample : float = clamp(draw_chunk_dict[draw_cell_coords], 0.0, 1.0)
 			for cx in range(-1, 2):
 				for cz in range(-1, 2):
 					if (cx == 0 and cz == 0):
@@ -1269,133 +1379,20 @@ func _set_vertex_colors(vc_idx: int) -> void:
 
 
 func _set_new_textures(_preset: MarchingSquaresTexturePreset) -> void:
+	if current_terrain_node == null:
+		return
+	
 	if _preset == null:
 		_preset = EMPTY_TEXTURE_PRESET.duplicate()
 	
-	# Set BatchUpdate flag to avoid indivudal setters triggering updates
-	current_terrain_node.is_batch_updating = true
-	
-	for i in range(5): # The range is 5 because MarchingSquaresTextureList has 5 export variables (terrain textures, texture scales, grass sprites, grass colors, has_grass)
-		match i:
-			0: # terrain_textures (unified for both floor and wall painting)
-				for i_tex in range(_preset.new_textures.terrain_textures.size()):
-					var tex : Texture2D = _preset.new_textures.terrain_textures[i_tex]
-					if tex == null:
-						continue
-					match i_tex:
-						0:
-							current_terrain_node.texture_1 = tex
-						1:
-							current_terrain_node.texture_2 = tex
-						2:
-							current_terrain_node.texture_3 = tex
-						3:
-							current_terrain_node.texture_4 = tex
-						4:
-							current_terrain_node.texture_5 = tex
-						5:
-							current_terrain_node.texture_6 = tex
-						6:
-							current_terrain_node.texture_7 = tex
-						7:
-							current_terrain_node.texture_8 = tex
-						8:
-							current_terrain_node.texture_9 = tex
-						9:
-							current_terrain_node.texture_10 = tex
-						10:
-							current_terrain_node.texture_11 = tex
-						11:
-							current_terrain_node.texture_12 = tex
-						12:
-							current_terrain_node.texture_13 = tex
-						13:
-							current_terrain_node.texture_14 = tex
-						14: # texture_15 is reserved for VOID
-							current_terrain_node.texture_15 = tex
-			1: # texture_scales
-				for i_tex_scale in range(_preset.new_textures.texture_scales.size()):
-					var scale : float = _preset.new_textures.texture_scales[i_tex_scale]
-					match i_tex_scale:
-						0:
-							current_terrain_node.texture_scale_1 = scale
-						1:
-							current_terrain_node.texture_scale_2 = scale
-						2:
-							current_terrain_node.texture_scale_3 = scale
-						3:
-							current_terrain_node.texture_scale_4 = scale
-						4:
-							current_terrain_node.texture_scale_5 = scale
-						5:
-							current_terrain_node.texture_scale_6 = scale
-						6:
-							current_terrain_node.texture_scale_7 = scale
-						7:
-							current_terrain_node.texture_scale_8 = scale
-						8:
-							current_terrain_node.texture_scale_9 = scale
-						9:
-							current_terrain_node.texture_scale_10 = scale
-						10:
-							current_terrain_node.texture_scale_11 = scale
-						11:
-							current_terrain_node.texture_scale_12 = scale
-						12:
-							current_terrain_node.texture_scale_13 = scale
-						13:
-							current_terrain_node.texture_scale_14 = scale
-						14:
-							current_terrain_node.texture_scale_15 = scale
-			2: # grass_sprites
-				for i_grass_tex in range(_preset.new_textures.grass_sprites.size()):
-					var tex : Texture2D = _preset.new_textures.grass_sprites[i_grass_tex]
-					if tex == null:
-						continue
-					match i_grass_tex:
-						0:
-							current_terrain_node.grass_sprite_tex_1 = tex
-						1:
-							current_terrain_node.grass_sprite_tex_2 = tex
-						2:
-							current_terrain_node.grass_sprite_tex_3 = tex
-						3:
-							current_terrain_node.grass_sprite_tex_4 = tex
-						4:
-							current_terrain_node.grass_sprite_tex_5 = tex
-						5:
-							current_terrain_node.grass_sprite_tex_6 = tex
-			3: # grass_colors (palette system)
-				current_terrain_node.load_from_preset(_preset)
-			4: # has_grass
-				for i_has_grass in range(_preset.new_textures.has_grass.size()):
-					var val : bool = _preset.new_textures.has_grass[i_has_grass]
-					match i_has_grass:
-						0:
-							current_terrain_node.tex2_has_grass = val
-						1:
-							current_terrain_node.tex3_has_grass = val
-						2:
-							current_terrain_node.tex4_has_grass = val
-						3:
-							current_terrain_node.tex5_has_grass = val
-						4:
-							current_terrain_node.tex6_has_grass = val
-	
-	
-	# Apply a batch update
-	current_terrain_node.force_batch_update()
+	# Apply via terrain API (handles palette/slots/grass + internal batching).
+	current_terrain_node.load_from_preset(_preset)
+	current_terrain_node.current_texture_preset = _preset
 	
 	# Mark scene as modified so user knows to save
 	EditorInterface.mark_scene_as_unsaved()
 	
-	# Store current preset
-	current_terrain_node.current_texture_preset = _preset
-	
-	# Set batch update to false, to allow setters to work individually
-	current_terrain_node.is_batch_updating = false
-	
-	# Ensure the Editor is updated live (trick it to redraw - There might be an easier way but this works)
+	# Ensure the Editor is updated live
 	EditorInterface.inspect_object(current_terrain_node)
 
 
