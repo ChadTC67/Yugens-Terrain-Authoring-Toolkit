@@ -10,6 +10,76 @@ const GRASS_ALPHA_VALUES := [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
 var _chunk : MarchingSquaresTerrainChunk
 var terrain_system : MarchingSquaresTerrain
 
+# Push grass points slightly inward when they're right next to a steep wall drop.
+# This preserves normal random scattering on flat floors.
+const _WALL_PUSH_SAMPLE_STEP_FRACTION: float = 0.25
+const _WALL_PUSH_MAX_FRACTION: float = 0.18
+const _WALL_PUSH_DROP_TRIGGER_FACTOR: float = 0.6
+
+
+func _sample_height_local(x: float, z: float) -> float:
+	if not _chunk or not terrain_system or not _chunk.height_map:
+		return 0.0
+	var cs := terrain_system.cell_size
+	if cs.x == 0.0 or cs.y == 0.0:
+		return 0.0
+
+	var gx := clampf(x / cs.x, 0.0, float(_chunk.dimensions.x - 1))
+	var gz := clampf(z / cs.y, 0.0, float(_chunk.dimensions.z - 1))
+	var x0 := int(floor(gx))
+	var z0 := int(floor(gz))
+	var x1 := mini(x0 + 1, _chunk.dimensions.x - 1)
+	var z1 := mini(z0 + 1, _chunk.dimensions.z - 1)
+	var tx := gx - float(x0)
+	var tz := gz - float(z0)
+
+	var h00: float = float(_chunk.height_map[z0][x0])
+	var h10: float = float(_chunk.height_map[z0][x1])
+	var h01: float = float(_chunk.height_map[z1][x0])
+	var h11: float = float(_chunk.height_map[z1][x1])
+	return lerpf(lerpf(h00, h10, tx), lerpf(h01, h11, tx), tz)
+
+
+func _wall_push_offset(p: Vector3) -> Vector3:
+	if not _chunk or not terrain_system:
+		return Vector3.ZERO
+	var cs := terrain_system.cell_size
+	var cell_min := minf(cs.x, cs.y)
+	if cell_min <= 0.0001:
+		return Vector3.ZERO
+
+	var step := cell_min * _WALL_PUSH_SAMPLE_STEP_FRACTION
+	var h := _sample_height_local(p.x, p.z)
+	var drop_trigger := float(_chunk.merge_threshold) * _WALL_PUSH_DROP_TRIGGER_FACTOR
+
+	var best_drop := 0.0
+	var dir := Vector3.ZERO
+
+	var drop_px := h - _sample_height_local(p.x + step, p.z)
+	if drop_px > best_drop:
+		best_drop = drop_px
+		dir = Vector3(-1, 0, 0)
+	var drop_nx := h - _sample_height_local(p.x - step, p.z)
+	if drop_nx > best_drop:
+		best_drop = drop_nx
+		dir = Vector3(1, 0, 0)
+	var drop_pz := h - _sample_height_local(p.x, p.z + step)
+	if drop_pz > best_drop:
+		best_drop = drop_pz
+		dir = Vector3(0, 0, -1)
+	var drop_nz := h - _sample_height_local(p.x, p.z - step)
+	if drop_nz > best_drop:
+		best_drop = drop_nz
+		dir = Vector3(0, 0, 1)
+
+	if best_drop <= drop_trigger:
+		return Vector3.ZERO
+
+	var push_max := cell_min * _WALL_PUSH_MAX_FRACTION
+	# Scale push by how "wall-like" the drop is, so small slopes don't get biased.
+	var t := clampf((best_drop - drop_trigger) / maxf(drop_trigger, 0.0001), 0.0, 1.0)
+	return dir * (push_max * t)
+
 
 func setup(chunk: MarchingSquaresTerrainChunk, redo: bool = true) -> void:
 	_chunk = chunk
@@ -175,9 +245,14 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 				points.remove_at(point_index) 
 				var p := a * (1 - u - v) + b * u + c * v
 				
-				# Don't place grass on ledges or ridges
+				# Detect ledge/ridge tags (UV encodes terrace proximity for edge logic)
 				var uv := uvs[i] * u + uvs[i + 1] * v + uvs[i + 2] * (1 - u - v)
 				var on_ledge_or_ridge : bool = uv.y > 0.0 or uv.x > 0.5
+				
+				# If we're near a steep wall drop, nudge grass points inward so blades don't clip the wall.
+				var push := _wall_push_offset(p)
+				p += push
+				var allow_ledge_grass := push.length() > 0.0001
 				
 				# Interpolated material blend payload (CUSTOM2) + extra weight (CUSTOM0.r)
 				var raw_blend := mat_blend[i] * u + mat_blend[i + 1] * v + mat_blend[i + 2] * (1 - u - v)
@@ -213,7 +288,8 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 				var texture_id := dominant_mat + 1
 				var on_grass_tex := _has_grass_for_texture(texture_id, force_grass_on)
 				
-				if on_grass_tex and not on_ledge_or_ridge and not is_masked:
+				# Keep the old behavior (no ledge/ridge grass) unless we're actually next to a wall.
+				if on_grass_tex and not is_masked and (allow_ledge_grass or not on_ledge_or_ridge):
 					_create_grass_instance(index, p, a, b, c, texture_id)
 				else:
 					_hide_grass_instance(index)
@@ -293,8 +369,19 @@ func _get_texture_id(vc_col_0: Color, vc_col_1: Color) -> int:
 func _has_grass_for_texture(texture_id: int, force_grass_on: bool) -> bool:
 	if force_grass_on:
 		return true
+	if terrain_system == null:
+		return false
+
+	# Prefer the PR1 slot-based flags (texture_slots[].has_grass) so toggles actually work.
+	var slot_idx := texture_id - 1
+	if slot_idx >= 0 and slot_idx < terrain_system.texture_slots.size():
+		var slot = terrain_system.texture_slots[slot_idx]
+		if slot != null and slot.get("has_grass") != null:
+			return bool(slot.has_grass)
+
+	# Fallback to legacy exported flags.
 	if texture_id == 1:
-		return true
+		return bool(terrain_system.tex1_has_grass) if terrain_system.get("tex1_has_grass") != null else true
 	if texture_id < 2 or texture_id > 6:
 		return false
 	
@@ -305,7 +392,7 @@ func _has_grass_for_texture(texture_id: int, force_grass_on: bool) -> bool:
 		terrain_system.tex5_has_grass,
 		terrain_system.tex6_has_grass
 	]
-	return has_grass_flags[texture_id - 2]
+	return bool(has_grass_flags[texture_id - 2])
 
 
 ## Gets the texture scale for the given texture ID.
@@ -373,7 +460,13 @@ func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vecto
 	var edge2 := c - a
 	
 	var normal : Vector3
-	if terrain_system.use_flat_normals:
+	var use_flat := false
+	if terrain_system != null:
+		var flat_val = terrain_system.get("use_flat_normals")
+		if flat_val == null:
+			flat_val = terrain_system.get("flat_normals")
+		use_flat = bool(flat_val) if flat_val != null else false
+	if use_flat:
 		normal = -Vector3.UP
 	else:
 		normal = edge1.cross(edge2).normalized()
@@ -391,21 +484,9 @@ func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vecto
 	)
 	rng.seed = seed
 	
-	var var_amt := 0.0
-	if terrain_system:
-		var_amt = clampf(float(terrain_system.grass_size_variation) if terrain_system.grass_size_variation != null else 0.0, 0.0, 1.0)
-
+	# PR1: no per-blade size variation (kept for PR2/PR4 scope).
 	var height_s := 1.0
 	var width_s := 1.0
-	
-		# Strong ranges so the difference is unmistakable
-	var min_h := lerpf(1.0, 0.50, var_amt)
-	var max_h := lerpf(1.0, 2.00, var_amt)
-	var min_w := lerpf(1.0, 0.70, var_amt)
-	var max_w := lerpf(1.0, 1.30, var_amt)
-		
-	height_s = rng.randf_range(min_h, max_h)
-	width_s = rng.randf_range(min_w, max_w)
 	
 	var scaled_basis := instance_basis.scaled(Vector3(width_s, height_s, width_s))
 	multimesh.set_instance_transform(index, Transform3D(scaled_basis, world_pos))

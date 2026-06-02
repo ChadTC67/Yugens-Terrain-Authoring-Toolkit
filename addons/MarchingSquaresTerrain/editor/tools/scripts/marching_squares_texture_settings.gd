@@ -10,6 +10,9 @@ var vp_tex_names : MarchingSquaresTextureNames = preload("uid://dd7fens03aosa")
 
 const MAX_TEXTURE_SLOTS := 256
 
+# Avoid hard class_name dependency in headless/script-cache runs.
+const _TEXTURE_SLOT_SCRIPT := preload("res://addons/MarchingSquaresTerrain/resources/marching_squares_texture_slot.gd")
+
 const VAR_NAMES : Array[Dictionary] = [
 	{
 		"tex_var": "texture_1",
@@ -108,7 +111,7 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 		slots_var.resize(MAX_TEXTURE_SLOTS)
 	for i in range(MAX_TEXTURE_SLOTS):
 		if slots_var[i] == null:
-			slots_var[i] = MarchingSquaresTextureSlot.new()
+			slots_var[i] = _TEXTURE_SLOT_SCRIPT.new()
 		# Default any missing 'active' to true (older saves won't have it).
 		if slots_var[i] != null and slots_var[i].get("active") == null:
 			slots_var[i].active = true
@@ -229,11 +232,81 @@ func add_texture_settings() -> void:
 		MarchingSquaresTerrainPlugin._ensure_texture_names_resource(vp_tex_names)
 		names = vp_tex_names.get("texture_names")
 	
+	# "Ghost" slot: Global Noise (not a texture slot).
+	var gn_name_row := HBoxContainer.new()
+	gn_name_row.add_theme_constant_override("separation", -16)
+	var gn_label := Label.new()
+	gn_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gn_label.text = "Global Noise"
+	gn_label.set_custom_minimum_size(Vector2(220, 25))
+	gn_label.tooltip_text = "Texture used by the shader's global noise multiplier (not a texture slot)"
+	gn_name_row.add_child(gn_label, true)
+	vbox.add_child(gn_name_row, true)
+
+	var gn_picker := EditorResourcePicker.new()
+	gn_picker.set_base_type("Texture2D")
+	var gn_tex: Texture2D = terrain.get("global_noise_texture")
+	if gn_tex != null and not (gn_tex is Texture2D):
+		gn_tex = null
+	gn_picker.edited_resource = gn_tex
+	gn_picker.set_custom_minimum_size(Vector2(100, 25))
+	gn_picker.resource_changed.connect(func(resource):
+		if resource != null and not (resource is Texture2D):
+			resource = null
+		terrain.set("global_noise_texture", resource)
+	)
+	vbox.add_child(gn_picker, true)
+
+	# Strength/scale controls for Global Noise (stored on the terrain node).
+	var gn_strength_hbox := HBoxContainer.new()
+	gn_strength_hbox.set_custom_minimum_size(Vector2(150, 20))
+	var gn_strength_label := Label.new()
+	gn_strength_label.text = "Strength:"
+	gn_strength_label.set_custom_minimum_size(Vector2(70, 20))
+	gn_strength_hbox.add_child(gn_strength_label)
+	var gn_strength_slider := EditorSpinSlider.new()
+	gn_strength_slider.set_flat(true)
+	gn_strength_slider.set_min(0.0)
+	gn_strength_slider.set_max(1.0)
+	gn_strength_slider.set_step(0.01)
+	var gn_strength_val := terrain.get("global_noise_strength")
+	if gn_strength_val is float or gn_strength_val is int:
+		gn_strength_slider.set_value(float(gn_strength_val))
+	else:
+		gn_strength_slider.set_value(1.0)
+	gn_strength_slider.value_changed.connect(func(v): terrain.set("global_noise_strength", float(v)))
+	gn_strength_slider.set_custom_minimum_size(Vector2(95, 25))
+	gn_strength_hbox.add_child(gn_strength_slider)
+	vbox.add_child(gn_strength_hbox, true)
+
+	var gn_scale_hbox := HBoxContainer.new()
+	gn_scale_hbox.set_custom_minimum_size(Vector2(150, 20))
+	var gn_scale_label := Label.new()
+	gn_scale_label.text = "Scale:"
+	gn_scale_label.set_custom_minimum_size(Vector2(70, 20))
+	gn_scale_hbox.add_child(gn_scale_label)
+	var gn_scale_slider := EditorSpinSlider.new()
+	gn_scale_slider.set_flat(true)
+	gn_scale_slider.set_min(0.001)
+	gn_scale_slider.set_max(1.0)
+	gn_scale_slider.set_step(0.001)
+	var gn_scale_val := terrain.get("global_noise_scale")
+	if gn_scale_val is float or gn_scale_val is int:
+		gn_scale_slider.set_value(float(gn_scale_val))
+	else:
+		gn_scale_slider.set_value(0.037)
+	gn_scale_slider.value_changed.connect(func(v): terrain.set("global_noise_scale", float(v)))
+	gn_scale_slider.set_custom_minimum_size(Vector2(95, 25))
+	gn_scale_hbox.add_child(gn_scale_slider)
+	vbox.add_child(gn_scale_hbox, true)
+
+	vbox.add_child(HSeparator.new())
+
 	var visible_count := clampi(int(terrain.visible_texture_slot_count), 1, 256)
 	
 	for i in range(visible_count):
 		var slot_idx := i
-		var slot_obj := terrain.texture_slots[slot_idx] if slot_idx < terrain.texture_slots.size() else null
+		var slot_obj = terrain.texture_slots[slot_idx] if slot_idx < terrain.texture_slots.size() else null
 		# Hide inactive slots (except reserved ones).
 		if slot_idx != 0 and slot_idx != 15 and slot_obj != null and bool(slot_obj.get("active")) == false:
 			continue
@@ -293,7 +366,7 @@ func add_texture_settings() -> void:
 				return
 			
 			if terrain.texture_slots[p_idx] == null:
-				terrain.texture_slots[p_idx] = MarchingSquaresTextureSlot.new()
+				terrain.texture_slots[p_idx] = _TEXTURE_SLOT_SCRIPT.new()
 			terrain.texture_slots[p_idx].active = false
 			terrain.texture_slots[p_idx].texture = null
 			terrain.texture_slots[p_idx].scale = 1.0
@@ -349,7 +422,7 @@ func add_texture_settings() -> void:
 		vbox.add_child(name_row, true)
 		
 		# Terrain texture picker (slot-based)
-		var slot := terrain.texture_slots[i]
+		var slot = terrain.texture_slots[i]
 		var tex_var : Texture2D = slot.texture if slot != null else null
 		if tex_var != null and not (tex_var is Texture2D):
 			tex_var = null
@@ -370,7 +443,7 @@ func add_texture_settings() -> void:
 				if not _ensure_terrain_arrays(terrain):
 					return
 				if terrain.texture_slots[p_idx] == null:
-					terrain.texture_slots[p_idx] = MarchingSquaresTextureSlot.new()
+					terrain.texture_slots[p_idx] = _TEXTURE_SLOT_SCRIPT.new()
 				terrain.texture_slots[p_idx].texture = resource
 				# Keep base mapping identity.
 				terrain.texture_slots[p_idx].terrain_texture_index = p_idx
@@ -405,7 +478,7 @@ func add_texture_settings() -> void:
 				if not _ensure_terrain_arrays(terrain):
 					return
 				if terrain.texture_slots[p_idx] == null:
-					terrain.texture_slots[p_idx] = MarchingSquaresTextureSlot.new()
+					terrain.texture_slots[p_idx] = _TEXTURE_SLOT_SCRIPT.new()
 				terrain.texture_slots[p_idx].terrain_texture_index = clampi(int(id), 0, 15)
 				# Update shader lookup textures.
 				terrain._rebuild_palette_uniforms()
@@ -440,7 +513,7 @@ func add_texture_settings() -> void:
 			if not _ensure_terrain_arrays(terrain):
 				return
 			if terrain.texture_slots[p_idx] == null:
-				terrain.texture_slots[p_idx] = MarchingSquaresTextureSlot.new()
+				terrain.texture_slots[p_idx] = _TEXTURE_SLOT_SCRIPT.new()
 			terrain.texture_slots[p_idx].scale = float(val)
 			
 			# Keep legacy properties in sync for slots 1..15 so presets save correctly.
@@ -479,7 +552,7 @@ func add_texture_settings() -> void:
 		for idx in range(clampi(int(terrain.visible_texture_slot_count), 1, 256)):
 			if idx == 0 or idx == 15:
 				continue
-			var s := terrain.texture_slots[idx]
+			var s = terrain.texture_slots[idx]
 			if s != null and bool(s.get("active")) == false:
 				s.active = true
 				made_active = true
@@ -662,7 +735,7 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 	vbox.add_child(add_btn, true)
 
 	# Grass settings (slot-based)
-	var slot_res := terrain.texture_slots[slot]
+	var slot_res = terrain.texture_slots[slot]
 	var has_grass_var := bool(slot_res.has_grass) if slot_res != null else (slot == 0)
 	var grass_cb := CheckBox.new()
 	grass_cb.text = "Has Grass"
@@ -690,7 +763,7 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 		if not _ensure_terrain_arrays(terrain):
 			return
 		if terrain.texture_slots[p_idx] == null:
-			terrain.texture_slots[p_idx] = MarchingSquaresTextureSlot.new()
+			terrain.texture_slots[p_idx] = _TEXTURE_SLOT_SCRIPT.new()
 		terrain.texture_slots[p_idx].has_grass = pressed
 
 		# Keep legacy properties in sync for slots 1..6 so presets/UI stay compatible.
@@ -710,7 +783,7 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 		if not _ensure_terrain_arrays(terrain):
 			return
 		if terrain.texture_slots[p_idx] == null:
-			terrain.texture_slots[p_idx] = MarchingSquaresTextureSlot.new()
+			terrain.texture_slots[p_idx] = _TEXTURE_SLOT_SCRIPT.new()
 		terrain.texture_slots[p_idx].grass_texture = resource
 
 		# Keep legacy properties in sync for slots 1..6 so presets/UI stay compatible.

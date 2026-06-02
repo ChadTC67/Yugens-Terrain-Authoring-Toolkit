@@ -170,11 +170,19 @@ func _redraw():
 				for z in range(cell_range.z_min, cell_range.z_max):
 					for x in range(cell_range.x_min, cell_range.x_max):
 						cursor_cell_coords = Vector2i(x, z)
-						var world_pos : Vector2 = BrushPatternCalculator.cell_to_world_pos(cursor_chunk_coords, cursor_cell_coords, terrain_system)
+						var world_pos : Vector2 = BrushPatternCalculator.cell_to_world_pos(
+							cursor_chunk_coords,
+							cursor_cell_coords,
+							terrain_system,
+							terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING
+						)
 						
+						var use_falloff := terrain_plugin.falloff
+						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING:
+							use_falloff = (terrain_plugin.vp_falloff_mode == terrain_plugin.VertexPaintFalloffMode.DITHERED)
 						var sample : float = BrushPatternCalculator.calculate_falloff_sample(
 							world_pos, brush_pos, terrain_plugin.brush_size, terrain_plugin.current_brush_index,
-							max_distance, terrain_plugin.falloff, terrain_plugin.falloff_curve
+							max_distance, use_falloff, terrain_plugin.falloff_curve
 						)
 						
 						if sample < 0:

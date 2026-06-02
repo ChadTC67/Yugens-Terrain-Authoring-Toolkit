@@ -11,6 +11,15 @@ var brush_type : Dictionary = {
 	"default": 0,
 }
 
+# Vertex Paint only: creates a feathered edge without lerping vertex colors (prevents wrong-texture “donut” artifacts).
+var vp_falloff_mode : Dictionary = {
+	"name": "vp_falloff_mode",
+	"type": "option",
+	"label": "Falloff",
+	"options": ["Hard", "Dithered"],
+	"default": 0,
+}
+
 var size : Dictionary = {
 	"name": "size",
 	"type": "slider",

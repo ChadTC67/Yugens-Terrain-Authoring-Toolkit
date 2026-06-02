@@ -25,6 +25,7 @@ var terrain_settings_data : Dictionary = {
 	"dimensions": "Vector3i",
 	"cell_size": "Vector2",
 	"blend_mode": "OptionButton",
+	"blend_noise_enabled": "CheckBox",
 	"noise_hmap": "EditorResourcePicker",
 	"default_wall_texture": "OptionButton",
 	"extra_collision_layer": "OptionButton",
@@ -32,8 +33,6 @@ var terrain_settings_data : Dictionary = {
 	"animation_fps": "SpinBox",
 	"grass_subdivisions": "SpinBox",
 	"grass_size": "Vector2",
-	# Vertex painter visuals
-	"outline_width": "EditorSpinSlider",
 	# Special texture settings
 	"use_ridge_texture": "CheckBox",
 	"use_ledge_texture": "CheckBox",
@@ -91,6 +90,8 @@ func show_tool_attributes(tool_index: int) -> void:
 	var new_attributes := []
 	if tool_attributes.brush_type:
 		new_attributes.append(attribute_list.brush_type)
+	if tool_attributes.vp_falloff_mode:
+		new_attributes.append(attribute_list.vp_falloff_mode)
 	if tool_attributes.size:
 		new_attributes.append(attribute_list.size)
 	if tool_attributes.ease_value:
@@ -598,6 +599,8 @@ func _get_setting_value(p_setting_name: String) -> Variant:
 	match p_setting_name:
 		"brush_type":
 			return plugin.current_brush_index
+		"vp_falloff_mode":
+			return plugin.vp_falloff_mode
 		"size":
 			return plugin.brush_size
 		"ease_value":
@@ -665,19 +668,34 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 
 func _on_chunk_selected(option_button: OptionButton, p_chunk: String) -> void:
 	var terrain := plugin.current_terrain_node
-	var chunk : MarchingSquaresTerrainChunk = terrain.find_child(p_chunk)
+	if terrain == null:
+		selected_chunk = null
+		plugin.selected_chunk = null
+		option_button.selected = -1
+		return
 	
-	option_button.selected = chunk.merge_mode
-	selected_chunk = plugin.current_terrain_node.find_child(p_chunk)
+	var chunk := terrain.find_child(p_chunk) as MarchingSquaresTerrainChunk
+	if chunk == null:
+		selected_chunk = null
+		plugin.selected_chunk = null
+		option_button.selected = -1
+		return
+	
+	option_button.selected = int(chunk.merge_mode)
+	selected_chunk = chunk
 	plugin.selected_chunk = selected_chunk
 	
 	plugin.gizmo_plugin.trigger_redraw(terrain)
 
 
 func _apply_mode_to_all_chunks() -> void:
+	if plugin.current_terrain_node == null:
+		return
+	if selected_chunk == null:
+		return
 	for child in plugin.current_terrain_node.get_children():
 		if child is MarchingSquaresTerrainChunk:
-			_change_chunk_mode(child, selected_chunk.merge_mode)
+			_change_chunk_mode(child, int(selected_chunk.merge_mode))
 
 
 func _on_chunk_mode_changed(m_mode: int) -> void:

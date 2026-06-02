@@ -134,8 +134,16 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 			if p_value is int:
 				plugin.current_brush_index = p_value
 				plugin.BRUSH_RADIUS_VISUAL = plugin.BrushMode.get(str(p_value))
-				plugin.BRUSH_RADIUS_MATERIAL = plugin.BrushMat.get(str(p_value))
-				plugin.BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", plugin.falloff)
+				var mat = plugin.BrushMat.get(str(p_value))
+				plugin.BRUSH_RADIUS_MATERIAL = mat.duplicate(true) if mat != null else null
+				if plugin.BRUSH_RADIUS_MATERIAL:
+					var visible := plugin.falloff
+					if plugin.mode == plugin.TerrainToolMode.VERTEX_PAINTING:
+						visible = (plugin.vp_falloff_mode == plugin.VertexPaintFalloffMode.DITHERED)
+					plugin.BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", visible)
+		"vp_falloff_mode":
+			if p_value is int:
+				plugin.vp_falloff_mode = p_value
 		"size":
 			if p_value is float or p_value is int:
 				plugin.brush_size = float(p_value)
@@ -148,7 +156,7 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 		"falloff":
 			if p_value is bool:
 				plugin.falloff = p_value
-				if plugin.BRUSH_RADIUS_MATERIAL:
+				if plugin.BRUSH_RADIUS_MATERIAL and plugin.mode != plugin.TerrainToolMode.VERTEX_PAINTING:
 					plugin.BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", p_value)
 		"strength":
 			if p_value is float or p_value is int:
@@ -163,15 +171,10 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 			if p_value is int:
 				plugin.vertex_color_idx = p_value
 		"texture_preset":
-			plugin.current_terrain_node.is_batch_updating = true
 			if p_value is MarchingSquaresTexturePreset:
 				plugin.current_texture_preset = p_value
 			else:
 				plugin.current_texture_preset = null
-			plugin.current_terrain_node.force_batch_update()
-			plugin.current_terrain_node.is_batch_updating = false
-			for chunk: MarchingSquaresTerrainChunk in plugin.current_terrain_node.chunks.values():
-				chunk.mark_dirty()
 			tool_attributes.show_tool_attributes(active_tool)
 		"quick_paint_selection":
 					if p_value is MarchingSquaresQuickPaint:
@@ -248,6 +251,9 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 		"blend_mode":
 			if p_value is int:
 				terrain.blend_mode = p_value
+		"blend_noise_enabled":
+			if p_value is bool:
+				terrain.blend_noise_enabled = p_value
 		"wall_threshold":
 			if p_value is float:
 				terrain.wall_threshold = p_value
@@ -269,9 +275,6 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 		"grass_size":
 			if p_value is Vector2:
 				terrain.grass_size = p_value
-		"outline_width":
-			if p_value is float or p_value is int:
-				terrain.outline_width = float(p_value)
 		"ridge_threshold":
 			if p_value is float:
 				terrain.ridge_threshold = p_value

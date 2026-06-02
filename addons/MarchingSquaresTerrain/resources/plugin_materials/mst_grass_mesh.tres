@@ -1,21 +1,21 @@
 [gd_resource type="QuadMesh" format=3 uid="uid://dovs51hsvtmga"]
 
 [ext_resource type="Shader" uid="uid://0fijvq5fdcep" path="res://addons/MarchingSquaresTerrain/resources/shaders/mst_grass.gdshader" id="1_jmvec"]
-[ext_resource type="Texture2D" uid="uid://dk1t5hy2tiil7" path="res://addons/MarchingSquaresTerrain/resources/plugin_materials/wind_noise_texture.tres" id="3_1bgk7"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_fa4te"]
 render_priority = 0
 shader = ExtResource("1_jmvec")
-shader_parameter/animate_active = true
-shader_parameter/fps = 0.0
-shader_parameter/wind_texture = ExtResource("3_1bgk7")
-shader_parameter/wind_direction = Vector2(1, 1)
-shader_parameter/wind_scale = 0.02
-shader_parameter/wind_speed = 0.14
-shader_parameter/wind_mode = 0
-shader_parameter/wind_intensity = 0.5
-shader_parameter/wind_tip_color = Color(1, 1, 1, 1)
-shader_parameter/wind_tip_strength = 0.3
+shader_parameter/use_grass_tex_2 = true
+shader_parameter/use_grass_tex_3 = true
+shader_parameter/use_grass_tex_4 = true
+shader_parameter/use_grass_tex_5 = true
+shader_parameter/use_grass_tex_6 = true
+shader_parameter/use_base_color_1 = false
+shader_parameter/use_base_color_2 = false
+shader_parameter/use_base_color_3 = false
+shader_parameter/use_base_color_4 = false
+shader_parameter/use_base_color_5 = false
+shader_parameter/use_base_color_6 = false
 shader_parameter/is_merge_round = false
 shader_parameter/blade_variation = 1.0
 shader_parameter/wall_threshold = 0.0
@@ -23,10 +23,6 @@ shader_parameter/use_cell_shading = true
 shader_parameter/shadow_color = Color(0, 0, 0, 1)
 shader_parameter/bands = 5
 shader_parameter/shadow_intensity = 0.0
-shader_parameter/global_noise_scale = 0.08
-shader_parameter/global_noise_strength = 0.3
-shader_parameter/global_noise_scroll = false
-shader_parameter/global_noise_octaves = 5
 
 [resource]
 material = SubResource("ShaderMaterial_fa4te")

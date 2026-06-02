@@ -134,9 +134,12 @@ func _save_preset(path: String) -> void:
 		if src_preset.get("apply_grass_settings") != null:
 			new_tex_preset.apply_grass_settings = bool(src_preset.apply_grass_settings)
 	
-	# Store the current terrain settings snapshot into the exported preset (applied only if apply_terrain_settings is enabled).
-	if current_terrain_node != null and current_terrain_node.has_method("_gather_preset_terrain_settings"):
+	# PR1: Do not export terrain/global settings unless explicitly enabled.
+	# This prevents PR2/PR4 keys (wind/global noise/etc.) from leaking into PR1 presets.
+	if new_tex_preset.apply_terrain_settings and current_terrain_node != null and current_terrain_node.has_method("_gather_preset_terrain_settings"):
 		new_tex_preset.terrain_settings = current_terrain_node._gather_preset_terrain_settings(new_tex_preset)
+	else:
+		new_tex_preset.terrain_settings = {}
 	
 	var save_error := ResourceSaver.save(new_tex_preset, path)
 	if save_error == OK:
