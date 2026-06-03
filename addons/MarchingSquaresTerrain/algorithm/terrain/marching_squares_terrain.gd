@@ -643,6 +643,10 @@ func add_new_chunk(chunk_x: int, chunk_z: int, plugin):
 			new_chunk.height_map[dimensions.z - 1][x] = chunk_down.height_map[0][x]
 	
 	new_chunk.regenerate_mesh()
+	
+	if plugin:
+		plugin.ui.tool_attributes.show_tool_attributes(plugin.TerrainToolMode.CHUNK_MANAGEMENT)
+		plugin.gizmo_plugin.trigger_redraw(self)
 
 
 func remove_chunk(x: int, z: int, plugin):
