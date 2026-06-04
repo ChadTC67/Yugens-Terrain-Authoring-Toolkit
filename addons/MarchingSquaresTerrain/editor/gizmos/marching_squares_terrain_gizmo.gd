@@ -116,8 +116,10 @@ func _redraw():
 	
 	if terrain_chunk_hovered:
 		# Brush radius visualization
+		# brush_size is a radius; these visuals are unit-sized (cylinder radius ~0.5 / plane size 1),
+		# so we scale by 2x to make the visible radius match the painted radius.
 		var brush_transform : Transform3D
-		brush_transform = Transform3D(Vector3.RIGHT * terrain_plugin.brush_size, Vector3.UP, Vector3.BACK * terrain_plugin.brush_size, pos)
+		brush_transform = Transform3D(Vector3.RIGHT * terrain_plugin.brush_size * 2.0, Vector3.UP, Vector3.BACK * terrain_plugin.brush_size * 2.0, pos)
 		
 		if is_wall_painting:
 			var viewport := EditorInterface.get_editor_viewport_3d()
@@ -140,7 +142,7 @@ func _redraw():
 			if hit_result:
 				wall_normal = hit_result.normal
 			
-			var basis := _create_brush_basis(wall_normal, terrain_plugin.brush_size)
+			var basis := _create_brush_basis(wall_normal, terrain_plugin.brush_size * 2.0)
 			if wall_normal.y > 0.5:
 				basis.z = Vector3.ZERO
 			brush_transform = Transform3D(basis, pos)

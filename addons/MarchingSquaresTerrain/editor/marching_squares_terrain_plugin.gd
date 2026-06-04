@@ -470,8 +470,8 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 		# Check for terrain collision
 		if draw_area_hovered:
 			terrain_hovered = true
-			var chunk_x : int = floor(draw_position.x / (terrain.dimensions.x * terrain.cell_size.x))
-			var chunk_z : int = floor(draw_position.z / (terrain.dimensions.z * terrain.cell_size.y))
+			var chunk_x : int = floor(draw_position.x / ((terrain.dimensions.x - 1) * terrain.cell_size.x))
+			var chunk_z : int = floor(draw_position.z / ((terrain.dimensions.z - 1) * terrain.cell_size.y))
 			var chunk_coords := Vector2i(chunk_x, chunk_z)
 			
 			is_chunk_plane_hovered = true
@@ -642,8 +642,7 @@ func update_draw_pattern(b_pos: Vector3):
 					var world_pos : Vector2 = BrushPatternCalculator.cell_to_world_pos(
 						cursor_chunk_coords,
 						cursor_cell_coords,
-						terrain_system,
-						mode == TerrainToolMode.VERTEX_PAINTING
+						terrain_system
 					)
 					
 					var use_falloff := falloff
