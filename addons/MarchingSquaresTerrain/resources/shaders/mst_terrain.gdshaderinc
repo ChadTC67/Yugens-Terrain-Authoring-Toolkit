@@ -111,6 +111,21 @@ float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
 
+vec2 _mst_surface_plane_uv(vec3 wpos, vec3 n) {
+	vec3 nn = normalize(n);
+	// Pick an "up" that isn't parallel to the normal, so cross() is stable.
+	vec3 up = (abs(nn.y) < 0.999) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+	vec3 t = normalize(cross(up, nn));
+	vec3 b = cross(nn, t);
+	return vec2(dot(wpos, t), dot(wpos, b));
+}
+
+vec2 _mst_blend_mask_uv(vec3 wpos, vec2 world_xz, vec3 n) {
+	vec3 nn = normalize(n);
+	float upness = abs(nn.y);
+	return (upness > 0.85) ? world_xz : _mst_surface_plane_uv(wpos, n);
+}
+
 float noise(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);
@@ -379,23 +394,36 @@ vec4 get_palette_color(int tex_idx, vec2 world_xz) {
 
 	} else if (mode == 2) {
 		// Dithered (weight-aware)
-		vec2 dither_coord = floor(vec2(
-			world_xz.x + world_pos.y * 0.7,
-			world_xz.y + world_pos.y * 1.3) * 8.0);
+		// Use stable world-XZ on floors; surface-plane UV on walls/steep slopes to avoid axis-aligned striping.
+		vec2 uv_mask = _mst_blend_mask_uv(world_pos, world_xz, vertex_normal);
+		vec2 dither_coord = floor(uv_mask * 8.0);
 		float dither = hash(dither_coord);
 		float sel = step(dither, t);
 		return mix(sample_palette_entry(tex_idx, i0), sample_palette_entry(tex_idx, i1), sel);
 
 	} else if (mode == 3) {
 		// Stipple (weight-aware)
+		// Checker should live in the *surface plane* so it stays checker-like on 8-way diagonals,
+		// instead of collapsing into world-axis stripes.
 		float seam = 0.05;
 		if (t < 0.5 - seam) {
 			return sample_palette_entry(tex_idx, i0);
 		} else if (t > 0.5 + seam) {
 			return sample_palette_entry(tex_idx, i1);
 		} else {
-			vec3 checker_coord = floor(vec3(world_xz.x, world_pos.y, world_xz.y) * 4.0);
-			float checker = mod(checker_coord.x + checker_coord.y + checker_coord.z, 2.0);
+			vec3 nn = normalize(vertex_normal);
+			float upness = abs(nn.y);
+
+			// Floors: use stable world-XZ so the checker doesn't warp with interpolated normals.
+			// Walls/steep slopes: use surface-plane UV so diagonals don't collapse into stripes.
+			vec2 p;
+			if (upness > 0.85) {
+				p = floor(world_xz * 4.0);
+			} else {
+				vec2 puv = _mst_surface_plane_uv(world_pos, vertex_normal);
+				p = floor(puv * 4.0);
+			}
+			float checker = mod(p.x + p.y, 2.0);
 			return checker > 0.5 ? sample_palette_entry(tex_idx, i1) : sample_palette_entry(tex_idx, i0);
 		}
 
