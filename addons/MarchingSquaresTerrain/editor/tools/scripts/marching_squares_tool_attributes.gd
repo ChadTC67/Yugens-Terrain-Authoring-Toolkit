@@ -694,6 +694,7 @@ func _change_chunk_mode(_chunk: MarchingSquaresTerrainChunk, m_mode: int) -> voi
 			_chunk.merge_mode = MarchingSquaresTerrainChunk.Mode.SEMI_ROUND
 		"SPHERICAL":
 			_chunk.merge_mode = MarchingSquaresTerrainChunk.Mode.SPHERICAL
+	_chunk.mark_dirty()
 
 #endregion
 
