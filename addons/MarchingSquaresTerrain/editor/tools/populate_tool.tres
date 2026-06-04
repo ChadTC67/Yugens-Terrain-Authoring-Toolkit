@@ -23,6 +23,13 @@ Allows the user to populate the terrain with either a FlowerPlanter or Vegetatio
 
 [INFO]
 • The FlowerPlanter allows you to...
-* The VegetationPlanter allows you to..."
+• The VegetationPlanter allows you to...
+
+[SHORTCUTS]
+Flowers:
+• Ctrl: Show the current multi-chunk cell pattern occupied by the selected FlowerPlanter.
+
+Vegetation:
+• -: ..."
 attributes = SubResource("Resource_pkm8f")
 metadata/_custom_type_script = "uid://brkjbcthwswel"
