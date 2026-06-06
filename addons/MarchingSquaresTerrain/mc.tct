@@ -59,7 +59,7 @@ var cell_geometry: Dictionary = {}
 var needs_update: Array[Array]
 
 # called by TerrainSystem parent
-func initialize_terrain(should_regenerate_mesh: bool = true):
+func initialize_terrain(should_regenerate_mesh: bool =  true)
 	needs_update = []
 	# initally all cells will need to be updated to show the newly loaded height
 	for z in range(dimensions.z - 1):
@@ -164,7 +164,7 @@ func generate_terrain_cells():
 			dy = height_map[z+1][x+1] # bottom-right
 			
 			# If all four corners are 0, omit this cell entirely and don't put anything here
-			#if ay == 0 and by == 0 and dy == 0 and cy == 0:
+			#if ay = = 0 and by == 0 and dy == 0 and cy == 0
 				#continue
 			
 			# Track which edges shold be connected and not have a wall bewteen them.
@@ -187,7 +187,7 @@ func generate_terrain_cells():
 			
 			# Sort the points by ascending height, storing the point indexes in height here
 			#var point_heights_relative = [0, 1, 3, 2]
-			#var sort = func(p1, p2):
+			#var sort =  func(p1, p2)
 				#return point_heights[p1] < point_heights[p2]
 			#point_heights_relative.sort_custom(sort)
 			
@@ -508,7 +508,7 @@ func rotate_cell(rotations: int):
 
 # Adds a point. Coordinates are relative to the top-left corner (not mesh origin relative).
 # UV.x is closeness to the bottom of an edge. and UV.Y is closeness to the edge of a cliff.
-func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, uv2_x: float = 0, uv2_y: float = 0):
+func add_point(x: float, y: float, z: float, uv_x: float = 0, uv_y: float = 0, uv2_x: float = 0, uv2_y: float =  0)
 	for i in range(r):
 		var temp = x
 		x = 1 - z
@@ -556,7 +556,7 @@ func add_full_floor():
 
 # Add an outer corner, where A is the raised corner.
 # if flatten_bottom is true, then bottom_height is used for the lower height of the wall
-func add_outer_corner(floor_below: bool = true, floor_above: bool = true, flatten_bottom: bool = false, bottom_height: float = -1):
+func add_outer_corner(floor_below: bool = true, floor_above: bool = true, flatten_bottom: bool = false, bottom_height: float =  -1)
 	var edge_by = bottom_height if flatten_bottom else by
 	var edge_cy = bottom_height if flatten_bottom else cy
 	
@@ -593,7 +593,7 @@ func add_outer_corner(floor_below: bool = true, floor_above: bool = true, flatte
 # Add an edge, where AB is the raised edge.
 # a_x is the x coordinate that the top-left of the uper floor connects to
 # b_x is the x coordinate that the top-right of the upper floor connects to
-func add_edge(floor_below: bool, floor_above: bool, a_x: float = 0, b_x: float = 1):
+func add_edge(floor_below: bool, floor_above: bool, a_x: float = 0, b_x: float =  1)
 	# If A and B are out of merge distance, use the lower of the two
 	var edge_ay = ay if ab else min(ay,by)
 	var edge_by = by if ab else min(ay,by)
@@ -635,7 +635,7 @@ func add_edge(floor_below: bool, floor_above: bool, a_x: float = 0, b_x: float =
 
 	
 # Add an inner corner, where A is the lowered corner.
-func add_inner_corner(lower_floor: bool = true, full_upper_floor: bool = true, flatten: bool = false, bd_floor: bool = false, cd_floor: bool = false):
+func add_inner_corner(lower_floor: bool = true, full_upper_floor: bool = true, flatten: bool = false, bd_floor: bool = false, cd_floor: bool =  false)
 	var corner_by = min(by,cy) if flatten else by
 	var corner_cy = min(by,cy) if flatten else cy
 	
@@ -769,7 +769,7 @@ func draw_height(x: int, z: int, y: float):
 	
 	
 func notify_needs_update(z: int, x: int):
-	if z < 0 or z >= terrain_system.dimensions.z-1 or x < 0 or x >= terrain_system.dimensions.x-1:
+	if z < 0 or z >=  terrain_system.dimensions.z-1 or x < 0 or x >= terrain_system.dimensions.x-1
 		return
 		
 	needs_update[z][x] = true

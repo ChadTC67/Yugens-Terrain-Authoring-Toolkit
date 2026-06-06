@@ -36,7 +36,6 @@ func trigger_redraw(node: Node) -> void:
 	if node is MarchingSquaresTerrainChunk and _chunk_gizmos.has(node):
 		_chunk_gizmos[node]._redraw()
 	elif node is MarchingSquaresTerrain and _terrain_gizmos.has(node):
-		
 		_terrain_gizmos[node]._redraw()
 
 
@@ -49,3 +48,8 @@ func clear() -> void:
 
 func _get_gizmo_name() -> String:
 	return "Marching Squares Terrain"
+
+
+
+
+

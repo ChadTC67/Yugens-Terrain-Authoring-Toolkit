@@ -39,3 +39,5 @@ func _get_property_list() -> Array[Dictionary]:
 	})
 	
 	return properties
+
+

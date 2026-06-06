@@ -53,3 +53,7 @@ func get_collision_shape() -> ConcavePolygonShape3D:
 ## Check if this is V2 compact format (has byte arrays) vs V1 legacy (has color arrays)
 func is_v2_format() -> bool:
 	return not ground_texture_idx.is_empty()
+
+
+
+

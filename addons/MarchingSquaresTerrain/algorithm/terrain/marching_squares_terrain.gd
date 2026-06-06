@@ -4,10 +4,11 @@ class_name MarchingSquaresTerrain
 
 const MSTVertexColorHelper := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_vertex_color_helper.gd")
 const MarchingSquaresTerrainHelpers := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_helpers.gd")
+const MarchingSquaresBaker := preload("res://addons/MarchingSquaresTerrain/editor/tools/marching_squares_baker.gd")
 
 # Uses global class_name MSTDataHandler (static utility).
 
-signal chunk_dimensions_changed (value : Vector3i)
+signal chunk_dimensions_changed(value: Vector3i)
 
 enum StorageMode {
 	## Saves load time. Loads a pre-built visual mesh from disk.
@@ -22,10 +23,13 @@ enum StorageMode {
 
 @export_category("Storage Options")
 ## The storage mode for terrain data. 
-@export var storage_mode : StorageMode = StorageMode.BAKED:
+@export var _storage_mode_internal : StorageMode = StorageMode.BAKED
+var storage_mode : StorageMode:
+	get():
+		return _storage_mode_internal
 	set(value):
-		if storage_mode != value:
-			storage_mode = value
+		if _storage_mode_internal != value:
+			_storage_mode_internal = value
 			# Mark all chunks dirty to force re-save of data/meshes
 			if chunks:
 				for chunk in chunks.values():
@@ -34,29 +38,44 @@ enum StorageMode {
 		notify_property_list_changed()
 
 ## If true, storage will include grass data, ignored if storage_mode = RUNTIME
+var _bake_grass : bool = true
 @export var bake_grass : bool = true:
+	get():
+		return _bake_grass
 	set(value):
-		bake_grass = value
-		for chunk : MarchingSquaresTerrainChunk in chunks.values():
+		_bake_grass = value
+		for chunk in chunks.values():
 			chunk.mark_dirty()
 
+
+
 ## If true, storage will include collision data, ignored if storage_mode = RUNTIME
+var _bake_collision : bool = true
 @export var bake_collision : bool = true:
+	get():
+		return _bake_collision
 	set(value):
-		bake_collision = value
-		for chunk : MarchingSquaresTerrainChunk in chunks.values():
+		_bake_collision = value
+		for chunk in chunks.values():
 			chunk.mark_dirty()
+
+
 
 ## The folder where this terrain's data is saved. 
 ## If left empty, it automatically fills with a folder name relative to your scene file.
 ## Note: Manually setting a path locks the save location even if you rename the terrain node later.
+var _data_directory : String = ""
 @export_dir var data_directory : String = "":
 	get():
-		if EngineWrapper.instance.is_editor() and data_directory.is_empty():
+		if EngineWrapper.instance.is_editor() and _data_directory.is_empty():
 			var auto_path := MSTDataHandler.generate_data_directory(self)
 			if not auto_path.is_empty():
-				data_directory = auto_path
-		return data_directory
+				_data_directory = auto_path
+		return _data_directory
+	set(value):
+		_data_directory = value
+
+
 
 @export_category("Runtime Baking")
 ## If this option is true, the textures will be baked into a texture atlas
@@ -71,9 +90,18 @@ enum StorageMode {
 ## Used for overriding the material of the baked terrain texture.
 @export var bake_material_override : Material
 
+# ---------------- Texture2DArray baking / library ----------------
+@export var texture_library : Resource
+@export_storage var baked_albedo_array_path : String = ""
+@export_storage var baked_normal_array_path : String = ""
+@export_storage var baked_grass_array_path : String = ""
+@export var baked_texture_size : int = 512
+
 ## True after external storage has been initialized.
 ## Used to detect when migration from embedded data is needed.
 @export_storage var _storage_initialized : bool = false
+# One-time quick setup flag: when plugin/terrain is added, auto-create texture library + baked arrays if missing
+@export_storage var _auto_quick_setup_done : bool = false
 
 ## Tracks the mode used during the last successful save for reporting purposes.
 @export_storage var _last_storage_mode : StorageMode = StorageMode.BAKED
@@ -106,7 +134,7 @@ enum StorageMode {
 		cell_size = value
 		terrain_material.set_shader_parameter("cell_size", value)
 		grass_size = grass_size
-@export_custom(PROPERTY_HINT_RANGE, "0, 2", PROPERTY_USAGE_STORAGE) var blend_mode : int = 0:
+@export_custom(PROPERTY_HINT_RANGE, "0, 2", PROPERTY_USAGE_STORAGE) var blend_mode : int =  0:
 	set(value):
 		blend_mode = value
 		if value == 1 or value == 2:
@@ -119,7 +147,7 @@ enum StorageMode {
 
 # Texture boundary waviness (blend noise). This controls ONLY the blend jitter/waves.
 # Outlines stay clean/stable regardless.
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var blend_noise_enabled: bool = false:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var blend_noise_enabled: bool =  false:
 	set(value):
 		blend_noise_enabled = bool(value)
 		if is_batch_updating:
@@ -134,23 +162,23 @@ func _apply_blend_noise_settings() -> void:
 		return
 	if blend_noise_enabled:
 		var s := float(_blend_noise_strength_saved)
-		if s <= 0.0:
+		if s <=  0.0:
 			s = 0.2
 		terrain_material.set_shader_parameter("blend_noise_strength", s)
 	else:
 		var current := terrain_material.get_shader_parameter("blend_noise_strength")
-		if current != null:
+		if current !=  null:
 			var cs := float(current)
 			if cs > 0.0:
 				_blend_noise_strength_saved = cs
 		terrain_material.set_shader_parameter("blend_noise_strength", 0.0)
 
-@export_custom(PROPERTY_HINT_RANGE, "9, 32", PROPERTY_USAGE_STORAGE) var extra_collision_layer : int = 9:
+@export_custom(PROPERTY_HINT_RANGE, "9, 32", PROPERTY_USAGE_STORAGE) var extra_collision_layer : int =  9:
 	set(value):
 		extra_collision_layer = value
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
 			chunk.regenerate_all_cells(true)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_cell_shading : bool = true:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_cell_shading : bool =  true:
 	set(value):
 		use_cell_shading = value
 		terrain_material.set_shader_parameter("use_cell_shading", value)
@@ -160,12 +188,12 @@ func _apply_blend_noise_settings() -> void:
 # Backwards/forwards compat: scenes/presets may reference either "use_flat_normals" (shader) or legacy "flat_normals".
 # Default is false (smooth normals).
 var _use_flat_normals : bool = false
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_flat_normals : bool = false:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_flat_normals : bool =  false:
 	get():
 		return _use_flat_normals
 	set(value):
 		_apply_flat_normals(bool(value))
-var flat_normals : bool = false:
+var flat_normals : bool =  false:
 	get():
 		return _use_flat_normals
 	set(value):
@@ -180,43 +208,43 @@ var flat_normals : bool = false:
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
 			if chunk.grass_planter:
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var ridge_threshold: float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var ridge_threshold: float =  1.0:
 	set(value):
 		ridge_threshold = value
 		terrain_material.set_shader_parameter("ridge_threshold", value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var ledge_threshold: float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var ledge_threshold: float =  1.0:
 	set(value):
 		ledge_threshold = value
 		terrain_material.set_shader_parameter("ledge_threshold", value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_ridge_texture: bool = true:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_ridge_texture: bool =  true:
 	set(value):
 		use_ridge_texture = value
 		terrain_material.set_shader_parameter("use_ridge_texture", value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_ledge_texture: bool = true:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_ledge_texture: bool =  true:
 	set(value):
 		use_ledge_texture = value
 		terrain_material.set_shader_parameter("use_ledge_texture", value)
 
 # Convenience: texture used by the shader's global noise multiplier.
 # Defaults to the same noise used for ridge/ledge so porting feels consistent.
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var global_noise_texture: Texture2D = preload("uid://dbnc04k3n0sro"):
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var global_noise_texture: Texture2D = EngineWrapper.load_resource("uid://dbnc04k3n0sro") as Texture2D:
 	set(value):
 		global_noise_texture = value
-		if terrain_material != null:
+		if terrain_material !=  null:
 			terrain_material.set_shader_parameter("global_noise_texture", value)
 		_sync_global_noise_to_grass()
 
-@export_custom(PROPERTY_HINT_RANGE, "0.0, 1.0, 0.01", PROPERTY_USAGE_STORAGE) var global_noise_strength: float = 1.0:
+@export_custom(PROPERTY_HINT_RANGE, "0.0, 1.0, 0.01", PROPERTY_USAGE_STORAGE) var global_noise_strength: float =  1.0:
 	set(value):
 		global_noise_strength = clampf(float(value), 0.0, 1.0)
-		if terrain_material != null:
+		if terrain_material !=  null:
 			terrain_material.set_shader_parameter("global_noise_strength", global_noise_strength)
 		_sync_global_noise_to_grass()
 
-@export_custom(PROPERTY_HINT_RANGE, "0.001, 1.0, 0.001", PROPERTY_USAGE_STORAGE) var global_noise_scale: float = 0.037:
+@export_custom(PROPERTY_HINT_RANGE, "0.001, 1.0, 0.001", PROPERTY_USAGE_STORAGE) var global_noise_scale: float =  0.037:
 	set(value):
 		global_noise_scale = clampf(float(value), 0.001, 1.0)
-		if terrain_material != null:
+		if terrain_material !=  null:
 			terrain_material.set_shader_parameter("global_noise_scale", global_noise_scale)
 		_sync_global_noise_to_grass()
 
@@ -224,12 +252,12 @@ var flat_normals : bool = false:
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var noise_hmap : Noise # used to generate smooth initial heights for more natrual looking terrain. if null, initial terrain will be flat
 
 # Grass settings
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var animation_fps : int = 0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var animation_fps : int =  0:
 	set(value):
 		animation_fps = clamp(value, 0, 30)
 		var grass_mat := grass_mesh.material as ShaderMaterial
 		grass_mat.set_shader_parameter("fps", clamp(value, 0, 30))
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_subdivisions : int = 3:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_subdivisions : int =  3:
 	set(value):
 		grass_subdivisions = value
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
@@ -237,7 +265,7 @@ var flat_normals : bool = false:
 				continue
 			chunk.grass_planter.multimesh.instance_count = (dimensions.x-1) * (dimensions.z-1) * grass_subdivisions * grass_subdivisions
 			chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_size : Vector2 = Vector2(1.0, 1.0):
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_size : Vector2 =  Vector2(1.0, 1.0):
 	set(value):
 		grass_size = value
 		var scale_factor := (cell_size.x + cell_size.y) / 4.0
@@ -257,105 +285,105 @@ var flat_normals : bool = false:
 #endregion
 
 #region vertex painting texture settings
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_1 : Texture2D = null:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_1 : Texture2D =  null:
 	set(value):
 		texture_1 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(0, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_2 : Texture2D = null:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_2 : Texture2D =  null:
 	set(value):
 		texture_2 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(1, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_3 : Texture2D = null:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_3 : Texture2D =  null:
 	set(value):
 		texture_3 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(2, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_4 : Texture2D = null:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_4 : Texture2D =  null:
 	set(value):
 		texture_4 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(3, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_5 : Texture2D = null:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_5 : Texture2D =  null:
 	set(value):
 		texture_5 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(4, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_6 : Texture2D = null:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_6 : Texture2D =  null:
 	set(value):
 		texture_6 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(5, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_7 : Texture2D:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_7 : Texture2D = null:
 	set(value):
 		texture_7 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(6, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_8 : Texture2D:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_8 : Texture2D = null:
 	set(value):
 		texture_8 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(7, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_9 : Texture2D:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_9 : Texture2D = null:
 	set(value):
 		texture_9 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(8, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_10 : Texture2D:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_10 : Texture2D = null:
 	set(value):
 		texture_10 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(9, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_11 : Texture2D:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_11 : Texture2D = null:
 	set(value):
 		texture_11 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(10, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_12 : Texture2D:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_12 : Texture2D = null:
 	set(value):
 		texture_12 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(11, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_13 : Texture2D:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_13 : Texture2D = null:
 	set(value):
 		texture_13 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(12, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_14 : Texture2D:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_14 : Texture2D = null:
 	set(value):
 		texture_14 = value
 		if not is_batch_updating:
 			_set_legacy_texture_slot(13, value)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.grass_planter.regenerate_all_cells()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_15 : Texture2D:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_15 : Texture2D = null:
 	set(value):
 		texture_15 = value
 		if not is_batch_updating:
@@ -458,7 +486,7 @@ var _warned_grass_array_slots: Dictionary = {}
 
 #region has grass variables (legacy exports -> slot has_grass)
 # Texture 1 was historically always-on; now exposed so "Base Grass" can be disabled.
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex1_has_grass : bool = true:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex1_has_grass : bool =  true:
 	set(value):
 		tex1_has_grass = bool(value) if value != null else true
 		if not is_batch_updating:
@@ -467,7 +495,7 @@ var _warned_grass_array_slots: Dictionary = {}
 			texture_slots[0].has_grass = tex1_has_grass
 			_request_grass_regen()
 
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex2_has_grass : bool = true:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex2_has_grass : bool =  true:
 	set(value):
 		tex2_has_grass = bool(value) if value != null else true
 		if not is_batch_updating:
@@ -475,7 +503,7 @@ var _warned_grass_array_slots: Dictionary = {}
 			_maybe_migrate_legacy_grass()
 			texture_slots[1].has_grass = tex2_has_grass
 			_request_grass_regen()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex3_has_grass : bool = true:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex3_has_grass : bool =  true:
 	set(value):
 		tex3_has_grass = bool(value) if value != null else true
 		if not is_batch_updating:
@@ -483,7 +511,7 @@ var _warned_grass_array_slots: Dictionary = {}
 			_maybe_migrate_legacy_grass()
 			texture_slots[2].has_grass = tex3_has_grass
 			_request_grass_regen()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex4_has_grass : bool = true:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex4_has_grass : bool =  true:
 	set(value):
 		tex4_has_grass = bool(value) if value != null else true
 		if not is_batch_updating:
@@ -491,7 +519,7 @@ var _warned_grass_array_slots: Dictionary = {}
 			_maybe_migrate_legacy_grass()
 			texture_slots[3].has_grass = tex4_has_grass
 			_request_grass_regen()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex5_has_grass : bool = true:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex5_has_grass : bool =  true:
 	set(value):
 		tex5_has_grass = bool(value) if value != null else true
 		if not is_batch_updating:
@@ -499,7 +527,7 @@ var _warned_grass_array_slots: Dictionary = {}
 			_maybe_migrate_legacy_grass()
 			texture_slots[4].has_grass = tex5_has_grass
 			_request_grass_regen()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex6_has_grass : bool = true:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex6_has_grass : bool =  true:
 	set(value):
 		tex6_has_grass = bool(value) if value != null else true
 		if not is_batch_updating:
@@ -527,77 +555,77 @@ var _warned_grass_array_slots: Dictionary = {}
 
 #region texture scales
 # Per-texture UV scaling (applied in shader)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_1 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_1 : float =  1.0:
 	set(value):
 		texture_scale_1 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(0, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_2 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_2 : float =  1.0:
 	set(value):
 		texture_scale_2 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(1, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_3 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_3 : float =  1.0:
 	set(value):
 		texture_scale_3 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(2, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_4 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_4 : float =  1.0:
 	set(value):
 		texture_scale_4 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(3, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_5 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_5 : float =  1.0:
 	set(value):
 		texture_scale_5 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(4, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_6 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_6 : float =  1.0:
 	set(value):
 		texture_scale_6 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(5, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_7 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_7 : float =  1.0:
 	set(value):
 		texture_scale_7 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(6, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_8 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_8 : float =  1.0:
 	set(value):
 		texture_scale_8 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(7, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_9 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_9 : float =  1.0:
 	set(value):
 		texture_scale_9 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(8, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_10 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_10 : float =  1.0:
 	set(value):
 		texture_scale_10 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(9, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_11 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_11 : float =  1.0:
 	set(value):
 		texture_scale_11 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(10, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_12 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_12 : float =  1.0:
 	set(value):
 		texture_scale_12 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(11, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_13 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_13 : float =  1.0:
 	set(value):
 		texture_scale_13 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(12, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_14 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_14 : float =  1.0:
 	set(value):
 		texture_scale_14 = value
 		if not is_batch_updating:
 			_set_legacy_texture_scale(13, value)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_15 : float = 1.0:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_15 : float =  1.0:
 	set(value):
 		texture_scale_15 = value
 		if not is_batch_updating:
@@ -650,7 +678,7 @@ var _warned_grass_array_slots: Dictionary = {}
 	1.0, 1.0, 1.0, 1.0, 1.0,
 ]
 
-@export_custom(PROPERTY_HINT_RANGE, "0.25,32.0,0.25", PROPERTY_USAGE_STORAGE) var outline_width: float = 6.0:
+@export_custom(PROPERTY_HINT_RANGE, "0.25,32.0,0.25", PROPERTY_USAGE_STORAGE) var outline_width: float =  6.0:
 	set(value):
 		outline_width = clampf(value, 0.25, 32.0)
 		if not is_batch_updating and terrain_material:
@@ -659,7 +687,7 @@ var _warned_grass_array_slots: Dictionary = {}
 
 # Default wall texture slot (0-15) used when no quick paint is active
 # Default is 5 (Texture 6 in 1-indexed UI terms)
-@export_storage var default_wall_texture : int = 5:
+@export_storage var default_wall_texture : int =  5:
 	set(value):
 		var old := default_wall_texture
 		default_wall_texture = clampi(int(value), 0, 255)
@@ -699,13 +727,13 @@ func _sync_global_noise_to_grass() -> void:
 	grass_mat.set_shader_parameter("global_noise_texture", global_noise_texture)
 	for p in ["global_noise_scale", "global_noise_strength", "global_noise_scroll", "wind_direction", "wind_speed"]:
 		var v := terrain_material.get_shader_parameter(p)
-		if v != null:
+		if v !=  null:
 			grass_mat.set_shader_parameter(p, v)
 
 
 func _validate_property(property: Dictionary) -> void:
 	if property.name in ["bake_grass", "bake_collision"]:
-		if storage_mode != StorageMode.BAKED:
+		if storage_mode !=  StorageMode.BAKED:
 			property.usage = PROPERTY_USAGE_NO_EDITOR
 
 
@@ -775,7 +803,7 @@ func _apply_grass_regen() -> void:
 func _apply_flat_normals(p_enabled: bool) -> void:
 	_use_flat_normals = p_enabled
 	# Terrain shader expects "use_flat_normals".
-	if terrain_material != null:
+	if terrain_material !=  null:
 		terrain_material.set_shader_parameter("use_flat_normals", _use_flat_normals)
 	# Grass instances use this flag when generating normals.
 	_request_grass_regen()
@@ -887,6 +915,60 @@ func _deferred_enter_tree() -> void:
 	force_batch_update()
 	
 	# One-time editor migrations: regenerate meshes so new wall tagging/material selection is present in geometry.
+
+	# Auto Quick Setup: when the terrain is created in the editor for the first time,
+	# create a MSTextureLibrary and baked arrays if none exist. This makes plugin usable
+	# immediately without pressing UI buttons.
+	if EngineWrapper.instance.is_editor() and not _auto_quick_setup_done:
+		# Only run if no library and no baked paths are present
+		var need_lib := (texture_library == null)
+		var need_baked := (baked_albedo_array_path == "" or baked_normal_array_path == "")
+		if need_lib or need_baked:
+			_auto_quick_setup_done = true
+			# Build MSTextureLibrary from existing texture_slots
+			var lib: MSTextureLibrary = MSTextureLibrary.new()
+			lib.max_slots = 256
+			lib.ensure_length()
+			if texture_slots is Array:
+				for i in range(lib.max_slots):
+					var slot = texture_slots[i] if i < texture_slots.size() else null
+					if slot !=  null and slot.texture != null and slot.texture is Texture2D:
+						lib.albedo_textures[i] = slot.texture
+						# If slot provides a normal field, prefer that.
+						if slot.has_method("get") and slot.get("normal_texture") !=  null:
+							var nt = slot.get("normal_texture")
+							if nt is Texture2D:
+								lib.normal_textures[i] = nt
+				# Save library
+				var out_dir := data_directory
+				if out_dir == null or out_dir == "":
+					out_dir = "res://scenes"
+				var lib_path := out_dir.path_join("mst_texture_library.tres")
+				ResourceSaver.save(lib, lib_path)
+				# Load saved lib resource and assign
+				var lib_res := ResourceLoader.load(lib_path)
+				if lib_res !=  null:
+					texture_library = lib_res
+					# Bake arrays into same folder if missing
+					var baker := MarchingSquaresBaker.new()
+					var bake_size := int(baked_texture_size) if baked_texture_size != null else 512
+					var results := baker.bake_library(lib_res, out_dir, bake_size)
+					if results and results.has("albedo_path"):
+						baked_albedo_array_path = results["albedo_path"]
+					if results and results.has("normal_path"):
+						baked_normal_array_path = results["normal_path"]
+					if results and results.has("grass_path"):
+						baked_grass_array_path = results["grass_path"]
+					# Switch to baked storage for best perf
+					storage_mode = StorageMode.BAKED
+					# Rebuild runtime arrays
+					rebuild_texture_array()
+					rebuild_grass_texture_array()
+					print_verbose("[MST] Auto Quick Setup completed: library + baked arrays created at ", out_dir)
+				else:
+					print_verbose("[MST] Auto Quick Setup: failed to save/load MSTextureLibrary")
+
+	# Initialize all chunks (regenerate mesh/grass from loaded data)
 	var force_regen_for_wall_fixes : bool = false
 	var force_regen_for_default_wall : bool = false
 	if EngineWrapper.instance.is_editor():
@@ -923,6 +1005,16 @@ func _deferred_enter_tree() -> void:
 	load_finished.emit()
 
 
+func _exit_tree() -> void:
+	# Ensure editor-time terrain data is saved when the terrain node is removed or scene switched.
+	if EngineWrapper.instance.is_editor():
+		# Only attempt save if data_directory is known (generated on enter_tree)
+		if data_directory !=  null and data_directory != "":
+			MSTDataHandler.save_all_chunks(self)
+		# Clear chunks map to avoid holding references after exit
+		chunks.clear()
+		# Let children handle their own cleanup (chunk._exit_tree will run)
+
 func has_chunk(x: int, z: int) -> bool:
 	return chunks.has(Vector2i(x, z))
 
@@ -953,25 +1045,25 @@ func add_new_chunk(chunk_x: int, chunk_z: int, plugin):
 	var chunk_left : MarchingSquaresTerrainChunk = chunks.get(Vector2i(chunk_x-1, chunk_z))
 	if chunk_left and not chunk_left.height_map.is_empty() and not new_chunk.height_map.is_empty():
 		for z in range(0, dimensions.z):
-			if z < chunk_left.height_map.size() and z < new_chunk.height_map.size() and chunk_left.height_map[z].size() >= dimensions.x and new_chunk.height_map[z].size() >= 1:
+			if z < chunk_left.height_map.size() and z < new_chunk.height_map.size() and chunk_left.height_map[z].size() >=  dimensions.x and new_chunk.height_map[z].size() >= 1:
 				new_chunk.height_map[z][0] = chunk_left.height_map[z][dimensions.x - 1]
 	
 	var chunk_right : MarchingSquaresTerrainChunk = chunks.get(Vector2i(chunk_x+1, chunk_z))
 	if chunk_right and not chunk_right.height_map.is_empty() and not new_chunk.height_map.is_empty():
 		for z in range(0, dimensions.z):
-			if z < chunk_right.height_map.size() and z < new_chunk.height_map.size() and chunk_right.height_map[z].size() >= 1 and new_chunk.height_map[z].size() >= dimensions.x:
+			if z < chunk_right.height_map.size() and z < new_chunk.height_map.size() and chunk_right.height_map[z].size() >=  1 and new_chunk.height_map[z].size() >= dimensions.x:
 				new_chunk.height_map[z][dimensions.x - 1] = chunk_right.height_map[z][0]
 	
 	var chunk_up : MarchingSquaresTerrainChunk = chunks.get(Vector2i(chunk_x, chunk_z-1))
 	if chunk_up and not chunk_up.height_map.is_empty() and not new_chunk.height_map.is_empty():
-		if chunk_up.height_map.size() >= dimensions.z and new_chunk.height_map.size() >= 1:
+		if chunk_up.height_map.size() >=  dimensions.z and new_chunk.height_map.size() >= 1:
 			for x in range(0, dimensions.x):
 				if x < chunk_up.height_map[dimensions.z - 1].size() and x < new_chunk.height_map[0].size():
 					new_chunk.height_map[0][x] = chunk_up.height_map[dimensions.z - 1][x]
 	
 	var chunk_down : MarchingSquaresTerrainChunk = chunks.get(Vector2i(chunk_x, chunk_z+1))
 	if chunk_down and not chunk_down.height_map.is_empty() and not new_chunk.height_map.is_empty():
-		if chunk_down.height_map.size() >= 1 and new_chunk.height_map.size() >= dimensions.z:
+		if chunk_down.height_map.size() >=  1 and new_chunk.height_map.size() >= dimensions.z:
 			for x in range(0, dimensions.x):
 				if x < chunk_down.height_map[0].size() and x < new_chunk.height_map[dimensions.z - 1].size():
 					new_chunk.height_map[dimensions.z - 1][x] = chunk_down.height_map[0][x]
@@ -1018,7 +1110,7 @@ func remove_chunk_from_tree(x: int, z: int, plugin):
 	plugin.gizmo_plugin.trigger_redraw(self)
 
 
-func add_chunk(coords: Vector2i, chunk: MarchingSquaresTerrainChunk, plugin, regenerate_mesh: bool = true):
+func add_chunk(coords: Vector2i, chunk: MarchingSquaresTerrainChunk, plugin, regenerate_mesh: bool =  true):
 	chunk.terrain_system = self
 	chunk.chunk_coords = coords
 	chunk._skip_save_on_exit = false  # Reset flag when chunk is re-added (undo restores chunk)
@@ -1177,7 +1269,7 @@ func save_to_preset() -> void:
 	# Grass sprites (slot-based)
 	_ensure_texture_slots()
 	_maybe_migrate_legacy_grass()
-	if current_texture_preset.new_textures.grass_sprites.size() != MAX_TEXTURE_SLOTS:
+	if current_texture_preset.new_textures.grass_sprites.size() !=  MAX_TEXTURE_SLOTS:
 		current_texture_preset.new_textures.grass_sprites.resize(MAX_TEXTURE_SLOTS)
 	for i in range(MAX_TEXTURE_SLOTS):
 		current_texture_preset.new_textures.grass_sprites[i] = texture_slots[i].grass_texture if texture_slots[i] != null else null
@@ -1201,21 +1293,21 @@ func save_to_preset() -> void:
 	# Has grass flags (slot-based)
 	_ensure_texture_slots()
 	_maybe_migrate_legacy_grass()
-	if current_texture_preset.new_textures.has_grass.size() != MAX_TEXTURE_SLOTS:
+	if current_texture_preset.new_textures.has_grass.size() !=  MAX_TEXTURE_SLOTS:
 		current_texture_preset.new_textures.has_grass.resize(MAX_TEXTURE_SLOTS)
 	for i in range(MAX_TEXTURE_SLOTS):
 		current_texture_preset.new_textures.has_grass[i] = bool(texture_slots[i].has_grass) if texture_slots[i] != null else false
 
 	# Slot->base texture mapping (slot-based)
 	if current_texture_preset.new_textures.get("terrain_texture_indices") is Array:
-		if current_texture_preset.new_textures.terrain_texture_indices.size() != MAX_TEXTURE_SLOTS:
+		if current_texture_preset.new_textures.terrain_texture_indices.size() !=  MAX_TEXTURE_SLOTS:
 			current_texture_preset.new_textures.terrain_texture_indices.resize(MAX_TEXTURE_SLOTS)
 		for i in range(MAX_TEXTURE_SLOTS):
 			var s = texture_slots[i]
 			var idx := 0
 			if i == VOID_TEXTURE_SLOT:
 				idx = VOID_TEXTURE_SLOT
-			elif s != null and s.get("terrain_texture_index") != null:
+			elif s !=  null and s.get("terrain_texture_index") != null:
 				idx = clampi(int(s.terrain_texture_index), 0, 15)
 			else:
 				idx = i if i < 15 else 0
@@ -1302,7 +1394,7 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 	_maybe_migrate_legacy_grass()
 
 	# Terrain textures (first 15)
-	if preset.new_textures != null and preset.new_textures.terrain_textures.size() >= 15:
+	if preset.new_textures !=  null and preset.new_textures.terrain_textures.size() >= 15:
 		texture_1 = preset.new_textures.terrain_textures[0]
 		texture_2 = preset.new_textures.terrain_textures[1]
 		texture_3 = preset.new_textures.terrain_textures[2]
@@ -1325,7 +1417,7 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 			texture_slots[i].texture = preset.new_textures.terrain_textures[i]
 
 	# Texture scales (first 15)
-	if preset.new_textures != null and preset.new_textures.texture_scales.size() >= 15:
+	if preset.new_textures !=  null and preset.new_textures.texture_scales.size() >= 15:
 		texture_scale_1 = preset.new_textures.texture_scales[0]
 		texture_scale_2 = preset.new_textures.texture_scales[1]
 		texture_scale_3 = preset.new_textures.texture_scales[2]
@@ -1351,9 +1443,9 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 	# IMPORTANT: if an older preset does not contain these arrays, do NOT wipe existing grass.
 	var p_sprites: Array = []
 	var p_has: Array = []
-	if preset.new_textures != null and preset.new_textures.get("grass_sprites") is Array:
+	if preset.new_textures !=  null and preset.new_textures.get("grass_sprites") is Array:
 		p_sprites = preset.new_textures.grass_sprites
-	if preset.new_textures != null and preset.new_textures.get("has_grass") is Array:
+	if preset.new_textures !=  null and preset.new_textures.get("has_grass") is Array:
 		p_has = preset.new_textures.has_grass
 
 	var has_sprite_data := p_sprites.size() > 0
@@ -1371,7 +1463,7 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 
 	# Slot->base texture mapping (0..15 per slot)
 	var p_map: Array = []
-	if preset.new_textures != null and preset.new_textures.get("terrain_texture_indices") is Array:
+	if preset.new_textures !=  null and preset.new_textures.get("terrain_texture_indices") is Array:
 		p_map = preset.new_textures.terrain_texture_indices
 	for i in range(MAX_TEXTURE_SLOTS):
 		if texture_slots[i] == null:
@@ -1379,7 +1471,7 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 		var idx := i if i < 15 else 0
 		if i == VOID_TEXTURE_SLOT:
 			idx = VOID_TEXTURE_SLOT
-		if i < p_map.size() and p_map[i] != null:
+		if i < p_map.size() and p_map[i] !=  null:
 			idx = clampi(int(p_map[i]), 0, 15)
 		texture_slots[i].terrain_texture_index = idx
 

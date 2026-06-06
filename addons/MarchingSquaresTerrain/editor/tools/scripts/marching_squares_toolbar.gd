@@ -60,3 +60,7 @@ func _add_tools() -> void:
 
 func _on_tool_selected(_button: BaseButton) -> void:
 	emit_signal("tool_changed", _button.get_meta("Index"))
+
+
+
+

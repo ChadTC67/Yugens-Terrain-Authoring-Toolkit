@@ -13,6 +13,9 @@ func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 		return
 	
 	var mesh : ArrayMesh = inst.mesh
+	if mesh.get_surface_count() == 0:
+		push_warning("MarchingSquaresGeometryBaker: input mesh has no surfaces; aborting bake.")
+		return
 	var new_mesh := ArrayMesh.new()
 	
 	var arrays := mesh.surface_get_arrays(0)
@@ -336,3 +339,7 @@ static func _store_geometry(mesh: Mesh, name: String):
 			"f %d/%d/%d %d/%d/%d %d/%d/%d"
 			% [a, a, a, c, c, c, b, b, b]
 		)
+
+
+
+

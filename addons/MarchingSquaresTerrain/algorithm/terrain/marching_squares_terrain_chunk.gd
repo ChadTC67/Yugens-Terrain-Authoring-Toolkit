@@ -87,7 +87,7 @@ var blend_zone := upper_thresh - lower_thresh
 #endregion
 
 # Called by TerrainSystem parent
-func initialize_terrain(should_regenerate_mesh: bool = true):
+func initialize_terrain(should_regenerate_mesh: bool =  true):
 	needs_update = []
 	# Initally all cells will need to be updated to show the newly loaded height
 	for z in range(dimensions.z - 1):
@@ -123,13 +123,22 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 	grass_planter.multimesh.mesh = terrain_system.grass_mesh
 	
 	# Generate maps if not loaded from external storage (works for both editor and runtime)
-	if not height_map:
+	# Validate height_map shape — serialized scenes may contain empty arrays or malformed rows.
+	var need_hm := true
+	if height_map and height_map is Array and height_map.size() == dimensions.z:
+		need_hm = false
+		for row in height_map:
+			if not (row is Array) or row.size() !=  dimensions.x:
+				need_hm = true
+				break
+	if need_hm:
 		generate_height_map()
-	if not color_map_0 or not color_map_1:
+	# Validate color maps sizes
+	if not (color_map_0 is PackedColorArray) or color_map_0.size() !=  dimensions.z * dimensions.x or not (color_map_1 is PackedColorArray) or color_map_1.size() != dimensions.z * dimensions.x:
 		generate_color_maps()
-	if not wall_color_map_0 or not wall_color_map_1:
+	if not (wall_color_map_0 is PackedColorArray) or wall_color_map_0.size() !=  dimensions.z * dimensions.x or not (wall_color_map_1 is PackedColorArray) or wall_color_map_1.size() != dimensions.z * dimensions.x:
 		generate_wall_color_maps()
-	if not grass_mask_map:
+	if not (grass_mask_map is PackedColorArray) or grass_mask_map.size() !=  dimensions.z * dimensions.x:
 		generate_grass_mask_map()
 	
 	if not mesh and should_regenerate_mesh:
@@ -152,7 +161,7 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 		baker.finished.connect(func(mesh_: Mesh, _original: MeshInstance3D, img: Image):
 			mesh = mesh_
 			var mat : Material
-			if terrain_system.bake_material_override: 
+			if terrain_system.bake_material_override:
 				mat = terrain_system.bake_material_override.duplicate()
 			else:
 				mat = bake_material.duplicate()
@@ -161,7 +170,8 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 				mat.albedo_texture = ImageTexture.create_from_image(img)
 			elif mat is ShaderMaterial:
 				mat.set_shader_parameter("texture_albedo", ImageTexture.create_from_image(img))
-			mesh.surface_set_material(0, mat)
+			if mesh and mesh.get_surface_count() > 0:
+				mesh.surface_set_material(0, mat)
 		, CONNECT_ONE_SHOT)
 		baker.bake_geometry_texture(self, get_tree())
 
@@ -176,11 +186,14 @@ func _notification(what: int) -> void:
 			_skip_save_on_exit = _skip_save_on_exit # Surpress warning
 			_temp_height_map = height_map
 			height_map = []
-			
+		
+			# Clear in-memory cache of generated cell geometry to avoid serializing Vector2i keys
+			cell_geometry.clear()
+		
 			# Store mesh and clear to prevent serialization
 			_temp_mesh = mesh
 			mesh = null
-			
+		
 			# Store grass multimesh and clear
 			if grass_planter and grass_planter.multimesh:
 				_temp_grass_multimesh = grass_planter.multimesh
@@ -236,7 +249,19 @@ func _notification(what: int) -> void:
 func _enter_tree() -> void:
 	if not terrain_system:
 		return
-	if get_parent() != terrain_system:
+	# Defensive: clear any serialized runtime caches that can cause variant lookup errors.
+	if cell_geometry and cell_geometry.size() > 0:
+		# Ensure keys are Vector2i; if not, dump and clear to avoid variant errors on load.
+		var keys_valid := true
+		for k in cell_geometry.keys():
+			if not (k is Vector2i):
+				keys_valid = false
+				break
+		if not keys_valid:
+			cell_geometry.clear()
+			push_warning("[MST] Cleared unexpected serialized cell_geometry: please re-save the scene to remove runtime caches.")
+	
+	if get_parent() !=  terrain_system:
 		push_error("Chunk must remain within its parent!")
 		return
 	terrain_system.chunks[chunk_coords] = self
@@ -263,7 +288,7 @@ func _exit_tree() -> void:
 		terrain_system.chunks.erase(chunk_coords)
 
 
-func regenerate_mesh(use_threads: bool = false):
+func regenerate_mesh(use_threads: bool =  false):
 	st = SurfaceTool.new()
 	if mesh:
 		st.create_from(mesh, 0)
@@ -280,8 +305,8 @@ func regenerate_mesh(use_threads: bool = false):
 	st.index()
 	# Create a new mesh out of floor, and add the wall surface to it
 	mesh = st.commit()
-	
-	if mesh and terrain_system:
+		
+	if mesh and terrain_system and mesh.get_surface_count() > 0:
 		mesh.surface_set_material(0, terrain_system.terrain_material)
 	
 	for child in get_children():
@@ -307,32 +332,49 @@ func generate_terrain_cells(use_threads: bool):
 			var work_load : Callable
 			# If geometry did not change, copy already generated geometry and skip this cell
 			if not needs_update[z][x]:
-				work_load = func():
-					cell_generation_mutex.lock()
-					var verts = cell_geometry[cell_coords]["verts"]
-					var uvs = cell_geometry[cell_coords]["uvs"]
-					var uv2s = cell_geometry[cell_coords]["uv2s"]
-					var color_0s = cell_geometry[cell_coords]["color_0s"]
-					var color_1s = cell_geometry[cell_coords]["color_1s"]
-					var custom_1_values = cell_geometry[cell_coords]["custom_1_values"]
-					var mat_blend = cell_geometry[cell_coords]["mat_blend"]
-					var is_floor = cell_geometry[cell_coords]["is_floor"]
+				# If cached geometry is missing or malformed, fallback to regenerating this cell.
+				if not cell_geometry.has(cell_coords):
+					needs_update[z][x] = true
+					# fall through to generation
 					
-					for i in range(len(verts)):
-						st.set_smooth_group(0 if is_floor[i] == true else -1)
-						st.set_uv(uvs[i])
-						st.set_uv2(uv2s[i])
-						st.set_color(color_0s[i])
-						st.set_custom(0, color_1s[i])
-						st.set_custom(1, custom_1_values[i])
-						st.set_custom(2, mat_blend[i])
-						st.add_vertex(verts[i])
-					cell_generation_mutex.unlock()
-				if use_threads:
-					thread_pool.enqueue(work_load)
+					# continue to next iteration so generation handles it
+					# (avoid executing the cached-copy branch)
+					# Note: do NOT call continue here because we want the generation code below to run in this iteration.
+					pass
 				else:
-					work_load.call()
-				continue
+					work_load =  func():
+						cell_generation_mutex.lock()
+						# Safely fetch cached arrays; if anything is missing, unlock and bail so generation occurs.
+						if not cell_geometry.has(cell_coords):
+							cell_generation_mutex.unlock()
+							return
+						var entry = cell_geometry[cell_coords]
+						if not entry.has("verts"):
+							cell_generation_mutex.unlock()
+							return
+						var verts = entry["verts"]
+						var uvs = entry["uvs"]
+						var uv2s = entry["uv2s"]
+						var color_0s = entry["color_0s"]
+						var color_1s = entry["color_1s"]
+						var custom_1_values = entry["custom_1_values"]
+						var mat_blend = entry["mat_blend"]
+						var is_floor = entry["is_floor"]
+						for i in range(len(verts)):
+							st.set_smooth_group(0 if is_floor[i] == true else -1)
+							st.set_uv(uvs[i])
+							st.set_uv2(uv2s[i])
+							st.set_color(color_0s[i])
+							st.set_custom(0, color_1s[i])
+							st.set_custom(1, custom_1_values[i])
+							st.set_custom(2, mat_blend[i])
+							st.add_vertex(verts[i])
+						cell_generation_mutex.unlock()
+					if use_threads:
+						thread_pool.enqueue(work_load)
+					else:
+						work_load.call()
+					continue
 			
 			# Cell is now being updated
 			needs_update[z][x] = false
@@ -355,7 +397,7 @@ func generate_terrain_cells(use_threads: bool):
 			color_helper.chunk = self
 			color_helper.cell = cell
 			
-			work_load = func():
+			work_load =  func():
 				cell.generate_geometry(cell_coords)
 				if grass_planter and grass_planter.terrain_system:
 					grass_planter.generate_grass_on_cell(cell_coords)
@@ -425,7 +467,7 @@ func _add_point(cell_coords: Vector2i, vert: Vector3, uv: Vector2, uv2: Vector2,
 
 #region cell_geometry generators (on being empty)
 
-func generate_height_map(p_base_height: float = 0.0):
+func generate_height_map(p_base_height: float =  0.0):
 	height_map = []
 	height_map.resize(dimensions.z)
 	for z in range(dimensions.z):
@@ -461,7 +503,7 @@ func generate_wall_color_maps():
 	wall_color_map_0.resize(dimensions.z * dimensions.x)
 	wall_color_map_1.resize(dimensions.z * dimensions.x)
 	var default_idx := 0
-	if terrain_system != null:
+	if terrain_system !=  null:
 		default_idx = int(terrain_system.default_wall_texture)
 	var cols := MSTVertexColorHelper.texture_index_to_colors(default_idx)
 	var c0 : Color = cols[0]
@@ -633,7 +675,7 @@ func draw_grass_mask(x: int, z: int, masked: Color):
 #endregion
 
 func notify_needs_update(z: int, x: int):
-	if z < 0 or z >= terrain_system.dimensions.z-1 or x < 0 or x >= terrain_system.dimensions.x-1:
+	if z < 0 or z >=  terrain_system.dimensions.z-1 or x < 0 or x >= terrain_system.dimensions.x-1:
 		return
 	
 	needs_update[z][x] = true
@@ -649,14 +691,19 @@ func _recreate_collision_body() -> void:
 	if not is_inside_tree() or _temp_collision_shapes.is_empty():
 		_temp_collision_shapes.clear()
 		return
-		
+			
 	for child in get_children():
 		if child is StaticBody3D:
 			child.free()
 	
 	# Only create ONE body with the FIRST shape
-	var shape : ConcavePolygonShape3D = _temp_collision_shapes[0]
+	var shape : ConcavePolygonShape3D = null
+	if _temp_collision_shapes.size() > 0 and _temp_collision_shapes[0] !=  null:
+		shape = _temp_collision_shapes[0]
 	_temp_collision_shapes.clear()
+	if shape == null:
+		# Nothing to create
+		return
 	
 	var body := StaticBody3D.new()
 	body.name = name + "_col"
@@ -700,7 +747,7 @@ func regenerate_all_cells(use_threads: bool):
 	regenerate_mesh(use_threads)
 
 
-@export_tool_button("Export GLB") var bake = func():
+@export_tool_button("Export GLB") var bake =  func():
 	var tree := get_tree()
 	
 	var baker = MarchingSquaresGeometryBaker.new()
@@ -716,7 +763,8 @@ func regenerate_all_cells(use_threads: bool):
 		inst.mesh = bakedMesh
 		var mat := StandardMaterial3D.new()
 		mat.albedo_texture = ImageTexture.create_from_image(bakedTexture)
-		inst.mesh.surface_set_material(0, mat)
+		if inst.mesh and inst.mesh.get_surface_count() > 0:
+			inst.mesh.surface_set_material(0, mat)
 		var file_selected := func(path: String):
 			var state := GLTFState.new()
 			var doc := GLTFDocument.new()

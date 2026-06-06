@@ -3,9 +3,9 @@ extends Node
 class_name MarchingSquaresUI
 
 
-const TOOLBAR : Script = preload("uid://3d77dnetkeik")
-const TOOL_ATTRIBUTES : Script = preload("uid://buxevb44hutjm")
-const TEXTURE_SETTINGS : Script = preload("uid://blvx0jk6wxk5p")
+@onready var TOOLBAR : Script = EngineWrapper.load_resource("uid://3d77dnetkeik") as Script
+@onready var TOOL_ATTRIBUTES : Script = EngineWrapper.load_resource("uid://buxevb44hutjm") as Script
+@onready var TEXTURE_SETTINGS : Script = EngineWrapper.load_resource("uid://blvx0jk6wxk5p") as Script
 
 #region texture setting property maps
 # Property names that map directly to terrain properties with same name
@@ -35,9 +35,9 @@ const TEXTURE_SCALE_PROPERTIES := [
 #endregion
 
 var plugin : MarchingSquaresTerrainPlugin
-var toolbar : TOOLBAR
-var tool_attributes : TOOL_ATTRIBUTES
-var texture_settings : TEXTURE_SETTINGS
+var toolbar
+var tool_attributes
+var texture_settings
 var active_tool : int
 var visible : bool = false
 
@@ -109,14 +109,14 @@ func set_visible(is_visible: bool) -> void:
 func _on_tool_changed(tool_index: int) -> void:
 	active_tool = tool_index
 	
-	if tool_index == 5: # Vertex Painting
+	if tool_index == 5: # Vertex Painting:
 		tool_attributes.attribute_list = MarchingSquaresToolAttributesList.new()
 		texture_settings.show()
 		texture_settings.add_texture_settings()
 	else:
 		texture_settings.hide()
 	
-	if tool_index == 3: # Bridge tool
+	if tool_index == 3: # Bridge tool:
 		plugin.falloff = false
 		plugin.BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", false)
 	
@@ -156,7 +156,7 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 		"falloff":
 			if p_value is bool:
 				plugin.falloff = p_value
-				if plugin.BRUSH_RADIUS_MATERIAL and plugin.mode != plugin.TerrainToolMode.VERTEX_PAINTING:
+				if plugin.BRUSH_RADIUS_MATERIAL and plugin.mode !=  plugin.TerrainToolMode.VERTEX_PAINTING:
 					plugin.BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", p_value)
 		"strength":
 			if p_value is float or p_value is int:
@@ -320,7 +320,7 @@ func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 		if p_value is float or p_value is int:
 			terrain.set(p_setting_name, float(p_value))
 	
-	if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
+	if terrain.current_texture_preset !=  null and not terrain.current_texture_preset.resource_path.is_empty():
 		terrain.save_to_preset()
 
 

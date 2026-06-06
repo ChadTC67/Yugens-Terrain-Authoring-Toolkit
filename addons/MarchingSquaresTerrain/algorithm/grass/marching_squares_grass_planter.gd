@@ -45,7 +45,7 @@ func _wall_push_offset(p: Vector3) -> Vector3:
 		return Vector3.ZERO
 	var cs := terrain_system.cell_size
 	var cell_min := minf(cs.x, cs.y)
-	if cell_min <= 0.0001:
+	if cell_min <=  0.0001:
 		return Vector3.ZERO
 
 	var step := cell_min * _WALL_PUSH_SAMPLE_STEP_FRACTION
@@ -72,7 +72,7 @@ func _wall_push_offset(p: Vector3) -> Vector3:
 		best_drop = drop_nz
 		dir = Vector3(0, 0, 1)
 
-	if best_drop <= drop_trigger:
+	if best_drop <=  drop_trigger:
 		return Vector3.ZERO
 
 	var push_max := cell_min * _WALL_PUSH_MAX_FRACTION
@@ -81,7 +81,7 @@ func _wall_push_offset(p: Vector3) -> Vector3:
 	return dir * (push_max * t)
 
 
-func setup(chunk: MarchingSquaresTerrainChunk, redo: bool = true) -> void:
+func setup(chunk: MarchingSquaresTerrainChunk, redo: bool =  true) -> void:
 	_chunk = chunk
 	terrain_system = _chunk.terrain_system if _chunk else null
 	
@@ -119,7 +119,7 @@ func ensure_multimesh_count() -> void:
 		return
 	
 	var expected := (_chunk.dimensions.x - 1) * (_chunk.dimensions.z - 1) * terrain_system.grass_subdivisions * terrain_system.grass_subdivisions
-	if multimesh.instance_count != expected:
+	if multimesh.instance_count !=  expected:
 		multimesh.instance_count = expected
 		regenerate_all_cells()
 
@@ -189,7 +189,7 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 	var end_index : int = index + count
 	
 	for slot in range(index, end_index):
-		if slot >= multimesh.instance_count:
+		if slot >=  multimesh.instance_count:
 			break
 		_hide_grass_instance(slot)
 	
@@ -201,7 +201,7 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 	var is_floor : Array = cell_geometry["is_floor"]
 	
 	for i in range(0, len(verts), 3):
-		if i + 2 >= len(verts):
+		if i + 2 >=  len(verts):
 			continue # Skip incomplete triangle
 		
 		# Only place grass on floors
@@ -236,7 +236,7 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 				point_index += 1
 				continue
 			
-			if u + v <= 1:
+			if u + v <=  1:
 				# Barycentric weights: wa for vertex a, wb for b, wc for c
 				var wa := 1.0 - u - v
 				var wb := u
@@ -300,7 +300,7 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 	
 	# Fill remaining points with hidden instances
 	while index < end_index:
-		if index >= multimesh.instance_count:
+		if index >=  multimesh.instance_count:
 			return
 		_hide_grass_instance(index)
 		index += 1
@@ -312,7 +312,7 @@ func _get_terrain_image(texture_id: int) -> Image:
 	var slot_idx := clampi(texture_id - 1, 0, 255)
 	var terrain_texture : Texture2D = null
 	
-	if terrain_system and terrain_system.texture_slots.size() > slot_idx and terrain_system.texture_slots[slot_idx] != null:
+	if terrain_system and terrain_system.texture_slots.size() > slot_idx and terrain_system.texture_slots[slot_idx] !=  null:
 		terrain_texture = terrain_system.texture_slots[slot_idx].texture
 	
 	if terrain_texture == null:
@@ -374,9 +374,9 @@ func _has_grass_for_texture(texture_id: int, force_grass_on: bool) -> bool:
 
 	# Prefer the PR1 slot-based flags (texture_slots[].has_grass) so toggles actually work.
 	var slot_idx := texture_id - 1
-	if slot_idx >= 0 and slot_idx < terrain_system.texture_slots.size():
+	if slot_idx >=  0 and slot_idx < terrain_system.texture_slots.size():
 		var slot = terrain_system.texture_slots[slot_idx]
-		if slot != null and slot.get("has_grass") != null:
+		if slot !=  null and slot.get("has_grass") != null:
 			return bool(slot.has_grass)
 
 	# Fallback to legacy exported flags.
@@ -461,7 +461,7 @@ func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vecto
 	
 	var normal : Vector3
 	var use_flat := false
-	if terrain_system != null:
+	if terrain_system !=  null:
 		var flat_val = terrain_system.get("use_flat_normals")
 		if flat_val == null:
 			flat_val = terrain_system.get("flat_normals")

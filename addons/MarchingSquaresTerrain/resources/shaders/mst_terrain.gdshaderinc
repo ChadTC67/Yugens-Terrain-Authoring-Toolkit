@@ -458,16 +458,18 @@ int _slot_base_texture_index(int slot) {
 
 vec4 sample_texture_layer(int slot, vec2 uv) {
 	slot = clamp(slot, 0, 255);
-	// Keep legacy VOID slot behavior (slot 15 always samples layer 15).
+	// New behavior: sample the Texture2DArray directly using the slot as the layer index.
+	// Keep legacy VOID slot behavior intact.
 	if (slot == 15) return texture(vc_tex_array, vec3(uv, 15.0));
-	int base_idx = clamp(_slot_base_texture_index(slot), 0, 15);
-	return texture(vc_tex_array, vec3(uv, float(base_idx)));
+	return texture(vc_tex_array, vec3(uv, float(slot)));
 }
 
 vec4 sample_material_by_index_tint(int index, vec2 base_uv, vec4 tint) {
 	float scale = get_texture_scale(index);
 	vec2 uv = base_uv * scale;
-	return sample_texture_layer(index, uv) * tint;
+	vec4 tex = sample_texture_layer(index, uv);
+	// Blend between texture and tint using tint.a as blend factor
+	return mix(tex, tint, clamp(tint.a, 0.0, 1.0));
 }
 
 vec4 sample_material_by_index(int index, vec2 base_uv) {
@@ -475,7 +477,9 @@ vec4 sample_material_by_index(int index, vec2 base_uv) {
 	vec2 uv = base_uv * scale;
 	vec4 tex = sample_texture_layer(index, uv);
 	if (index == 15) return tex;
-	return tex * get_palette_color(index, world_pos.xz);
+	vec4 palette = get_palette_color(index, world_pos.xz);
+	// Blend between texture and palette color using palette.a as blend factor
+	return mix(tex, palette, clamp(palette.a, 0.0, 1.0));
 }
 
 void calculate_blend_weights(vec4 vc0, vec4 vc1, float sharpness, out float weights[16]) {
@@ -497,15 +501,16 @@ void calculate_blend_weights(vec4 vc0, vec4 vc1, float sharpness, out float weig
 	raw_weights[14] = vc0.a * vc1.b;
 	raw_weights[15] = vc0.a * vc1.a;
 
-	float power = 2.0 + sharpness * 2.0;
+	// Use linear weights (no exponentiation) to avoid biasing towards large contributors.
 	float total = 0.0;
 	for (int i = 0; i < 16; i++) {
-		weights[i] = pow(max(raw_weights[i], 0.0), power);
+		weights[i] = max(raw_weights[i], 0.0);
 		total += weights[i];
 	}
-	if (total > 0.001) {
+	if (total > 0.000001) {
 		for (int i = 0; i < 16; i++) weights[i] /= total;
 	} else {
+		// Fallback: pick the dominant index if all weights are near-zero.
 		float max_raw = 0.0;
 		int max_idx = 0;
 		for (int i = 0; i < 16; i++) {

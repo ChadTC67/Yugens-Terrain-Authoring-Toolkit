@@ -18,7 +18,7 @@ static func ensure_directory_exists(path: String) -> bool:
 		return true
 	
 	var err := DirAccess.make_dir_recursive_absolute(path)
-	if err != OK:
+	if err !=  OK:
 		printerr("MSTDataHandler: Failed to create directory: ", path, " Error: ", err)
 		return false
 	
@@ -55,7 +55,7 @@ static func copy_recursive(from_path: String, to_path: String) -> void:
 	dir.list_dir_begin()
 	var file_name = dir.get_next()
 	
-	while file_name != "":
+	while file_name !=  "":
 		if file_name == "." or file_name == "..":
 			file_name = dir.get_next()
 			continue
@@ -67,7 +67,7 @@ static func copy_recursive(from_path: String, to_path: String) -> void:
 			copy_recursive(src, dst)
 		else:
 			var err = DirAccess.copy_absolute(src, dst)
-			if err != OK:
+			if err !=  OK:
 				push_error("Failed to copy file: %s -> %s" % [src, dst])
 		file_name = dir.get_next()
 	dir.list_dir_end()
@@ -176,7 +176,7 @@ static func save_chunk_resources(terrain: MarchingSquaresTerrain, chunk: Marchin
 	
 	var metadata_path := chunk_dir.path_join("metadata.res")
 	var err := ResourceSaver.save(data, metadata_path, ResourceSaver.FLAG_COMPRESS)
-	if err != OK:
+	if err !=  OK:
 		printerr("MSTDataHandler: Failed to save metadata to ", metadata_path)
 	
 	print_verbose("MSTDataHandler: Saved chunk ", chunk.chunk_coords)
@@ -200,7 +200,7 @@ static func load_terrain_data(terrain: MarchingSquaresTerrain) -> void:
 	var chunk_dirs : Array[Vector2i] = []
 	dir.list_dir_begin()
 	var folder_name := dir.get_next()
-	while folder_name != "":
+	while folder_name !=  "":
 		if dir.current_is_dir() and folder_name.begins_with("chunk_"):
 			# Parse chunk coordinates from folder name: chunk_X_Y
 			var parts := folder_name.trim_prefix("chunk_").split("_")
@@ -410,7 +410,7 @@ static func cleanup_orphaned_chunk_files(terrain: MarchingSquaresTerrain) -> voi
 	
 	dir.list_dir_begin()
 	var folder_name := dir.get_next()
-	while folder_name != "":
+	while folder_name !=  "":
 		if dir.current_is_dir() and folder_name.begins_with("chunk_"):
 			# Parse chunk coordinates from folder name: chunk_X_Y
 			var parts := folder_name.trim_prefix("chunk_").split("_")
@@ -438,17 +438,17 @@ static func _delete_chunk_directory(chunk_dir: String) -> void:
 	dir.list_dir_begin()
 	var file_name := dir.get_next()
 	var err : Error
-	while file_name != "":
+	while file_name !=  "":
 		if not dir.current_is_dir():
 			err = dir.remove(file_name)
-			if err != OK:
+			if err !=  OK:
 				printerr("MSTDataHandler: Failed to delete file ", file_name, " in ", chunk_dir)
 		file_name = dir.get_next()
 	dir.list_dir_end()
 	
 	# Remove the directory itself
 	err = DirAccess.remove_absolute(chunk_dir.trim_suffix("/"))
-	if err != OK:
+	if err !=  OK:
 		printerr("MSTDataHandler: Failed to delete directory ", chunk_dir)
 
 #endregion
@@ -470,13 +470,11 @@ static func _colors_to_texture_idx(c0: Color, c1: Color) -> int:
 		if c0.g > c0_m: c0_m = c0.g; c0_idx = 1
 		if c0.b > c0_m: c0_m = c0.b; c0_idx = 2
 		if c0.a > c0_m: c0_idx = 3
-		
 		var c1_idx = 0
 		var c1_m = c1.r
 		if c1.g > c1_m: c1_m = c1.g; c1_idx = 1
 		if c1.b > c1_m: c1_m = c1.b; c1_idx = 2
 		if c1.a > c1_m: c1_idx = 3
-		
 		return c0_idx * 4 + c1_idx
 	
 	# New encoding: store texture index in c0.r (0..1 mapped to 0..255)
@@ -526,7 +524,7 @@ static func cleanup_orphaned_terrain_directories(terrain: MarchingSquaresTerrain
 	var orphaned_dirs : Array[String] = []
 	dir.list_dir_begin()
 	var folder_name := dir.get_next()
-	while folder_name != "":
+	while folder_name !=  "":
 		if dir.current_is_dir():
 			var res_name := terrain_data_dir.path_join(folder_name).simplify_path()
 			if not active_dirs.has(res_name):
@@ -541,7 +539,7 @@ static func cleanup_orphaned_terrain_directories(terrain: MarchingSquaresTerrain
 
 
 ## Recursively collect terrain data dirs from scene tree.
-static func _collect_terrain_dirs_recursive(node: Node, dirs: Dictionary[String, Array] = {}) -> Dictionary[String, Array]:
+static func _collect_terrain_dirs_recursive(node: Node, dirs: Dictionary[String, Array] =  {}) -> Dictionary[String, Array]:
 	var terrain := node as MarchingSquaresTerrain
 	if terrain and not terrain.data_directory.is_empty():
 		var simplified_path := terrain.data_directory.simplify_path()
@@ -562,7 +560,7 @@ static func _delete_directory_recursive(dir_path: String) -> void:
 	
 	dir.list_dir_begin()
 	var item_name := dir.get_next()
-	while item_name != "":
+	while item_name !=  "":
 		if dir.current_is_dir():
 			_delete_directory_recursive(dir_path.path_join(item_name))
 		else:

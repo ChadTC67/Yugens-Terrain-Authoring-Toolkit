@@ -31,9 +31,9 @@ func _redraw():
 		return
 	
 	# Only draw the gizmo if this is the only selected node
-	if len(EditorInterface.get_selection().get_selected_nodes()) != 1:
+	if len(EditorInterface.get_selection().get_selected_nodes()) !=  1:
 		return
-	if EditorInterface.get_selection().get_selected_nodes()[0] != terrain_system:
+	if EditorInterface.get_selection().get_selected_nodes()[0] !=  terrain_system:
 		return
 	
 	var chunks_var := terrain_system.get("chunks")
@@ -112,7 +112,7 @@ func _redraw():
 	var is_wall_painting : bool = terrain_plugin.paint_walls_mode and terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING
 	
 	# Set the BRUSH_VISUAL's size dynamically
-	if terrain_plugin.BRUSH_VISUAL != null and (terrain_plugin.BRUSH_VISUAL is PlaneMesh or terrain_plugin.BRUSH_VISUAL is QuadMesh):
+	if terrain_plugin.BRUSH_VISUAL !=  null and (terrain_plugin.BRUSH_VISUAL is PlaneMesh or terrain_plugin.BRUSH_VISUAL is QuadMesh):
 		terrain_plugin.BRUSH_VISUAL.size = Vector2(1.0, 1.0) * (cell_size.x + cell_size.y) / 4.0
 	
 	if terrain_chunk_hovered:
@@ -151,7 +151,7 @@ func _redraw():
 		if terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING:
 			if terrain_plugin.paint_walls_mode:
 				add_mesh(terrain_plugin.BRUSH_RADIUS_VISUAL, null, brush_transform)
-		elif terrain_plugin.mode != terrain_plugin.TerrainToolMode.SMOOTH and terrain_plugin.mode != terrain_plugin.TerrainToolMode.GRASS_MASK and terrain_plugin.mode != terrain_plugin.TerrainToolMode.DEBUG_BRUSH:
+		elif terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.SMOOTH and terrain_plugin.mode != terrain_plugin.TerrainToolMode.GRASS_MASK and terrain_plugin.mode != terrain_plugin.TerrainToolMode.DEBUG_BRUSH and terrain_plugin.mode != terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
 			add_mesh(terrain_plugin.BRUSH_RADIUS_VISUAL, null, brush_transform)
 		
 		pos = terrain_plugin.brush_position
@@ -194,7 +194,7 @@ func _redraw():
 							y = terrain_plugin.draw_height
 						else:
 							# height_map can be empty while chunks initialize (or after errors).
-							if chunk.height_map.size() > z and z >= 0 and chunk.height_map[z].size() > x and x >= 0:
+							if chunk.height_map.size() > z and z >=  0 and chunk.height_map[z].size() > x and x >= 0:
 								y = chunk.height_map[z][x]
 							else:
 								y = 0.0
@@ -202,7 +202,7 @@ func _redraw():
 						var draw_position := Vector3(world_pos.x, y, world_pos.y)
 						var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
 						# Only draw ground brush squares if NOT in wall paint mode
-						if not is_wall_painting:
+						if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
 							add_mesh(terrain_plugin.BRUSH_VISUAL, brush_material, draw_transform)
 						
 						# Draw to current pattern
@@ -231,7 +231,7 @@ func _redraw():
 				if not terrain_plugin.flatten:
 					var dz := draw_coords.y
 					var dx := draw_coords.x
-					if chunk.height_map.size() > dz and dz >= 0 and chunk.height_map[dz].size() > dx and dx >= 0:
+					if chunk.height_map.size() > dz and dz >=  0 and chunk.height_map[dz].size() > dx and dx >= 0:
 						draw_y = chunk.height_map[dz][dx]
 				
 				var sample : float = draw_chunk_dict[draw_coords]
@@ -240,12 +240,12 @@ func _redraw():
 				if terrain_plugin.is_setting and terrain_plugin.draw_height_set:
 					var draw_position := Vector3(draw_x, draw_y + height_diff * sample, draw_z)
 					var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
-					if not is_wall_painting:
+					if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
 						add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
 				else:
 					var draw_position := Vector3(draw_x, draw_y, draw_z)
 					var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
-					if not is_wall_painting:
+					if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
 						add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
 
 

@@ -553,7 +553,7 @@ func add_full_floor():
 
 # Add an outer corner, where A is the raised corner.
 # If flatten_bottom is true, then bottom_height is used for the lower height of the wall
-func add_outer_corner(floor_below: bool = true, floor_above: bool = true, flatten_bottom: bool = false, bottom_height: float = -1):
+func add_outer_corner(floor_below: bool = true, floor_above: bool = true, flatten_bottom: bool = false, bottom_height: float =  -1):
 	var edge_by = bottom_height if flatten_bottom else by
 	var edge_cy = bottom_height if flatten_bottom else cy
 	
@@ -591,7 +591,7 @@ func add_outer_corner(floor_below: bool = true, floor_above: bool = true, flatte
 # Add an edge, where AB is the raised edge.
 # a_x is the x coordinate that the top-left of the uper floor connects to
 # b_x is the x coordinate that the top-right of the upper floor connects to
-func add_edge(floor_below: bool, floor_above: bool, a_x: float = 0, b_x: float = 1):
+func add_edge(floor_below: bool, floor_above: bool, a_x: float = 0, b_x: float =  1):
 	# If A and B are out of merge distance, use the lower of the two
 	var edge_ay = ay if ab else min(ay, by)
 	var edge_by = by if ab else min(ay, by)
@@ -633,7 +633,7 @@ func add_edge(floor_below: bool, floor_above: bool, a_x: float = 0, b_x: float =
 
 
 # Add an inner corner, where A is the lowered corner.
-func add_inner_corner(lower_floor: bool = true, full_upper_floor: bool = true, flatten: bool = false, bd_floor: bool = false, cd_floor: bool = false):
+func add_inner_corner(lower_floor: bool = true, full_upper_floor: bool = true, flatten: bool = false, bd_floor: bool = false, cd_floor: bool =  false):
 	var corner_by = min(by, cy) if flatten else by
 	var corner_cy = min(by, cy) if flatten else cy
 	
@@ -679,7 +679,7 @@ func add_inner_corner(lower_floor: bool = true, full_upper_floor: bool = true, f
 		add_point(0, by, 0.5, 1, 1)
 	
 	# If B and D are both higher than C, and C does not connect the corners, there's an edge above, place floors that will connect to the BD edge
-	if bd_floor: 
+	if bd_floor:
 		add_point(0, cy, 0.5, 0, 1)
 		add_point(0.5, cy, 0, 1, 1)
 		add_point(0, cy, 1, 0, 0)

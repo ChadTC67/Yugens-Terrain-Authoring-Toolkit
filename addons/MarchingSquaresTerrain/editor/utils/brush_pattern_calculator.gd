@@ -85,13 +85,15 @@ static func calculate_falloff_sample(
 			t = 1.0 - clamp(d, 0.0, 1.0)
 	
 	# IMPORTANT: allow true endpoints so a full-strength stroke can reach the target.
+	# Soften falloff: apply a square-root easing to expand the brush's effective area (gentler falloff).
+	t = pow(t, 0.5)
 	return falloff_curve.sample(clamp(t, 0.0, 1.0))
 
 
 ## Calculate world position for a cell in a chunk.
 ## p_centered=true returns the center of the cell (half-cell offset). This is useful for Vertex Paint
 ## so round brushes look less octagon-y on low-resolution grids.
-static func cell_to_world_pos(chunk_coords: Vector2i, cell_coords: Vector2i, terrain: MarchingSquaresTerrain, p_centered: bool = false) -> Vector2:
+static func cell_to_world_pos(chunk_coords: Vector2i, cell_coords: Vector2i, terrain: MarchingSquaresTerrain, p_centered: bool =  false) -> Vector2:
 	var world_x : float = (chunk_coords.x * (terrain.dimensions.x - 1) + cell_coords.x) * terrain.cell_size.x
 	var world_z : float = (chunk_coords.y * (terrain.dimensions.z - 1) + cell_coords.y) * terrain.cell_size.y
 	if p_centered:
@@ -107,3 +109,7 @@ static func get_cell_range_for_chunk(chunk_coords: Vector2i, bounds: BrushBounds
 	var z_min : int = bounds.cell_tl.y if chunk_coords.y == bounds.chunk_tl.y else 0
 	var z_max : int = bounds.cell_br.y if chunk_coords.y == bounds.chunk_br.y else terrain.dimensions.z
 	return {"x_min": x_min, "x_max": x_max, "z_min": z_min, "z_max": z_max}
+
+
+
+

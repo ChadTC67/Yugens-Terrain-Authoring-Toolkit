@@ -46,11 +46,11 @@ func _init() -> void:
 
 
 func _ensure_terrain_texture_indices() -> void:
-	if terrain_texture_indices.size() != MAX_TEXTURE_SLOTS:
+	if terrain_texture_indices.size() !=  MAX_TEXTURE_SLOTS:
 		var prev := terrain_texture_indices.duplicate()
 		terrain_texture_indices.resize(MAX_TEXTURE_SLOTS)
 		for i in range(MAX_TEXTURE_SLOTS):
-			if i < prev.size() and prev[i] != null:
+			if i < prev.size() and prev[i] !=  null:
 				terrain_texture_indices[i] = clampi(int(prev[i]), 0, 15)
 			else:
 				# Default: identity for base slots, 0 for the rest.
@@ -64,7 +64,7 @@ func _ensure_grass_arrays() -> void:
 	if grass_sprites.size() == 6:
 		# legacy OK
 		pass
-	elif grass_sprites.size() != MAX_TEXTURE_SLOTS:
+	elif grass_sprites.size() !=  MAX_TEXTURE_SLOTS:
 		var prev := grass_sprites.duplicate()
 		grass_sprites.resize(MAX_TEXTURE_SLOTS)
 		for i in range(MAX_TEXTURE_SLOTS):
@@ -91,8 +91,12 @@ func _ensure_grass_arrays() -> void:
 			has_grass[i] = bool(prev_h6[i])
 		for i in range(6, MAX_TEXTURE_SLOTS):
 			has_grass[i] = false
-	elif has_grass.size() != MAX_TEXTURE_SLOTS:
+	elif has_grass.size() !=  MAX_TEXTURE_SLOTS:
 		has_grass.resize(MAX_TEXTURE_SLOTS)
 		# default: keep legacy behavior for first 6
 		for i in range(MAX_TEXTURE_SLOTS):
 			has_grass[i] = (i < 6)
+
+
+
+
