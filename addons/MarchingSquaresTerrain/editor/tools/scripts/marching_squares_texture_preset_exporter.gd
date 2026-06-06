@@ -102,7 +102,7 @@ func _save_preset(path: String) -> void:
 	new_tex_preset.new_tex_names = src_names.duplicate(true)
 	
 	# Copy palette/outline settings from the current terrain so the exported preset is a true "look" preset.
-	if current_terrain_node != null:
+	if current_terrain_node !=  null:
 		if current_terrain_node.get("slot_color_indices") is Array:
 			new_tex_preset.slot_color_indices = current_terrain_node.slot_color_indices.duplicate(true)
 		if current_terrain_node.get("slot_blend_modes") is Array:
@@ -123,20 +123,20 @@ func _save_preset(path: String) -> void:
 			new_tex_preset.slot_roughnesses = current_terrain_node.slot_roughnesses.duplicate()
 	
 	# If a preset is currently selected, inherit its Global Settings apply flags so exports preserve intent.
-	if current_terrain_node != null and current_terrain_node.current_texture_preset != null:
+	if current_terrain_node !=  null and current_terrain_node.current_texture_preset != null:
 		var src_preset := current_terrain_node.current_texture_preset
-		if src_preset.get("apply_terrain_settings") != null:
+		if src_preset.get("apply_terrain_settings") !=  null:
 			new_tex_preset.apply_terrain_settings = bool(src_preset.apply_terrain_settings)
-		if src_preset.get("apply_chunk_settings") != null:
+		if src_preset.get("apply_chunk_settings") !=  null:
 			new_tex_preset.apply_chunk_settings = bool(src_preset.apply_chunk_settings)
-		if src_preset.get("apply_vertex_painter_settings") != null:
+		if src_preset.get("apply_vertex_painter_settings") !=  null:
 			new_tex_preset.apply_vertex_painter_settings = bool(src_preset.apply_vertex_painter_settings)
-		if src_preset.get("apply_grass_settings") != null:
+		if src_preset.get("apply_grass_settings") !=  null:
 			new_tex_preset.apply_grass_settings = bool(src_preset.apply_grass_settings)
 	
 	# PR1: Do not export terrain/global settings unless explicitly enabled.
 	# This prevents PR2/PR4 keys (wind/global noise/etc.) from leaking into PR1 presets.
-	if new_tex_preset.apply_terrain_settings and current_terrain_node != null and current_terrain_node.has_method("_gather_preset_terrain_settings"):
+	if new_tex_preset.apply_terrain_settings and current_terrain_node !=  null and current_terrain_node.has_method("_gather_preset_terrain_settings"):
 		new_tex_preset.terrain_settings = current_terrain_node._gather_preset_terrain_settings(new_tex_preset)
 	else:
 		new_tex_preset.terrain_settings = {}
@@ -234,7 +234,7 @@ func _get_current_texture_data() -> MarchingSquaresTextureList:
 	# Slot-based grass sprites + has-grass flags (0..255)
 	if current_terrain_node.has_method("_ensure_texture_slots"):
 		current_terrain_node._ensure_texture_slots()
-	if current_terrain_node.get("texture_slots") is Array and current_terrain_node.texture_slots.size() >= MarchingSquaresTextureList.MAX_TEXTURE_SLOTS:
+	if current_terrain_node.get("texture_slots") is Array and current_terrain_node.texture_slots.size() >=  MarchingSquaresTextureList.MAX_TEXTURE_SLOTS:
 		new_texture_list.grass_sprites.resize(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS)
 		new_texture_list.has_grass.resize(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS)
 		for i in range(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS):

@@ -23,3 +23,5 @@ class_name MarchingSquaresTextureSlot
 @export var has_outline: bool = false
 # 0 = darken albedo, 1 = use albedo as outline color
 @export var outline_mode: int = 0
+
+

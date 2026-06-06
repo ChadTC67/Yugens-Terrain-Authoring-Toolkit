@@ -184,7 +184,7 @@ func add_setting(p_params: Dictionary) -> void:
 			var checkbox := CheckBox.new()
 			checkbox.set_flat(true)
 			checkbox.button_pressed = p_params.get("default", false) # Fallback base value
-			if saved_setting_value is not String and str(saved_setting_value) != "ERROR":
+			if saved_setting_value is not String and str(saved_setting_value) !=  "ERROR":
 				checkbox.button_pressed = saved_setting_value
 			checkbox.toggled.connect(func(pressed): _on_setting_changed(setting_name, pressed))
 			checkbox.set_custom_minimum_size(Vector2(25, 25))
@@ -205,7 +205,7 @@ func add_setting(p_params: Dictionary) -> void:
 			var range_min = range_data.x
 			var range_max = range_data.y
 			var range_step = range_data.z
-			if saved_setting_value is not String and str(saved_setting_value) != "ERROR":
+			if saved_setting_value is not String and str(saved_setting_value) !=  "ERROR":
 				default_value = saved_setting_value
 			
 			cont = MarginContainer.new()
@@ -243,7 +243,7 @@ func add_setting(p_params: Dictionary) -> void:
 			for option in options:
 				option_button.add_item(option)
 			var default_value := p_params.get("default", 0) # Fallback base value
-			if saved_setting_value is not String and str(saved_setting_value) != "ERROR":
+			if saved_setting_value is not String and str(saved_setting_value) !=  "ERROR":
 				default_value = saved_setting_value
 			option_button.selected = default_value
 			
@@ -279,7 +279,7 @@ func add_setting(p_params: Dictionary) -> void:
 				if dir:
 					dir.list_dir_begin()
 					file_name = dir.get_next()
-					while file_name != "":
+					while file_name !=  "":
 						if file_name.ends_with(".tres") or file_name.ends_with(".res"):
 							var texture_preset := load(TEXTURE_PRESETS_PATH + file_name) as MarchingSquaresTexturePreset
 							if texture_preset:
@@ -311,7 +311,7 @@ func add_setting(p_params: Dictionary) -> void:
 				cont.set_custom_minimum_size(Vector2(100, 35))
 				cont.add_child(preset_button, true)
 				hbox_container.add_child(cont, true)
-			else: # Can be used for e.g. terrain settings presets in the future
+			else: # Can be used for e.g. terrain settings presets in the future:
 				pass 
 		SettingType.QUICK_PAINT:
 			var quick_paint_button := OptionButton.new()
@@ -323,7 +323,7 @@ func add_setting(p_params: Dictionary) -> void:
 			if dir:
 				dir.list_dir_begin()
 				var file_name := dir.get_next()
-				while file_name != "":
+				while file_name !=  "":
 					if file_name.ends_with(".tres") or file_name.ends_with(".res"):
 						var quick_paint := load(GLOBAL_QUICK_PAINTS_PATH + file_name) as MarchingSquaresQuickPaint
 						if quick_paint:

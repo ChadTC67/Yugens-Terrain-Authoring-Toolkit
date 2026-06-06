@@ -1,5 +1,6 @@
 @tool
 extends RefCounted
+class_name MarchingSquaresTerrainHelpers
 
 const MAX_TEXTURE_SLOTS := 256
 const VOID_TEXTURE_SLOT := 15
@@ -15,32 +16,32 @@ const MSTVertexColorHelper := preload("res://addons/MarchingSquaresTerrain/algor
 static func ensure_texture_slots(terrain) -> void:
 	if terrain.texture_slots == null:
 		terrain.texture_slots = []
-	if terrain.texture_slots.size() != MAX_TEXTURE_SLOTS:
+	if terrain.texture_slots.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.texture_slots.resize(MAX_TEXTURE_SLOTS)
 	for i in range(MAX_TEXTURE_SLOTS):
 		if terrain.texture_slots[i] == null:
 			terrain.texture_slots[i] = _TEXTURE_SLOT_SCRIPT.new()
 		# Default any missing 'active' to true (older saves won't have it).
-		if terrain.texture_slots[i] != null and terrain.texture_slots[i].get("active") == null:
+		if terrain.texture_slots[i] !=  null and terrain.texture_slots[i].get("active") == null:
 			terrain.texture_slots[i].active = true
 		
 		# Slot->base texture mapping (older saves won't have it).
-		if terrain.texture_slots[i] != null and terrain.texture_slots[i].get("terrain_texture_index") == null:
+		if terrain.texture_slots[i] !=  null and terrain.texture_slots[i].get("terrain_texture_index") == null:
 			if i == VOID_TEXTURE_SLOT:
 				terrain.texture_slots[i].terrain_texture_index = VOID_TEXTURE_SLOT
 			elif i < 15:
 				terrain.texture_slots[i].terrain_texture_index = i
 			else:
 				terrain.texture_slots[i].terrain_texture_index = 0
-		elif terrain.texture_slots[i] != null:
+		elif terrain.texture_slots[i] !=  null:
 			terrain.texture_slots[i].terrain_texture_index = clampi(int(terrain.texture_slots[i].terrain_texture_index), 0, 15)
 		
 		# Default any missing grass fields (older saves / older slot resources).
 		# Slot 0 (Texture 1) defaults to having grass enabled.
-		if terrain.texture_slots[i] != null and terrain.texture_slots[i].get("has_grass") == null:
+		if terrain.texture_slots[i] !=  null and terrain.texture_slots[i].get("has_grass") == null:
 			terrain.texture_slots[i].has_grass = (i == 0)
 		# grass_texture can be null; only coerce if the key is missing (avoid nil variants).
-		if terrain.texture_slots[i] != null and terrain.texture_slots[i].get("grass_texture") == null:
+		if terrain.texture_slots[i] !=  null and terrain.texture_slots[i].get("grass_texture") == null:
 			terrain.texture_slots[i].grass_texture = null
 
 	# Ensure legacy VOID slot always has a valid texture.
@@ -53,7 +54,7 @@ static func maybe_migrate_legacy_textures(terrain) -> void:
 	var any_slot_set := false
 	for i in range(mini(15, terrain.texture_slots.size())):
 		var s = terrain.texture_slots[i]
-		if s != null and s.texture != null:
+		if s !=  null and s.texture != null:
 			any_slot_set = true
 			break
 
@@ -64,7 +65,7 @@ static func maybe_migrate_legacy_textures(terrain) -> void:
 	]
 	var any_legacy_set := false
 	for t in legacy_textures:
-		if t != null:
+		if t !=  null:
 			any_legacy_set = true
 			break
 
@@ -137,7 +138,7 @@ static func maybe_migrate_legacy_grass(terrain) -> void:
 
 static func set_legacy_texture_slot(terrain, slot_idx: int, tex: Texture2D) -> void:
 	ensure_texture_slots(terrain)
-	if slot_idx < 0 or slot_idx >= 15:
+	if slot_idx < 0 or slot_idx >=  15:
 		return
 	terrain.texture_slots[slot_idx].texture = tex
 	rebuild_texture_array(terrain)
@@ -145,7 +146,7 @@ static func set_legacy_texture_slot(terrain, slot_idx: int, tex: Texture2D) -> v
 
 static func set_legacy_texture_scale(terrain, slot_idx: int, scale: float) -> void:
 	ensure_texture_slots(terrain)
-	if slot_idx < 0 or slot_idx >= 15:
+	if slot_idx < 0 or slot_idx >=  15:
 		return
 	terrain.texture_slots[slot_idx].scale = scale
 	push_tex_scales(terrain)
@@ -160,14 +161,85 @@ static func push_tex_scales(terrain) -> void:
 	terrain.terrain_material.set_shader_parameter("tex_scales", scales)
 
 
+static func _try_load_baked(terrain, path_var_name: String) -> Texture2DArray:
+	if terrain == null or not terrain.has_method("get"):
+		return null
+	var raw: Variant = ""
+	if terrain.get(path_var_name) !=  null:
+		raw = terrain.get(path_var_name)
+	var p := str(raw)
+	if p == "":
+		return null
+	if ResourceLoader.exists(p):
+		var r = ResourceLoader.load(p)
+		if r and r is Texture2DArray:
+			return r
+		else:
+			push_warning("[MST] Baked Texture2DArray at %s exists but failed to load as Texture2DArray." % p)
+	return null
+
 static func rebuild_texture_array(terrain) -> void:
-	# Build ONLY the 16 base layers used by the shader (0..15). All 0..255 slots map
-	# onto these base layers via slot_tex_index_tex.
+	# New builder: prefer pre-baked external Texture2DArray resources (for performance and small scene files).
+	# If not present, attempt to build from an attached MSTextureLibrary resource. Fall back to legacy 16-layer builder for compatibility.
 	ensure_texture_slots(terrain)
+
+	# Priority 1: load baked albedo array
+	var baked := _try_load_baked(terrain, "baked_albedo_array_path")
+	if baked !=  null:
+		terrain._runtime_texture_array = baked
+		terrain.terrain_material.set_shader_parameter("vc_tex_array", terrain._runtime_texture_array)
+		return
+
+	# Priority 2: build from a linked MSTextureLibrary resource (non-destructive, uses placeholders)
+	if terrain.has_method("get") and terrain.get("texture_library") !=  null:
+		var lib = terrain.get("texture_library")
+		# If this is a placeholder Resource in the editor, attempt to load the real resource from disk.
+		if not (lib is MSTextureLibrary):
+			if lib is Resource and lib.resource_path and str(lib.resource_path) !=  "":
+				var loaded_lib = ResourceLoader.load(str(lib.resource_path))
+				if loaded_lib and loaded_lib is MSTextureLibrary:
+					lib = loaded_lib
+				else:
+					push_warning("[MST] texture_library path did not load a valid MSTextureLibrary. Falling back to legacy builder.")
+					lib = null
+			else:
+				push_warning("[MST] texture_library is not an MSTextureLibrary instance. Falling back to legacy builder.")
+				lib = null
+		if lib:
+			# Ensure library arrays are sized (guard method call on placeholder)
+			if lib.has_method("ensure_length"):
+				lib.ensure_length()
+			var target_size := int(terrain.get("baked_texture_size")) if terrain.get("baked_texture_size") != null else 512
+			var images := []
+			for i in range(MAX_TEXTURE_SLOTS):
+				var tex = null
+				if i < lib.albedo_textures.size():
+					tex = lib.albedo_textures[i]
+				var img: Image
+				if tex !=  null and tex is Texture2D:
+					img = MSTVertexColorHelper.get_decompressed_image(tex)
+					if img !=  null:
+						img.resize(target_size, target_size, Image.INTERPOLATE_LANCZOS)
+					else:
+						img = Image.create(target_size, target_size, false, Image.FORMAT_RGBA8)
+						img.fill(Color(1, 1, 1, 1))
+				else:
+					img = Image.create(target_size, target_size, false, Image.FORMAT_RGBA8)
+					img.fill(Color(1, 1, 1, 1))
+				images.append(img)
+			var arr := Texture2DArray.new()
+			var err := arr.create_from_images(images)
+			if err !=  OK:
+				push_warning("[MST] Failed to build runtime Texture2DArray from MSTextureLibrary (err=%s)." % str(err))
+				return
+			terrain._runtime_texture_array = arr
+			terrain.terrain_material.set_shader_parameter("vc_tex_array", terrain._runtime_texture_array)
+			return
+	
+	# Priority 3: Legacy fallback (build 16 canonical slices as before)
+	# (Preserve previous behavior for compatibility)
 	var canonical_w := 1
 	var canonical_h := 1
-
-	# Find canonical size from the first non-null base texture (0..14).
 	for i in range(15):
 		var tex = terrain.texture_slots[i].texture if terrain.texture_slots[i] != null else null
 		if tex == null:
@@ -179,9 +251,6 @@ static func rebuild_texture_array(terrain) -> void:
 		canonical_h = img.get_height()
 		break
 
-	# IMPORTANT: The terrain shader uses alpha scissoring. If placeholder layers are
-	# transparent, the floor disappears. Use an opaque white placeholder so palette
-	# tinting still renders even when a base texture is unset.
 	var placeholder := Image.create_empty(canonical_w, canonical_h, false, Image.FORMAT_RGBA8)
 	placeholder.fill(Color(1, 1, 1, 1))
 	var void_placeholder := Image.create_empty(canonical_w, canonical_h, false, Image.FORMAT_RGBA8)
@@ -195,7 +264,6 @@ static func rebuild_texture_array(terrain) -> void:
 
 		var tex = terrain.texture_slots[i].texture if (i < terrain.texture_slots.size() and terrain.texture_slots[i] != null) else null
 		if is_void:
-			# Force VOID layer to be transparent.
 			images[i] = void_placeholder.duplicate()
 			continue
 		if tex == null:
@@ -220,7 +288,7 @@ static func rebuild_texture_array(terrain) -> void:
 
 	var arr := Texture2DArray.new()
 	var err := arr.create_from_images(images)
-	if err != OK:
+	if err !=  OK:
 		push_warning("[MST] Failed to build terrain Texture2DArray (err=%s)." % str(err))
 		return
 
@@ -245,24 +313,24 @@ static func rebuild_grass_texture_array(terrain) -> void:
 	var t5: Texture2D = terrain.grass_sprite_tex_5
 	var t6: Texture2D = terrain.grass_sprite_tex_6
 
-	if terrain.texture_slots.size() >= 6:
+	if terrain.texture_slots.size() >=  6:
 		var s0 = terrain.texture_slots[0]
-		if s0 != null and s0.get("grass_texture") != null and s0.grass_texture != null:
+		if s0 !=  null and s0.get("grass_texture") != null and s0.grass_texture != null:
 			t1 = s0.grass_texture
 		var s1 = terrain.texture_slots[1]
-		if s1 != null and s1.get("grass_texture") != null and s1.grass_texture != null:
+		if s1 !=  null and s1.get("grass_texture") != null and s1.grass_texture != null:
 			t2 = s1.grass_texture
 		var s2 = terrain.texture_slots[2]
-		if s2 != null and s2.get("grass_texture") != null and s2.grass_texture != null:
+		if s2 !=  null and s2.get("grass_texture") != null and s2.grass_texture != null:
 			t3 = s2.grass_texture
 		var s3 = terrain.texture_slots[3]
-		if s3 != null and s3.get("grass_texture") != null and s3.grass_texture != null:
+		if s3 !=  null and s3.get("grass_texture") != null and s3.grass_texture != null:
 			t4 = s3.grass_texture
 		var s4 = terrain.texture_slots[4]
-		if s4 != null and s4.get("grass_texture") != null and s4.grass_texture != null:
+		if s4 !=  null and s4.get("grass_texture") != null and s4.grass_texture != null:
 			t5 = s4.grass_texture
 		var s5 = terrain.texture_slots[5]
-		if s5 != null and s5.get("grass_texture") != null and s5.grass_texture != null:
+		if s5 !=  null and s5.get("grass_texture") != null and s5.grass_texture != null:
 			t6 = s5.grass_texture
 
 	grass_mat.set_shader_parameter("grass_texture_1", t1)
@@ -279,29 +347,29 @@ static func rebuild_grass_texture_array(terrain) -> void:
 
 static func ensure_palette_settings(terrain) -> void:
 	# Expand palette-per-slot structures to 256 so shader uniform arrays are always valid.
-	if terrain.slot_color_indices.size() != MAX_TEXTURE_SLOTS:
+	if terrain.slot_color_indices.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_color_indices.resize(MAX_TEXTURE_SLOTS)
 	for i in range(MAX_TEXTURE_SLOTS):
 		if terrain.slot_color_indices[i] == null:
 			terrain.slot_color_indices[i] = []
 
-	if terrain.slot_blend_modes.size() != MAX_TEXTURE_SLOTS:
+	if terrain.slot_blend_modes.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_blend_modes.resize(MAX_TEXTURE_SLOTS)
 	for i in range(MAX_TEXTURE_SLOTS):
 		if terrain.slot_blend_modes[i] == null:
 			terrain.slot_blend_modes[i] = 3
 
-	if terrain.slot_has_outline.size() != MAX_TEXTURE_SLOTS:
+	if terrain.slot_has_outline.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_has_outline.resize(MAX_TEXTURE_SLOTS)
-	if terrain.slot_outline_modes.size() != MAX_TEXTURE_SLOTS:
+	if terrain.slot_outline_modes.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_outline_modes.resize(MAX_TEXTURE_SLOTS)
-	if terrain.slot_outline_widths.size() != MAX_TEXTURE_SLOTS:
+	if terrain.slot_outline_widths.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_outline_widths.resize(MAX_TEXTURE_SLOTS)
-	if terrain.slot_wet_enabled.size() != MAX_TEXTURE_SLOTS:
+	if terrain.slot_wet_enabled.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_wet_enabled.resize(MAX_TEXTURE_SLOTS)
-	if terrain.slot_wet_modes.size() != MAX_TEXTURE_SLOTS:
+	if terrain.slot_wet_modes.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_wet_modes.resize(MAX_TEXTURE_SLOTS)
-	if terrain.slot_roughnesses.size() != MAX_TEXTURE_SLOTS:
+	if terrain.slot_roughnesses.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_roughnesses.resize(MAX_TEXTURE_SLOTS)
 	for i in range(MAX_TEXTURE_SLOTS):
 		if terrain.slot_has_outline[i] == null:
@@ -323,7 +391,7 @@ static func ensure_palette_settings(terrain) -> void:
 
 
 static func ensure_palette_weights(terrain) -> void:
-	if terrain.palette_weights.size() != 128:
+	if terrain.palette_weights.size() !=  128:
 		terrain.palette_weights.resize(128)
 	for i in range(128):
 		if terrain.palette_weights[i] == null:

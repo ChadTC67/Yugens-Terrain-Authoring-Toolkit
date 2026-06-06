@@ -41,10 +41,10 @@ static func _ensure_texture_names_resource(res: Resource) -> void:
 
 	res.set("texture_names", names)
 
-const EMPTY_TEXTURE_PRESET : MarchingSquaresTexturePreset = preload("uid://db4scsn2nqqyu")
-const BrushPatternCalculator = preload("uid://bli1mnri3jwpa")
+@onready var EMPTY_TEXTURE_PRESET : MarchingSquaresTexturePreset = EngineWrapper.load_resource("uid://db4scsn2nqqyu") as MarchingSquaresTexturePreset
+@onready var BrushPatternCalculator = EngineWrapper.load_resource("uid://bli1mnri3jwpa")
 
-var vp_texture_names : MarchingSquaresTextureNames = preload("uid://dd7fens03aosa")
+@onready var vp_texture_names : MarchingSquaresTextureNames = EngineWrapper.load_resource("uid://dd7fens03aosa") as MarchingSquaresTextureNames
 
 # Instantiate these lazily in _safe_initialize() to avoid editor-load ordering issues.
 const GizmoPluginScript := preload("res://addons/MarchingSquaresTerrain/editor/marching_squares_terrain_gizmo_plugin.gd")
@@ -71,23 +71,23 @@ var _syncing_from_terrain : bool = false
 
 #region brush variables
 var BrushMode : Dictionary = {
-	"0" = preload("uid://cg3lvmu68oaaa"),
-	"1" = preload("uid://b6uwsa1vjeb4"),
+	"0": EngineWrapper.load_resource("uid://cg3lvmu68oaaa"),
+	"1": EngineWrapper.load_resource("uid://b6uwsa1vjeb4"),
 }
 
 var BrushMat : Dictionary = {
-	"0" = preload("uid://dtevocyixqsgv"),
-	"1" = preload("uid://daofaifmtbyak"),
+	"0": EngineWrapper.load_resource("uid://dtevocyixqsgv"),
+	"1": EngineWrapper.load_resource("uid://daofaifmtbyak"),
 }
 
 var current_brush_index : int = 0
 
 var brush_position : Vector3
 
-var BRUSH_VISUAL : Mesh = preload("uid://ch6cb07rh0m3l")
-var BRUSH_RADIUS_VISUAL : Mesh = preload("uid://cg3lvmu68oaaa")
-var BRUSH_RADIUS_MATERIAL : ShaderMaterial = preload("uid://dtevocyixqsgv")
-@onready var falloff_curve : Curve = preload("uid://c0bexjsfvvcxb")
+var BRUSH_VISUAL : Mesh = EngineWrapper.load_resource("uid://ch6cb07rh0m3l") as Mesh
+var BRUSH_RADIUS_VISUAL : Mesh = EngineWrapper.load_resource("uid://cg3lvmu68oaaa") as Mesh
+var BRUSH_RADIUS_MATERIAL : ShaderMaterial = EngineWrapper.load_resource("uid://dtevocyixqsgv") as ShaderMaterial
+@onready var falloff_curve : Curve = EngineWrapper.load_resource("uid://c0bexjsfvvcxb") as Curve
 #endregion
 
 #region tool_mode vars
@@ -103,9 +103,12 @@ enum TerrainToolMode {
 	TERRAIN_SETTINGS = 8,
 }
 
-var mode : TerrainToolMode = TerrainToolMode.BRUSH:
+var _mode : TerrainToolMode = TerrainToolMode.BRUSH
+var mode : TerrainToolMode:
+	get():
+		return _mode
 	set(value):
-		mode = value
+		_mode = value
 		current_draw_pattern.clear()
 		_update_falloff_visual()
 #endregion
@@ -137,7 +140,10 @@ var vp_falloff_mode : int:
 var should_mask_grass : bool = false
 
 # Currently selected preset for vertex textures (DOES change the global terrain)
-var current_texture_preset : MarchingSquaresTexturePreset = EMPTY_TEXTURE_PRESET:
+var _current_texture_preset : MarchingSquaresTexturePreset = EMPTY_TEXTURE_PRESET
+var current_texture_preset : MarchingSquaresTexturePreset:
+	get():
+		return _current_texture_preset
 	set(value):
 		if value == current_texture_preset:
 			return
@@ -150,13 +156,19 @@ var current_texture_preset : MarchingSquaresTexturePreset = EMPTY_TEXTURE_PRESET
 var current_quick_paint : MarchingSquaresQuickPaint = null
 
 # Toggle for painting walls vs ground in VERTEX_PAINTING mode
-var paint_walls_mode : bool = false:
+var _paint_walls_mode : bool = false
+var paint_walls_mode : bool:
+	get():
+		return _paint_walls_mode
 	set(value):
-		paint_walls_mode = value
+		_paint_walls_mode = value
 
-var vertex_color_idx : int = 0:
+var _vertex_color_idx : int = 0
+var vertex_color_idx : int:
+	get():
+		return _vertex_color_idx
 	set(value):
-		vertex_color_idx = value
+		_vertex_color_idx = value
 		_set_vertex_colors(value)
 var vertex_color_0 : Color = Color(1.0, 0.0, 0.0, 0.0)
 var vertex_color_1 : Color = Color(1.0, 0.0, 0.0, 0.0)
@@ -624,7 +636,7 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 func update_draw_pattern(b_pos: Vector3):
 	var terrain_system : MarchingSquaresTerrain = current_terrain_node
 	
-	var bounds := BrushPatternCalculator.calculate_bounds(b_pos, brush_size, terrain_system)
+	var bounds: Dictionary = BrushPatternCalculator.calculate_bounds(b_pos, brush_size, terrain_system)
 	var max_distance : float = BrushPatternCalculator.calculate_max_distance(brush_size, current_brush_index)
 	var brush_pos : Vector2 = Vector2(b_pos.x, b_pos.z)
 	
@@ -684,9 +696,9 @@ static func _blue_noise_unit_2i(p_x: int, p_y: int) -> float:
 func _vp_dither_should_paint(terrain: MarchingSquaresTerrain, chunk_coords: Vector2i, cell_coords: Vector2i, p_sample: float) -> bool:
 	# Want a solid core + dithered outer ring (soft edge).
 	# p_sample is a (0..1) falloff sample where higher means closer to brush center.
-	if p_sample >= VP_DITHER_CORE_SAMPLE:
+	if p_sample >=  VP_DITHER_CORE_SAMPLE:
 		return true
-	if p_sample <= 0.0:
+	if p_sample <=  0.0:
 		return false
 
 	# Remap outer-ring probability so core -> 1.0 (always) and 0.0 -> 0.0 (never).
@@ -898,19 +910,27 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 					var z : int = draw_cell_coords.y
 					
 					if cx == -1:
-						if x == 0: x = terrain.dimensions.x-1
-						else: continue
+						if x == 0:
+							x = terrain.dimensions.x - 1
+						else:
+							continue
 					elif cx == 1:
-						if x == terrain.dimensions.x-1: x = 0
-						else: continue
-					
+						if x == terrain.dimensions.x - 1:
+							x = 0
+						else:
+							continue
+				
 					if cz == -1:
-						if z == 0: z = terrain.dimensions.z-1
-						else: continue
+						if z == 0:
+							z = terrain.dimensions.z - 1
+						else:
+							continue
 					elif cz == 1:
-						if z == terrain.dimensions.z-1: z = 0
-						else: continue
-					
+						if z == terrain.dimensions.z - 1:
+							z = 0
+						else:
+							continue
+				
 					var adjacent_cell_coords := Vector2i(x, z)
 					
 					if not pattern.has(adjacent_chunk_coords):
@@ -1016,14 +1036,14 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 							if adj_x < 0:
 								adj_chunk_coords = Vector2i(chunk_coords.x - 1, chunk_coords.y)
 								adj_x = terrain.dimensions.x - 1
-							elif adj_x >= terrain.dimensions.x:
+							elif adj_x >=  terrain.dimensions.x:
 								adj_chunk_coords = Vector2i(chunk_coords.x + 1, chunk_coords.y)
 								adj_x = 0
 							
 							if adj_z < 0:
 								adj_chunk_coords = Vector2i(adj_chunk_coords.x, chunk_coords.y - 1)
 								adj_z = terrain.dimensions.z - 1
-							elif adj_z >= terrain.dimensions.z:
+							elif adj_z >=  terrain.dimensions.z:
 								adj_chunk_coords = Vector2i(adj_chunk_coords.x, chunk_coords.y + 1)
 								adj_z = 0
 							
@@ -1147,14 +1167,14 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 							if adj_x < 0:
 								adj_chunk_coords = Vector2i(chunk_coords.x - 1, chunk_coords.y)
 								adj_x = terrain.dimensions.x - 1
-							elif adj_x >= terrain.dimensions.x:
+							elif adj_x >=  terrain.dimensions.x:
 								adj_chunk_coords = Vector2i(chunk_coords.x + 1, chunk_coords.y)
 								adj_x = 0
 							
 							if adj_z < 0:
 								adj_chunk_coords = Vector2i(adj_chunk_coords.x, chunk_coords.y - 1)
 								adj_z = terrain.dimensions.z - 1
-							elif adj_z >= terrain.dimensions.z:
+							elif adj_z >=  terrain.dimensions.z:
 								adj_chunk_coords = Vector2i(adj_chunk_coords.x, chunk_coords.y + 1)
 								adj_z = 0
 							

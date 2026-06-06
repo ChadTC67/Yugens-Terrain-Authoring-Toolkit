@@ -3,9 +3,9 @@ extends Node
 class_name MarchingSquaresUI
 
 
-const TOOLBAR : Script = preload("uid://3d77dnetkeik")
-const TOOL_ATTRIBUTES : Script = preload("uid://buxevb44hutjm")
-const TEXTURE_SETTINGS : Script = preload("uid://blvx0jk6wxk5p")
+@onready var TOOLBAR : Script = EngineWrapper.load_resource("uid://3d77dnetkeik") as Script
+@onready var TOOL_ATTRIBUTES : Script = EngineWrapper.load_resource("uid://buxevb44hutjm") as Script
+@onready var TEXTURE_SETTINGS : Script = EngineWrapper.load_resource("uid://blvx0jk6wxk5p") as Script
 
 #region texture setting property maps
 # Property names that map directly to terrain properties with same name
@@ -156,7 +156,7 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 		"falloff":
 			if p_value is bool:
 				plugin.falloff = p_value
-				if plugin.BRUSH_RADIUS_MATERIAL and plugin.mode != plugin.TerrainToolMode.VERTEX_PAINTING:
+				if plugin.BRUSH_RADIUS_MATERIAL and plugin.mode !=  plugin.TerrainToolMode.VERTEX_PAINTING:
 					plugin.BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", p_value)
 		"strength":
 			if p_value is float or p_value is int:
@@ -338,7 +338,7 @@ func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 		if p_value is float or p_value is int:
 			terrain.set(p_setting_name, float(p_value))
 	
-	if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
+	if terrain.current_texture_preset !=  null and not terrain.current_texture_preset.resource_path.is_empty():
 		terrain.save_to_preset()
 
 

@@ -28,3 +28,5 @@ class_name MarchingSquaresToolAttributeSettings
 # Non-brush attributes
 @export var chunk_management : bool = false
 @export var terrain_settings : bool = false
+
+

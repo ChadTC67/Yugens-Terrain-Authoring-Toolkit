@@ -35,7 +35,7 @@ var chunk
 var cell
 
 
-func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool = false) -> Dictionary[String, Color]:
+func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool =  false) -> Dictionary[String, Color]:
 	var colors : Dictionary[String, Color] = {}
 	var blend_threshold : float = cell.merge_threshold * BLEND_EDGE_SENSITIVITY # COMMENT: We can tweak the BLEND_EDGE_SENSITIVITY to allow more "agressive" Cliff vs Slope detection
 	var blend_ab : bool = abs(cell.ay-cell.by) < blend_threshold
@@ -59,7 +59,7 @@ func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool = false) -> 
 	# Ensure dominant material selection matches the map we are currently sampling.
 	# Without this, wall vertices can incorrectly use floor material pairs (regression).
 	var want_floor_pair: bool = bool(cell.floor_mode)
-	if want_floor_pair != _mat_pair_is_floor:
+	if want_floor_pair !=  _mat_pair_is_floor:
 		calculate_cell_material_pair(source_map_0, source_map_1)
 		_mat_pair_is_floor = want_floor_pair
 	
@@ -95,7 +95,6 @@ func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool = false) -> 
 	if w_b > best_w: best_w = w_b; rl_idx = wall_b
 	if w_c > best_w: best_w = w_c; rl_idx = wall_c
 	if w_d > best_w: rl_idx = wall_d
-	
 	c_1_val.a = rl_idx
 	colors["custom_1_value"] = c_1_val
 	
@@ -231,7 +230,7 @@ func _calc_bilinear_color(x: float, z: float, source_map: PackedColorArray) -> C
 	var ab_color : Color = lerp(source_map[idx], source_map[idx + 1], x)
 	var cd_color : Color = lerp(source_map[idx + chunk.dimensions.x], source_map[idx + chunk.dimensions.x + 1], x)
 	
-	if chunk.terrain_system.blend_mode != 1:
+	if chunk.terrain_system.blend_mode !=  1:
 		return get_dominant_color(lerp(ab_color, cd_color, z))  # Mixed triangles
 	return source_map[idx]  # hard squares/hard triangles
 
@@ -290,13 +289,13 @@ static func get_texture_index_from_colors(c0: Color, c1: Color) -> int:
 		if c0.g > c0_m: c0_m = c0.g; c0_idx = 1
 		if c0.b > c0_m: c0_m = c0.b; c0_idx = 2
 		if c0.a > c0_m: c0_idx = 3
-		
+
 		var c1_idx = 0
 		var c1_m = c1.r
 		if c1.g > c1_m: c1_m = c1.g; c1_idx = 1
 		if c1.b > c1_m: c1_m = c1.b; c1_idx = 2
 		if c1.a > c1_m: c1_idx = 3
-		
+
 		return c0_idx * 4 + c1_idx
 	
 	return clampi(int(round(clampf(c0.r, 0.0, 1.0) * 255.0)), 0, 255)
@@ -372,19 +371,19 @@ func calculate_material_blend_data(vert_x: float, vert_z: float, source_map_0: P
 	if tex_a == cell_mat_a: weight_mat_a += w_a
 	elif tex_a == cell_mat_b: weight_mat_b += w_a
 	elif tex_a == cell_mat_c: weight_mat_c += w_a
-	
+
 	if tex_b == cell_mat_a: weight_mat_a += w_b
 	elif tex_b == cell_mat_b: weight_mat_b += w_b
 	elif tex_b == cell_mat_c: weight_mat_c += w_b
-	
+
 	if tex_c == cell_mat_a: weight_mat_a += w_c
 	elif tex_c == cell_mat_b: weight_mat_b += w_c
 	elif tex_c == cell_mat_c: weight_mat_c += w_c
-	
+
 	if tex_d == cell_mat_a: weight_mat_a += w_d
 	elif tex_d == cell_mat_b: weight_mat_b += w_d
 	elif tex_d == cell_mat_c: weight_mat_c += w_d
-	
+
 	# Normalize weights
 	var total_weight : float = weight_mat_a + weight_mat_b + weight_mat_c
 	if total_weight > 0.001:
@@ -433,10 +432,10 @@ static func normalize_image_for_texture_array(src: Image, w: int, h: int) -> Ima
 	if src == null:
 		return null
 	var img := src
-	if img.get_format() != Image.FORMAT_RGBA8:
+	if img.get_format() !=  Image.FORMAT_RGBA8:
 		img = img.duplicate()
 		img.convert(Image.FORMAT_RGBA8)
-	if img.get_width() != w or img.get_height() != h:
+	if img.get_width() !=  w or img.get_height() != h:
 		img = img.duplicate()
 		# Nearest keeps pixel art crisp if a texture has the wrong size.
 		img.resize(w, h, Image.INTERPOLATE_NEAREST)
@@ -481,7 +480,7 @@ static func rebuild_palette_uniforms(terrain) -> void:
 			base_idx = void_slot
 		else:
 			var s = terrain.texture_slots[slot] if slot < terrain.texture_slots.size() else null
-			if s != null and s.get("terrain_texture_index") != null:
+			if s !=  null and s.get("terrain_texture_index") != null:
 				base_idx = clampi(int(s.terrain_texture_index), 0, 15)
 			else:
 				base_idx = slot if slot < 15 else 0

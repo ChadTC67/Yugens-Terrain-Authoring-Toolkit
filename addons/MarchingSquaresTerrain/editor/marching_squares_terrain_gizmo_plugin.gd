@@ -47,3 +47,8 @@ func clear() -> void:
 
 func _get_gizmo_name() -> String:
 	return "Marching Squares Terrain"
+
+
+
+
+

@@ -43,3 +43,5 @@ class_name MarchingSquaresTexturePreset
 
 # Roughness per texture slot (0 = shiny/wet, 1 = matte/dry)
 @export var slot_roughnesses: Array[float] = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+
+
