@@ -118,7 +118,9 @@ func _prepare(key: String, scene: PackedScene, is_diag_floor: bool = false, is_c
 	var n := _inst.name
 	var inst = _inst.get_child(0) as MeshInstance3D
 	
-	if not inst or not inst.mesh is ArrayMesh:
+	if not inst or not inst.mesh:
+		return
+	if not inst.mesh is ArrayMesh:
 		push_warning(resource_name, ":", " ", key, " Mesh is not an ArrayMesh")
 		return
 	
