@@ -587,7 +587,8 @@ func notify_needs_update(z: int, x: int):
 ## Mark chunk as having modified source data - triggers save in MSTDataHandler.
 func mark_dirty() -> void:
 	_data_dirty = true
-
+	if EngineWrapper.instance.is_editor():
+		EngineWrapper.instance.mark_scene_as_unsaved()
 
 ## Recreate collision body after scene save (deferred call for proper physics refresh).
 func _recreate_collision_body() -> void:

@@ -73,6 +73,7 @@ enum StorageMode {
 		prefab_set = value
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
 			chunk.regenerate_all_cells(true)
+			chunk.mark_dirty()
 		
 
 ## True after external storage has been initialized.
@@ -175,210 +176,143 @@ enum StorageMode {
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_1 : Texture2D = preload("uid://dbnc04k3n0sro"):
 	set(value):
 		texture_1 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_rr", value)
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			if texture_1:
-				grass_mat.set_shader_parameter("use_base_color_1", false)
-			else:
-				grass_mat.set_shader_parameter("use_base_color_1", true)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_rr", "use_base_color_1")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_2 : Texture2D = preload("uid://dbnc04k3n0sro"):
 	set(value):
 		texture_2 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_rg", value)
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			if texture_2:
-				grass_mat.set_shader_parameter("use_base_color_2", false)
-			else:
-				grass_mat.set_shader_parameter("use_base_color_2", true)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_rg", "use_base_color_2")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_3 : Texture2D = preload("uid://dbnc04k3n0sro"):
 	set(value):
 		texture_3 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_rb", value)
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			if texture_3:
-				grass_mat.set_shader_parameter("use_base_color_3", false)
-			else:
-				grass_mat.set_shader_parameter("use_base_color_3", true)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_rb", "use_base_color_3")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_4 : Texture2D = preload("uid://dbnc04k3n0sro"):
 	set(value):
 		texture_4 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_ra", value)
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			if texture_4:
-				grass_mat.set_shader_parameter("use_base_color_4", false)
-			else:
-				grass_mat.set_shader_parameter("use_base_color_4", true)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_ra", "use_base_color_4")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_5 : Texture2D = preload("uid://dbnc04k3n0sro"):
 	set(value):
 		texture_5 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_gr", value)
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			if texture_5:
-				grass_mat.set_shader_parameter("use_base_color_5", false)
-			else:
-				grass_mat.set_shader_parameter("use_base_color_5", true)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_gr", "use_base_color_5")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_6 : Texture2D = preload("uid://cv87twjgbqq0s"):
 	set(value):
 		texture_6 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_gg", value)
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			if texture_6:
-				grass_mat.set_shader_parameter("use_base_color_6", false)
-			else:
-				grass_mat.set_shader_parameter("use_base_color_6", true)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_gg", "use_base_color_6")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_7 : Texture2D:
 	set(value):
 		texture_7 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_gb", value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_gb")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_8 : Texture2D:
 	set(value):
 		texture_8 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_ga", value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_ga")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_9 : Texture2D:
 	set(value):
 		texture_9 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_br", value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_br")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_10 : Texture2D:
 	set(value):
 		texture_10 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_bg", value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_bg")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_11 : Texture2D:
 	set(value):
 		texture_11 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_bb", value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_bb")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_12 : Texture2D:
 	set(value):
 		texture_12 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_ba", value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_ba")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_13 : Texture2D:
 	set(value):
 		texture_13 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_ar", value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_ar")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_14 : Texture2D:
 	set(value):
 		texture_14 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_ag", value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_ag")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_15 : Texture2D:
 	set(value):
 		texture_15 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("vc_tex_ab", value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+		_update_texture(value, "vc_tex_ab")
+				
+func _update_texture(value: Texture2D, shader_param_tex: String, shader_param_enable: String = "") -> void:
+	if not is_batch_updating:
+		terrain_material.set_shader_parameter(shader_param_tex, value)
+		var grass_mat := grass_mesh.material as ShaderMaterial
+		if shader_param_enable:
+			if value:
+				grass_mat.set_shader_parameter(shader_param_enable, false)
+			else:
+				grass_mat.set_shader_parameter(shader_param_enable, true)
+		for chunk: MarchingSquaresTerrainChunk in chunks.values():
+			chunk.grass_planter.regenerate_all_cells()
+			chunk.mark_dirty()
 #endregion
 
 #region grass textures
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_sprite_tex_1 : Texture2D = preload("uid://cxvnfgy865wsk"):
 	set(value):
 		grass_sprite_tex_1 = value
-		if not is_batch_updating:
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("grass_texture_1", value)
+		_update_grass_texture(value, "grass_texture_1")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_sprite_tex_2 : Texture2D = preload("uid://cxvnfgy865wsk"):
 	set(value):
 		grass_sprite_tex_2 = value
-		if not is_batch_updating:
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("grass_texture_2", value)
+		_update_grass_texture(value, "grass_texture_2")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_sprite_tex_3 : Texture2D = preload("uid://cxvnfgy865wsk"):
 	set(value):
 		grass_sprite_tex_3 = value
-		if not is_batch_updating:
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("grass_texture_3", value)
+		_update_grass_texture(value, "grass_texture_3")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_sprite_tex_4 : Texture2D = preload("uid://cxvnfgy865wsk"):
 	set(value):
 		grass_sprite_tex_4 = value
-		if not is_batch_updating:
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("grass_texture_4", value)
+		_update_grass_texture(value, "grass_texture_4")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_sprite_tex_5 : Texture2D = preload("uid://cxvnfgy865wsk"):
 	set(value):
 		grass_sprite_tex_5 = value
-		if not is_batch_updating:
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("grass_texture_5", value)
+		_update_grass_texture(value, "grass_texture_5")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_sprite_tex_6 : Texture2D = preload("uid://cxvnfgy865wsk"):
 	set(value):
 		grass_sprite_tex_6 = value
-		if not is_batch_updating:
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("grass_texture_6", value)
+		_update_grass_texture(value, "grass_texture_6")
+			
+func _update_grass_texture(value: Texture2D, shader_param: String) -> void:
+	if not is_batch_updating:
+		var grass_mat := grass_mesh.material as ShaderMaterial
+		grass_mat.set_shader_parameter(shader_param, value)
+		for chunk: MarchingSquaresTerrainChunk in chunks.values():
+			chunk.grass_planter.regenerate_all_cells()
+			chunk.mark_dirty()
+		
 #endregion
 
 #region has grass variables
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex2_has_grass : bool = true:
 	set(value):
 		tex2_has_grass = value
-		if not is_batch_updating:
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("use_grass_tex_2", value)
+		_enable_grass_texture(value, "use_grass_tex_2")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex3_has_grass : bool = true:
 	set(value):
 		tex3_has_grass = value
-		if not is_batch_updating:
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("use_grass_tex_3", value)
+		_enable_grass_texture(value, "use_grass_tex_3")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex4_has_grass : bool = true:
 	set(value):
 		tex4_has_grass = value
-		if not is_batch_updating:
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("use_grass_tex_4", value)
+		_enable_grass_texture(value, "use_grass_tex_4")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex5_has_grass : bool = true:
 	set(value):
 		tex5_has_grass = value
-		if not is_batch_updating:
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("use_grass_tex_5", value)
+		_enable_grass_texture(value, "use_grass_tex_5")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex6_has_grass : bool = true:
 	set(value):
 		tex6_has_grass = value
-		if not is_batch_updating:
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("use_grass_tex_6", value)
+		_enable_grass_texture(value, "use_grass_tex_6")
+			
+func _enable_grass_texture(enable: bool, shader_param: String) -> void:
+	if not is_batch_updating:
+		var grass_mat := grass_mesh.material as ShaderMaterial
+		grass_mat.set_shader_parameter(shader_param, enable)
+		for chunk: MarchingSquaresTerrainChunk in chunks.values():
+			chunk.grass_planter.regenerate_all_cells()
+			chunk.mark_dirty()
 #endregion
 
 #region texture albedos
@@ -393,49 +327,41 @@ enum StorageMode {
 				var mat := chunk.mesh.surface_get_material(0) as ShaderMaterial
 				mat.set_shader_parameter("tex_prefab_colormap", value)
 				mat.set_shader_parameter("has_prefab_colormap", has_map)
-					
+				chunk.grass_planter.fetch_texture_data()
+				chunk.grass_planter.regenerate_all_cells()
+				chunk.mark_dirty()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_albedo_1 : Color = Color("647851ff"):
 	set(value):
 		texture_albedo_1 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_albedo_1", value)
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("grass_color_1", value)
+		_update_texture_albedo(value, "tex_albedo_1", "grass_color_1")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_albedo_2 : Color = Color("527b62ff"):
 	set(value):
 		texture_albedo_2 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_albedo_2", value)
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("grass_color_2", value)
+		_update_texture_albedo(value, "tex_albedo_2", "grass_color_2")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_albedo_3 : Color = Color("5f6c4bff"):
 	set(value):
 		texture_albedo_3 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_albedo_3", value)
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("grass_color_3", value)
+		_update_texture_albedo(value, "tex_albedo_3", "grass_color_3")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_albedo_4 : Color = Color("647941ff"):
 	set(value):
 		texture_albedo_4 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_albedo_4", value)
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("grass_color_4", value)
+		_update_texture_albedo(value, "tex_albedo_4", "grass_color_4")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_albedo_5 : Color = Color("4a7e5dff"):
 	set(value):
 		texture_albedo_5 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_albedo_5", value)
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("grass_color_5", value)
+		_update_texture_albedo(value, "tex_albedo_5", "grass_color_5")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_albedo_6 : Color = Color("71725dff"):
 	set(value):
 		texture_albedo_6 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_albedo_6", value)
-			var grass_mat := grass_mesh.material as ShaderMaterial
-			grass_mat.set_shader_parameter("grass_color_6", value)
+		_update_texture_albedo(value, "tex_albedo_6", "grass_color_6")
+			
+func _update_texture_albedo(value: Color, shader_param: String, grass_shader_param: String) -> void:
+	if not is_batch_updating:
+		terrain_material.set_shader_parameter(shader_param, value)
+		var grass_mat := grass_mesh.material as ShaderMaterial
+		grass_mat.set_shader_parameter(grass_shader_param, value)
+		for chunk: MarchingSquaresTerrainChunk in chunks.values():
+			chunk.mark_dirty()
 #endregion
 
 #region texture scales
@@ -443,78 +369,69 @@ enum StorageMode {
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_1 : float = 1.0:
 	set(value):
 		texture_scale_1 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_1", value)
+		_update_texture_scale(value, "tex_scale_1")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_2 : float = 1.0:
 	set(value):
 		texture_scale_2 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_2", value)
+		_update_texture_scale(value, "tex_scale_2")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_3 : float = 1.0:
 	set(value):
 		texture_scale_3 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_3", value)
+		_update_texture_scale(value, "tex_scale_3")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_4 : float = 1.0:
 	set(value):
 		texture_scale_4 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_4", value)
+		_update_texture_scale(value, "tex_scale_4")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_5 : float = 1.0:
 	set(value):
 		texture_scale_5 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_5", value)
+		_update_texture_scale(value, "tex_scale_5")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_6 : float = 1.0:
 	set(value):
 		texture_scale_6 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_6", value)
+		_update_texture_scale(value, "tex_scale_6")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_7 : float = 1.0:
 	set(value):
 		texture_scale_7 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_7", value)
+		_update_texture_scale(value, "tex_scale_7")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_8 : float = 1.0:
 	set(value):
 		texture_scale_8 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_8", value)
+		_update_texture_scale(value, "tex_scale_8")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_9 : float = 1.0:
 	set(value):
 		texture_scale_9 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_9", value)
+		_update_texture_scale(value, "tex_scale_9")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_10 : float = 1.0:
 	set(value):
 		texture_scale_10 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_10", value)
+		_update_texture_scale(value, "tex_scale_10")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_11 : float = 1.0:
 	set(value):
 		texture_scale_11 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_11", value)
+		_update_texture_scale(value, "tex_scale_11")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_12 : float = 1.0:
 	set(value):
 		texture_scale_12 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_12", value)
+		_update_texture_scale(value, "tex_scale_12")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_13 : float = 1.0:
 	set(value):
 		texture_scale_13 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_13", value)
+		_update_texture_scale(value, "tex_scale_13")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_14 : float = 1.0:
 	set(value):
 		texture_scale_14 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_14", value)
+		_update_texture_scale(value, "tex_scale_14")
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_scale_15 : float = 1.0:
 	set(value):
 		texture_scale_15 = value
-		if not is_batch_updating:
-			terrain_material.set_shader_parameter("tex_scale_15", value)
+		_update_texture_scale(value, "tex_scale_15")
+			
+func _update_texture_scale(value: float, shader_param: String) -> void:
+	if not is_batch_updating:
+		terrain_material.set_shader_parameter(shader_param, value)
+		for chunk: MarchingSquaresTerrainChunk in chunks.values():
+			chunk.mark_dirty()
 #endregion
 
 @export_storage var current_texture_preset : MarchingSquaresTexturePreset = null
