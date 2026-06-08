@@ -72,7 +72,6 @@ func regenerate_all_cells() -> void:
 	
 	if not _chunk.cell_geometry:
 		_chunk.regenerate_mesh()
-	
 	for z in range(terrain_system.dimensions.z-1):
 		for x in range(terrain_system.dimensions.x-1):
 			generate_grass_on_cell(Vector2i(x, z))
@@ -326,7 +325,6 @@ func _sample_terrain_texture_color(world_pos: Vector3, texture_id: int, tex_scal
 	
 
 func _sample_prefab_texture_color(uv: Vector2) -> Color:
-	var material := terrain_system.terrain_material
 	var terrain_image := _image_cache.get("tex_prefab_colormap")
 	if not terrain_image:
 		return Color.WHITE
