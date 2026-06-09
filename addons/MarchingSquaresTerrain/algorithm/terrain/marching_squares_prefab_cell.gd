@@ -226,6 +226,8 @@ func add_flat(ox: float, oy: float, rot: float, a: float, b: float, c: float, d:
 	if not chunk.terrain_system.prefab_set:
 		return
 	var obj := chunk.terrain_system.prefab_set.get_random_flat()
+	if not obj:
+		return
 	add_chunk(obj.get_data("top_floor"), Vector2(ox, oy), rot, {"a": a, "b": b, "c": c, "d": d, "a2": a - merge_threshold, "b2": b - merge_threshold, "c2": c - merge_threshold, "d2": d - merge_threshold})
 
 
@@ -233,6 +235,8 @@ func add_diagonal(ox: float, oy: float, rot: float, a: float, b: float, c: float
 	if not chunk.terrain_system.prefab_set:
 		return
 	var obj := chunk.terrain_system.prefab_set.get_random_diagonal()
+	if not obj:
+		return
 	add_wall(obj.get_data("wall_top"), obj.get_data("wall"), Vector2(ox, oy), rot, {"a": a, "b": b, "c": c, "d": d, "a2": a2, "b2": b2, "c2": c2, "d2": d2})
 	add_chunk(obj.get_data("top_floor"), Vector2(ox, oy), rot, {"a": a, "b": b, "c": c, "d": d, "a2": a - merge_threshold, "b2": b - merge_threshold, "c2": c - merge_threshold, "d2": d - merge_threshold})
 	if has_bfloor:
@@ -242,6 +246,8 @@ func add_orthogonal(ox: float, oy: float, rot: float, a: float, b: float, c: flo
 	if not chunk.terrain_system.prefab_set:
 		return
 	var obj := chunk.terrain_system.prefab_set.get_random_orthogonal()
+	if not obj:
+		return
 	add_wall(obj.get_data("wall_top"), obj.get_data("wall"), Vector2(ox, oy), rot, {"a": a, "b": b, "c": c, "d": d, "a2": a2, "b2": b2, "c2": c2, "d2": d2})
 	add_chunk(obj.get_data("top_floor"), Vector2(ox, oy), rot, {"a": a, "b": b, "c": c, "d": d, "a2": a - merge_threshold, "b2": b - merge_threshold, "c2": c - merge_threshold, "d2": d - merge_threshold})
 	if has_bfloor:
@@ -257,6 +263,8 @@ func add_filler(ox: float, oy: float, rot: float, a: float, b: float, c: float, 
 	if not chunk.terrain_system.prefab_set:
 		return
 	var obj := chunk.terrain_system.prefab_set.get_random_filler()
+	if not obj:
+		return
 	add_wall(obj.get_data("wall_top"), obj.get_data("wall"), Vector2(ox, oy), rot, {"a": a, "b": b, "c": c, "d": d, "a2": a2, "b2": b2, "c2": c2, "d2": d2})
 	add_chunk(obj.get_data("top_floor"), Vector2(ox, oy), rot, {"a": a, "b": b, "c": c, "d": d, "a2": a - merge_threshold, "b2": b - merge_threshold, "c2": c - merge_threshold, "d2": d - merge_threshold})
 	add_chunk(obj.get_data("bottom_floor"), Vector2(ox, oy), rot, {"a": a2 + merge_threshold, "b": b2 + merge_threshold, "c": c2 + merge_threshold, "d": d2 + merge_threshold, "a2": a2, "b2": b2, "c2": c2, "d2": d2})
