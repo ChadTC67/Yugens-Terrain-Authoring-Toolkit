@@ -2,13 +2,13 @@
 class_name MarchingSquaresPrefabSet
 extends Resource
 
-@export var flats : Array[MarchingSquaresPrefab]
+@export var flats : Array[MarchingSquaresPrefabFlat]
 
-@export var diagonals : Array[MarchingSquaresPrefab]
+@export var diagonals : Array[MarchingSquaresPrefabDiagonal]
 
-@export var orthogonals : Array[MarchingSquaresPrefab]
+@export var orthogonals : Array[MarchingSquaresPrefabOrthogonal]
 
-@export var fillers : Array[MarchingSquaresPrefab]
+@export var fillers : Array[MarchingSquaresPrefabFiller]
 
 @export var color_map : Texture2D
 
@@ -24,6 +24,6 @@ func get_random_orthogonal() -> MarchingSquaresPrefab:
 func get_random_filler() -> MarchingSquaresPrefab:
 	return _random(fillers)
 	
-func _random(array: Array[MarchingSquaresPrefab]) -> MarchingSquaresPrefab:
+func _random(array: Array) -> MarchingSquaresPrefab:
 	var i := randi_range(0, array.size()-1)
 	return array[i]

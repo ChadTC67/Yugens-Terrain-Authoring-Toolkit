@@ -1,9 +1,13 @@
 [gd_resource type="Resource" script_class="MarchingSquaresPrefabSet" format=3 uid="uid://ljcr0d4mbbuo"]
 
-[ext_resource type="Script" uid="uid://brr0n4nhr567q" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_prefab.gd" id="1_86wjr"]
+[ext_resource type="Script" uid="uid://ct55aw6xlcmu" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_flat.gd" id="1_h70ih"]
+[ext_resource type="Script" uid="uid://ca7353uloodm3" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_diagonal.gd" id="2_h70ih"]
+[ext_resource type="Script" uid="uid://jetwfp0muy5b" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_filler.gd" id="3_h70ih"]
+[ext_resource type="Script" uid="uid://c0uwqtd5aejyp" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_orthogonal.gd" id="4_h70ih"]
+
 [ext_resource type="Texture2D" uid="uid://da06vhls0hw17" path="res://scenes/prefabs/kenney/grass.png" id="1_lhkgn"]
 [ext_resource type="PackedScene" uid="uid://drktxhigrdo36" path="res://scenes/prefabs/kenney/glb_grass/Diagonal_BottomFloor.glb" id="2_3l25d"]
-[ext_resource type="Script" uid="uid://cx6mjly0heii5" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_prefab_set.gd" id="2_oy10v"]
+[ext_resource type="Script" uid="uid://cx6mjly0heii5" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_squares_prefab_set.gd" id="2_oy10v"]
 [ext_resource type="PackedScene" uid="uid://dufisnmsc2ve5" path="res://scenes/prefabs/kenney/glb_grass/Diagonal_TopFloor.glb" id="3_1jcjl"]
 [ext_resource type="PackedScene" uid="uid://8swsox2sa0fi" path="res://scenes/prefabs/kenney/glb_grass/Diagonal_Wall.glb" id="4_5qpxm"]
 [ext_resource type="PackedScene" uid="uid://chg4884243w7l" path="res://scenes/prefabs/kenney/glb_grass/Diagonal_TopWall.glb" id="5_11wsx"]
@@ -35,8 +39,7 @@
 [ext_resource type="PackedScene" uid="uid://dwe8h6r08lef8" path="res://scenes/prefabs/kenney/glb_grass/Orthogonal_TopFloor_003.glb" id="31_6xvdq"]
 
 [sub_resource type="Resource" id="Resource_qtg1h"]
-script = ExtResource("1_86wjr")
-base = 1
+script = ExtResource("2_h70ih")
 top_floor = ExtResource("3_1jcjl")
 bottom_floor = ExtResource("2_3l25d")
 wall_top = ExtResource("5_11wsx")
@@ -44,8 +47,7 @@ wall = ExtResource("4_5qpxm")
 metadata/_custom_type_script = "uid://brr0n4nhr567q"
 
 [sub_resource type="Resource" id="Resource_shvtt"]
-script = ExtResource("1_86wjr")
-base = 1
+script = ExtResource("2_h70ih")
 top_floor = ExtResource("6_lehde")
 bottom_floor = ExtResource("2_3l25d")
 wall_top = ExtResource("5_11wsx")
@@ -53,8 +55,7 @@ wall = ExtResource("4_5qpxm")
 metadata/_custom_type_script = "uid://brr0n4nhr567q"
 
 [sub_resource type="Resource" id="Resource_tnoqh"]
-script = ExtResource("1_86wjr")
-base = 1
+script = ExtResource("2_h70ih")
 top_floor = ExtResource("7_fbwvy")
 bottom_floor = ExtResource("2_3l25d")
 wall_top = ExtResource("5_11wsx")
@@ -62,8 +63,7 @@ wall = ExtResource("4_5qpxm")
 metadata/_custom_type_script = "uid://brr0n4nhr567q"
 
 [sub_resource type="Resource" id="Resource_6xvdq"]
-script = ExtResource("1_86wjr")
-base = 1
+script = ExtResource("2_h70ih")
 top_floor = ExtResource("8_rmm6o")
 bottom_floor = ExtResource("2_3l25d")
 wall_top = ExtResource("5_11wsx")
@@ -71,8 +71,7 @@ wall = ExtResource("4_5qpxm")
 metadata/_custom_type_script = "uid://brr0n4nhr567q"
 
 [sub_resource type="Resource" id="Resource_qqg2n"]
-script = ExtResource("1_86wjr")
-base = 3
+script = ExtResource("3_h70ih")
 top_floor = ExtResource("13_tnoqh")
 top_floor_half = ExtResource("14_6xvdq")
 bottom_floor = ExtResource("6_qfqo8")
@@ -88,13 +87,12 @@ diagonal_diagonal_cap_right_floor = ExtResource("9_lehde")
 diagonal_diagonal_cap_right_wall = ExtResource("10_fbwvy")
 
 [sub_resource type="Resource" id="Resource_5bt05"]
-script = ExtResource("1_86wjr")
+script = ExtResource("1_h70ih")
 top_floor = ExtResource("6_ttabb")
 metadata/_custom_type_script = "uid://brr0n4nhr567q"
 
 [sub_resource type="Resource" id="Resource_614ql"]
-script = ExtResource("1_86wjr")
-base = 2
+script = ExtResource("4_h70ih")
 top_floor = ExtResource("12_yrfyu")
 bottom_floor = ExtResource("7_f0pjf")
 wall_top = ExtResource("14_7m703")
@@ -106,8 +104,7 @@ orthogonal_orthogonal_cap_right_wall = ExtResource("11_evpdn")
 metadata/_custom_type_script = "uid://brr0n4nhr567q"
 
 [sub_resource type="Resource" id="Resource_bkp5j"]
-script = ExtResource("1_86wjr")
-base = 2
+script = ExtResource("4_h70ih")
 top_floor = ExtResource("29_shvtt")
 bottom_floor = ExtResource("7_f0pjf")
 wall_top = ExtResource("14_7m703")
@@ -119,8 +116,7 @@ orthogonal_orthogonal_cap_right_wall = ExtResource("11_evpdn")
 metadata/_custom_type_script = "uid://brr0n4nhr567q"
 
 [sub_resource type="Resource" id="Resource_mkexp"]
-script = ExtResource("1_86wjr")
-base = 2
+script = ExtResource("4_h70ih")
 top_floor = ExtResource("30_tnoqh")
 bottom_floor = ExtResource("7_f0pjf")
 wall_top = ExtResource("14_7m703")
@@ -132,8 +128,7 @@ orthogonal_orthogonal_cap_right_wall = ExtResource("11_evpdn")
 metadata/_custom_type_script = "uid://brr0n4nhr567q"
 
 [sub_resource type="Resource" id="Resource_qo5e5"]
-script = ExtResource("1_86wjr")
-base = 2
+script = ExtResource("4_h70ih")
 top_floor = ExtResource("31_6xvdq")
 bottom_floor = ExtResource("7_f0pjf")
 wall_top = ExtResource("14_7m703")
@@ -146,8 +141,8 @@ metadata/_custom_type_script = "uid://brr0n4nhr567q"
 
 [resource]
 script = ExtResource("2_oy10v")
-flats = Array[ExtResource("1_86wjr")]([SubResource("Resource_5bt05")])
-diagonals = Array[ExtResource("1_86wjr")]([SubResource("Resource_qtg1h"), SubResource("Resource_shvtt"), SubResource("Resource_tnoqh"), SubResource("Resource_6xvdq")])
-orthogonals = Array[ExtResource("1_86wjr")]([SubResource("Resource_614ql"), SubResource("Resource_bkp5j"), SubResource("Resource_mkexp"), SubResource("Resource_qo5e5")])
-fillers = Array[ExtResource("1_86wjr")]([SubResource("Resource_qqg2n")])
+flats = Array[ExtResource("1_h70ih")]([SubResource("Resource_5bt05")])
+diagonals = Array[ExtResource("2_h70ih")]([SubResource("Resource_qtg1h"), SubResource("Resource_shvtt"), SubResource("Resource_tnoqh"), SubResource("Resource_6xvdq")])
+orthogonals = Array[ExtResource("4_h70ih")]([SubResource("Resource_614ql"), SubResource("Resource_bkp5j"), SubResource("Resource_mkexp"), SubResource("Resource_qo5e5")])
+fillers = Array[ExtResource("3_h70ih")]([SubResource("Resource_qqg2n")])
 color_map = ExtResource("1_lhkgn")

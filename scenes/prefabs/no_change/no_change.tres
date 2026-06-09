@@ -1,147 +1,51 @@
 [gd_resource type="Resource" script_class="MarchingSquaresPrefabSet" format=3 uid="uid://c07vwk2qc6ilx"]
 
-[ext_resource type="Script" uid="uid://brr0n4nhr567q" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_prefab.gd" id="1_h70ih"]
-[ext_resource type="Script" uid="uid://cx6mjly0heii5" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_prefab_set.gd" id="2_3x47k"]
+[ext_resource type="Script" uid="uid://ct55aw6xlcmu" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_flat.gd" id="1_h70ih"]
+[ext_resource type="Script" uid="uid://cx6mjly0heii5" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_squares_prefab_set.gd" id="2_3x47k"]
 [ext_resource type="PackedScene" uid="uid://bpjh3865chfrv" path="res://scenes/prefabs/no_change/glb/Flat_TopFloor.glb" id="2_5gwfd"]
+[ext_resource type="Script" uid="uid://ca7353uloodm3" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_diagonal.gd" id="2_h70ih"]
 [ext_resource type="PackedScene" uid="uid://ba45syn6gxl5u" path="res://scenes/prefabs/no_change/glb/Diagonal_BottomFloor.glb" id="2_umwks"]
+[ext_resource type="Script" uid="uid://jetwfp0muy5b" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_filler.gd" id="3_h70ih"]
 [ext_resource type="PackedScene" uid="uid://bgq5tv18jr5wk" path="res://scenes/prefabs/no_change/glb/Diagonal_TopFloor.glb" id="3_yafej"]
+[ext_resource type="Script" uid="uid://c0uwqtd5aejyp" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_orthogonal.gd" id="4_h70ih"]
 [ext_resource type="PackedScene" uid="uid://b4hpypp8r1at7" path="res://scenes/prefabs/no_change/glb/Diagonal_Wall.glb" id="4_tvy0q"]
 [ext_resource type="PackedScene" uid="uid://cgjoxpg07ofuj" path="res://scenes/prefabs/no_change/glb/Diagonal_TopWall.glb" id="5_nkq5g"]
 [ext_resource type="PackedScene" uid="uid://b8rmo1kvhg28f" path="res://scenes/prefabs/no_change/glb/Orthogonal_TopFloor.glb" id="7_5pcbv"]
 [ext_resource type="PackedScene" uid="uid://dinmiyltl3vvu" path="res://scenes/prefabs/no_change/glb/Filler_HalfFloor.glb" id="8_nkq5g"]
 [ext_resource type="PackedScene" uid="uid://dlaphpb0ouich" path="res://scenes/prefabs/no_change/glb/Orthogonal_Wall.glb" id="9_bq0ok"]
+[ext_resource type="PackedScene" uid="uid://brsea8np5s3ep" path="res://scenes/prefabs/no_change/glb/Filler_TopFloor.glb" id="9_nkq5g"]
 [ext_resource type="PackedScene" uid="uid://fg4cp11laeyv" path="res://scenes/prefabs/no_change/glb/Orthogonal_TopWall.glb" id="10_c0afk"]
 
 [sub_resource type="Resource" id="Resource_0nia4"]
-script = ExtResource("1_h70ih")
-base = 1
+script = ExtResource("2_h70ih")
 top_floor = ExtResource("3_yafej")
 bottom_floor = ExtResource("2_umwks")
 wall_top = ExtResource("5_nkq5g")
 wall = ExtResource("4_tvy0q")
-metadata/_custom_type_script = "uid://brr0n4nhr567q"
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mesap"]
-vertex_color_use_as_albedo = true
-
-[sub_resource type="ArrayMesh" id="ArrayMesh_goskd"]
-_surfaces = [{
-"aabb": AABB(5.642599e-07, 0.49999994, 2.6027425e-07, 0.49999967, 1e-05, 0.50000024),
-"format": 34896613377,
-"index_count": 3,
-"index_data": PackedByteArray(0, 0, 1, 0, 2, 0),
-"primitive": 3,
-"uv_scale": Vector4(0, 0, 0, 0),
-"vertex_count": 3,
-"vertex_data": PackedByteArray(255, 255, 0, 0, 0, 0, 0, 0, 254, 255, 195, 0, 254, 255, 0, 0, 0, 0, 0, 0, 255, 255, 0, 0)
-}]
-blend_shape_mode = 0
-
-[sub_resource type="ArrayMesh" id="ArrayMesh_6jo0l"]
-resource_name = "Filler_TopFloor_Filler_TopFloor"
-_surfaces = [{
-"aabb": AABB(5.642599e-07, 0.49999994, 2.6027425e-07, 0.49999967, 1e-05, 0.50000024),
-"attribute_data": PackedByteArray(0, 255, 0, 255, 205, 167, 86, 70, 0, 0, 0, 0, 0, 255, 0, 255, 150, 173, 149, 65, 0, 0, 0, 0, 0, 255, 0, 255, 132, 175, 255, 63, 0, 0, 0, 0),
-"format": 34896613439,
-"index_count": 3,
-"index_data": PackedByteArray(0, 0, 1, 0, 2, 0),
-"material": SubResource("StandardMaterial3D_mesap"),
-"primitive": 3,
-"uv_scale": Vector4(0, 0, 0, 0),
-"vertex_count": 3,
-"vertex_data": PackedByteArray(255, 255, 0, 0, 0, 0, 244, 62, 254, 255, 195, 0, 254, 255, 244, 62, 0, 0, 0, 0, 255, 255, 244, 62, 161, 224, 174, 143, 161, 224, 174, 143, 161, 224, 174, 143)
-}]
-blend_shape_mode = 0
-shadow_mesh = SubResource("ArrayMesh_goskd")
-
-[sub_resource type="PackedScene" id="PackedScene_biw11"]
-_bundled = {
-"conn_count": 0,
-"conns": PackedInt32Array(),
-"editable_instances": [],
-"id_paths": [],
-"names": PackedStringArray("Filler_TopFloor2", "Node3D", "Filler_TopFloor", "transform", "mesh", "skeleton", "MeshInstance3D"),
-"node_count": 2,
-"node_ids": PackedInt32Array(1027815069, 868371864),
-"node_paths": [],
-"nodes": PackedInt32Array(-1, -1, 1, 0, -1, 0, 0, 0, 0, 6, 2, -1, 3, 3, 0, 4, 1, 5, 2, 0),
-"variants": [Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0.5, 0), SubResource("ArrayMesh_6jo0l"), NodePath("")],
-"version": 3
-}
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_lk57q"]
-vertex_color_use_as_albedo = true
-
-[sub_resource type="ArrayMesh" id="ArrayMesh_r13uy"]
-_surfaces = [{
-"aabb": AABB(-1.3783573e-07, 0.5, 0, 0.49999997, 1e-05, 0.5000001),
-"format": 34896613377,
-"index_count": 3,
-"index_data": PackedByteArray(0, 0, 1, 0, 2, 0),
-"primitive": 3,
-"uv_scale": Vector4(0, 0, 0, 0),
-"vertex_count": 3,
-"vertex_data": PackedByteArray(255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-}]
-blend_shape_mode = 0
-
-[sub_resource type="ArrayMesh" id="ArrayMesh_eibhv"]
-resource_name = "Filler_HalfFloor_Filler_HalfFloor"
-_surfaces = [{
-"aabb": AABB(-1.3783573e-07, 0.5, 0, 0.49999997, 1e-05, 0.5000001),
-"attribute_data": PackedByteArray(0, 255, 0, 255, 255, 159, 198, 92, 0, 0, 0, 0, 0, 255, 0, 255, 162, 194, 255, 63, 0, 0, 0, 0, 0, 255, 0, 255, 141, 194, 112, 95, 0, 0, 0, 0),
-"format": 34896613439,
-"index_count": 3,
-"index_data": PackedByteArray(0, 0, 1, 0, 2, 0),
-"material": SubResource("StandardMaterial3D_lk57q"),
-"primitive": 3,
-"uv_scale": Vector4(0, 0, 0, 0),
-"vertex_count": 3,
-"vertex_data": PackedByteArray(255, 255, 0, 0, 0, 0, 143, 253, 0, 0, 0, 0, 255, 255, 143, 253, 0, 0, 0, 0, 0, 0, 143, 253, 166, 130, 171, 190, 166, 130, 171, 190, 166, 130, 171, 190)
-}]
-blend_shape_mode = 0
-shadow_mesh = SubResource("ArrayMesh_r13uy")
-
-[sub_resource type="PackedScene" id="PackedScene_8gwiv"]
-_bundled = {
-"conn_count": 0,
-"conns": PackedInt32Array(),
-"editable_instances": [],
-"id_paths": [],
-"names": PackedStringArray("Filler_HalfFloor2", "Node3D", "Filler_HalfFloor", "transform", "mesh", "skeleton", "MeshInstance3D"),
-"node_count": 2,
-"node_ids": PackedInt32Array(671960629, 324330717),
-"node_paths": [],
-"nodes": PackedInt32Array(-1, -1, 1, 0, -1, 0, 0, 0, 0, 6, 2, -1, 3, 3, 0, 4, 1, 5, 2, 0),
-"variants": [Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0.5, 0), SubResource("ArrayMesh_eibhv"), NodePath("")],
-"version": 3
-}
-
-[sub_resource type="Resource" id="Resource_qeeed"]
-script = ExtResource("1_h70ih")
-base = 3
-top_floor = SubResource("PackedScene_biw11")
-top_floor_half = SubResource("PackedScene_8gwiv")
-metadata/_custom_type_script = "uid://brr0n4nhr567q"
+metadata/_custom_type_script = "uid://ca7353uloodm3"
 
 [sub_resource type="Resource" id="Resource_fmg6s"]
+script = ExtResource("3_h70ih")
+top_floor = ExtResource("9_nkq5g")
+top_floor_half = ExtResource("8_nkq5g")
+metadata/_custom_type_script = "uid://jetwfp0muy5b"
+
+[sub_resource type="Resource" id="Resource_umwks"]
 script = ExtResource("1_h70ih")
 top_floor = ExtResource("2_5gwfd")
-metadata/_custom_type_script = "uid://brr0n4nhr567q"
+metadata/_custom_type_script = "uid://ct55aw6xlcmu"
 
-[sub_resource type="Resource" id="Resource_5pcbv"]
-script = ExtResource("1_h70ih")
-base = 2
+[sub_resource type="Resource" id="Resource_yafej"]
+script = ExtResource("4_h70ih")
 top_floor = ExtResource("7_5pcbv")
-top_floor_half = ExtResource("8_nkq5g")
 wall_top = ExtResource("10_c0afk")
 wall = ExtResource("9_bq0ok")
-metadata/_custom_type_script = "uid://brr0n4nhr567q"
+metadata/_custom_type_script = "uid://c0uwqtd5aejyp"
 
 [resource]
 script = ExtResource("2_3x47k")
-flats = Array[ExtResource("1_h70ih")]([SubResource("Resource_fmg6s")])
-diagonals = Array[ExtResource("1_h70ih")]([SubResource("Resource_0nia4")])
-orthogonals = Array[ExtResource("1_h70ih")]([SubResource("Resource_5pcbv")])
-fillers = Array[ExtResource("1_h70ih")]([SubResource("Resource_qeeed")])
+flats = Array[ExtResource("1_h70ih")]([SubResource("Resource_umwks")])
+diagonals = Array[ExtResource("2_h70ih")]([SubResource("Resource_0nia4")])
+orthogonals = Array[ExtResource("4_h70ih")]([SubResource("Resource_yafej")])
+fillers = Array[ExtResource("3_h70ih")]([SubResource("Resource_fmg6s")])
 metadata/_custom_type_script = "uid://cx6mjly0heii5"
