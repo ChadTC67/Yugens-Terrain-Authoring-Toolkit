@@ -13,7 +13,7 @@ var vp_texture_names = preload("uid://dd7fens03aosa")
 var gizmo_plugin := MarchingSquaresTerrainGizmoPlugin.new()
 var toolbar := MarchingSquaresToolbar.new()
 var tool_attributes := MarchingSquaresToolAttributes.new()
-var active_tool : int = 0
+var active_tool : TerrainToolMode = TerrainToolMode.BRUSH
 
 var UI : Script = preload("uid://bmedudg6sllf8")
 var ui : MarchingSquaresUI
