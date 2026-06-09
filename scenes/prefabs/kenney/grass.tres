@@ -1,8 +1,9 @@
 [gd_resource type="Resource" script_class="MarchingSquaresPrefabSet" format=3 uid="uid://ljcr0d4mbbuo"]
 
-[ext_resource type="Script" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_prefab.gd" id="1_86wjr"]
+[ext_resource type="Script" uid="uid://brr0n4nhr567q" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_prefab.gd" id="1_86wjr"]
+[ext_resource type="Texture2D" uid="uid://da06vhls0hw17" path="res://scenes/prefabs/kenney/grass.png" id="1_lhkgn"]
 [ext_resource type="PackedScene" uid="uid://drktxhigrdo36" path="res://scenes/prefabs/kenney/glb_grass/Diagonal_BottomFloor.glb" id="2_3l25d"]
-[ext_resource type="Script" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_prefab_set.gd" id="2_oy10v"]
+[ext_resource type="Script" uid="uid://cx6mjly0heii5" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_prefab_set.gd" id="2_oy10v"]
 [ext_resource type="PackedScene" uid="uid://dufisnmsc2ve5" path="res://scenes/prefabs/kenney/glb_grass/Diagonal_TopFloor.glb" id="3_1jcjl"]
 [ext_resource type="PackedScene" uid="uid://8swsox2sa0fi" path="res://scenes/prefabs/kenney/glb_grass/Diagonal_Wall.glb" id="4_5qpxm"]
 [ext_resource type="PackedScene" uid="uid://chg4884243w7l" path="res://scenes/prefabs/kenney/glb_grass/Diagonal_TopWall.glb" id="5_11wsx"]
@@ -149,3 +150,4 @@ flats = Array[ExtResource("1_86wjr")]([SubResource("Resource_5bt05")])
 diagonals = Array[ExtResource("1_86wjr")]([SubResource("Resource_qtg1h"), SubResource("Resource_shvtt"), SubResource("Resource_tnoqh"), SubResource("Resource_6xvdq")])
 orthogonals = Array[ExtResource("1_86wjr")]([SubResource("Resource_614ql"), SubResource("Resource_bkp5j"), SubResource("Resource_mkexp"), SubResource("Resource_qo5e5")])
 fillers = Array[ExtResource("1_86wjr")]([SubResource("Resource_qqg2n")])
+color_map = ExtResource("1_lhkgn")

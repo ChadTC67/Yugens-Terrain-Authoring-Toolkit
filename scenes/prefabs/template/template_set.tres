@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="MarchingSquaresPrefabSet" format=3 uid="uid://bks8psh5iff0d"]
 
-[ext_resource type="Script" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_prefab.gd" id="1_mgls2"]
+[ext_resource type="Script" uid="uid://brr0n4nhr567q" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_prefab.gd" id="1_mgls2"]
 [ext_resource type="PackedScene" uid="uid://b8yn8082qi65o" path="res://scenes/prefabs/template/glb/Diagonal_BottomFloor.glb" id="2_2mk5b"]
 [ext_resource type="PackedScene" uid="uid://bgx4sf5hu35ct" path="res://scenes/prefabs/template/glb/Diagonal_TopFloor.glb" id="3_evpjw"]
 [ext_resource type="PackedScene" uid="uid://dt5na8q1o1r2s" path="res://scenes/prefabs/template/glb/Diagonal_Wall.glb" id="4_sebpm"]
@@ -27,7 +27,7 @@
 [ext_resource type="PackedScene" uid="uid://dt8xdsy7g8nvh" path="res://scenes/prefabs/template/glb/Orthogonal_TopFloor.glb" id="25_ooj0u"]
 [ext_resource type="PackedScene" uid="uid://d3hky1vtrx3ag" path="res://scenes/prefabs/template/glb/Orthogonal_Wall.glb" id="26_e4d8v"]
 [ext_resource type="PackedScene" uid="uid://dg661le8uadxc" path="res://scenes/prefabs/template/glb/Orthogonal_TopWall.glb" id="27_sxrqr"]
-[ext_resource type="Script" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_prefab_set.gd" id="28_s8vp8"]
+[ext_resource type="Script" uid="uid://cx6mjly0heii5" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_prefab_set.gd" id="28_s8vp8"]
 
 [sub_resource type="Resource" id="Resource_s2sf2"]
 script = ExtResource("1_mgls2")
