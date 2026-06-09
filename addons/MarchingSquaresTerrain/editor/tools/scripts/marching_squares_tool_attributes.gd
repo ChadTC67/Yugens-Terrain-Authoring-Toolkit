@@ -40,6 +40,7 @@ var terrain_settings_data : Dictionary[String, String] = {
 	"use_ledge_texture": "CheckBox",
 	"ridge_threshold": "EditorSpinSlider",
 	"ledge_threshold": "EditorSpinSlider",
+	"prefab_set": "EditorResourcePicker",
 	# Lighting settings
 	"use_cell_shading": "CheckBox",
 }
@@ -478,10 +479,10 @@ func add_setting(p_params: Dictionary) -> void:
 						vbox.add_child(hbox, true)
 					"EditorResourcePicker":
 						var editor_r_picker := EditorResourcePicker.new()
-						if setting == "noise_hmap":
-							editor_r_picker.set_base_type("Noise")
-						else:
-							editor_r_picker.set_base_type("Texture2D")
+						match setting:
+							"noise_hmap": editor_r_picker.set_base_type("Noise")
+							"prefab_set": editor_r_picker.set_base_type("MarchingSquaresPrefabSet")
+							_: editor_r_picker.set_base_type("Texture2D")
 						editor_r_picker.edited_resource = plugin.current_terrain_node.get(setting)
 						_hide_textures(editor_r_picker)
 						editor_r_picker.resource_changed.connect(func(resource): _on_terrain_setting_changed(setting, resource))

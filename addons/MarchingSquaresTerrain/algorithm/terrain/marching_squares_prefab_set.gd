@@ -10,6 +10,8 @@ extends Resource
 
 @export var fillers : Array[MarchingSquaresPrefab]
 
+@export var color_map : Texture2D
+
 func get_random_flat() -> MarchingSquaresPrefab:
 	return _random(flats)
 	

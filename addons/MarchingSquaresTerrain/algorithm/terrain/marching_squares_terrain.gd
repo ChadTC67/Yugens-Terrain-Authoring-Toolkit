@@ -68,12 +68,23 @@ enum StorageMode {
 @export var bake_material_override : Material
 
 
-@export var prefab_set : MarchingSquaresPrefabSet:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var prefab_set : MarchingSquaresPrefabSet:
 	set(value):
 		prefab_set = value
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
 			chunk.regenerate_all_cells(true)
 			chunk.mark_dirty()
+		if not is_batch_updating:
+			var has_map := true if prefab_set and prefab_set.color_map else false
+			terrain_material.set_shader_parameter("tex_prefab_colormap", prefab_set.color_map)
+			terrain_material.set_shader_parameter("has_prefab_colormap", has_map)
+			for chunk: MarchingSquaresTerrainChunk in chunks.values():
+				var mat := chunk.mesh.surface_get_material(0) as ShaderMaterial
+				mat.set_shader_parameter("tex_prefab_colormap", prefab_set.color_map)
+				mat.set_shader_parameter("has_prefab_colormap", has_map)
+				chunk.grass_planter.fetch_texture_data()
+				chunk.grass_planter.regenerate_all_cells()
+				chunk.mark_dirty()
 		
 
 ## True after external storage has been initialized.
@@ -316,20 +327,6 @@ func _enable_grass_texture(enable: bool, shader_param: String) -> void:
 #endregion
 
 #region texture albedos
-@export var texture_prefab_colormap : Texture2D:
-	set(value):
-		texture_prefab_colormap = value
-		if not is_batch_updating:
-			var has_map := true if value else false
-			terrain_material.set_shader_parameter("tex_prefab_colormap", value)
-			terrain_material.set_shader_parameter("has_prefab_colormap", has_map)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				var mat := chunk.mesh.surface_get_material(0) as ShaderMaterial
-				mat.set_shader_parameter("tex_prefab_colormap", value)
-				mat.set_shader_parameter("has_prefab_colormap", has_map)
-				chunk.grass_planter.fetch_texture_data()
-				chunk.grass_planter.regenerate_all_cells()
-				chunk.mark_dirty()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_albedo_1 : Color = Color("647851ff"):
 	set(value):
 		texture_albedo_1 = value
@@ -362,6 +359,7 @@ func _update_texture_albedo(value: Color, shader_param: String, grass_shader_par
 		grass_mat.set_shader_parameter(grass_shader_param, value)
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
 			chunk.mark_dirty()
+			
 #endregion
 
 #region texture scales
@@ -678,8 +676,8 @@ func force_batch_update() -> void:
 	terrain_material.set_shader_parameter("vc_tex_ag", texture_14)
 	terrain_material.set_shader_parameter("vc_tex_ab", texture_15)
 	
-	terrain_material.set_shader_parameter("tex_prefab_colormap", texture_prefab_colormap)
-	if texture_prefab_colormap:
+	if prefab_set and prefab_set.color_map:
+		terrain_material.set_shader_parameter("tex_prefab_colormap", prefab_set.color_map)
 		terrain_material.set_shader_parameter("has_prefab_colormap", true)
 	else:
 		terrain_material.set_shader_parameter("has_prefab_colormap", false)

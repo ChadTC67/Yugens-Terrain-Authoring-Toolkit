@@ -252,6 +252,9 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 				# +1 because collision layers don't start from 0 like indexed items
 				# +8 because the selectable collision layers range from 9 to 32
 				terrain.extra_collision_layer = p_value + 9
+		"prefab_set":
+			if p_value is MarchingSquaresPrefabSet:
+				terrain.prefab_set = p_value
 
 
 func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> void:
