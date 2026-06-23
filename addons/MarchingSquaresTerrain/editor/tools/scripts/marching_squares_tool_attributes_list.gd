@@ -129,6 +129,12 @@ var heightmap_importer : Dictionary = {
 	"label": "Heightmap Importer",
 }
 
+var heightmap_exporter : Dictionary = {
+	"name": "heightmap_exporter",
+	"type": "heightmap_exporter",
+	"label": "Heightmap Exporter",
+}
+
 """
 # Example Attribute Entries
 	"name": "",

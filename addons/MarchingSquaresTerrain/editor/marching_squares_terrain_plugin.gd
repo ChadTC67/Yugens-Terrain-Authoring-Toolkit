@@ -120,6 +120,7 @@ enum TerrainToolMode {
 	CHUNK_MANAGEMENT = 7,
 	TERRAIN_SETTINGS = 8,
 	HEIGHTMAP_IMPORTER = 9,
+	HEIGHTMAP_EXPORTER = 10,
 }
 
 var _mode : TerrainToolMode = TerrainToolMode.BRUSH
@@ -187,10 +188,22 @@ var vertex_color_idx : int:
 
 #region heightmap importer vars
 var hm_heightmap_image : Texture2D = null
+var hm_grass_image : Texture2D = null
+var hm_texture_image : Texture2D = null
 var hm_chunks_x : int = 4
 var hm_chunks_z : int = 4
 var hm_max_height : int = 32
 var hm_merge_mode : int = 1
+var hm_single_file_import : bool = false
+var hm_combined_image : Texture2D = null
+#endregion
+
+#region heightmap exporter vars
+var hme_export_heightmap : bool = true
+var hme_export_grass : bool = true
+var hme_export_texture_index : bool = false
+var hme_output_path : String = "res://"
+var hme_single_file : bool = false
 #endregion
 
 var vertex_color_idx : int = 0:
@@ -1700,7 +1713,10 @@ func run_heightmap_import() -> void:
 		hm_chunks_z,
 		hm_max_height,
 		hm_merge_mode,
-		self
+		hm_grass_image,
+		hm_texture_image,
+		self,
+		hm_combined_image if hm_single_file_import else null
 	)
 
 	# Snapshot newly created chunks after the import
@@ -1755,6 +1771,32 @@ func _replace_chunks_action(terrain: MarchingSquaresTerrain, coords_to_clear: Ar
 		chunk._data_dirty = true
 		terrain.add_chunk(coords, chunk, null, true)
 	gizmo_plugin.trigger_redraw(terrain)
+
+
+func run_heightmap_export() -> void:
+	if not current_terrain_node:
+		push_error("MarchingSquaresTerrainPlugin: No terrain selected for heightmap export.")
+		return
+
+	var chunks_to_export : Array[Vector2i] = []
+	chunks_to_export.assign(current_terrain_node.chunks.keys())
+
+	if chunks_to_export.is_empty():
+		push_warning("MarchingSquaresTerrainPlugin: No chunks to export.")
+		return
+
+	var output_path := hme_output_path if not hme_output_path.is_empty() else "res://"
+
+	await MarchingSquaresHeightmapExporter.run(
+		current_terrain_node,
+		chunks_to_export,
+		hme_export_heightmap,
+		hme_export_grass,
+		hme_export_texture_index,
+		output_path,
+		self,
+		hme_single_file
+	)
 
 #endregion
 

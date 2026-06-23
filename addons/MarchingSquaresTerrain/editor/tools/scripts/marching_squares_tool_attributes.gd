@@ -19,6 +19,7 @@ enum SettingType {
 	PRESET,
 	QUICK_PAINT,
 	HEIGHTMAP_IMPORTER,
+	HEIGHTMAP_EXPORTER,
 	ERROR,
 }
 
@@ -228,6 +229,7 @@ func show_tool_attributes(tool_index: int) -> void:
 		"preset": SettingType.PRESET,
 		"quick_paint": SettingType.QUICK_PAINT,
 		"heightmap_importer": SettingType.HEIGHTMAP_IMPORTER,
+		"heightmap_exporter": SettingType.HEIGHTMAP_EXPORTER,
 	}
 
 	var new_attributes := []
@@ -300,7 +302,8 @@ func add_setting(p_params: Dictionary) -> void:
 
 	var add_label := true
 	if setting_type == SettingType.CHUNK or setting_type == SettingType.TERRAIN \
-			or setting_type == SettingType.HEIGHTMAP_IMPORTER:
+			or setting_type == SettingType.HEIGHTMAP_IMPORTER \
+			or setting_type == SettingType.HEIGHTMAP_EXPORTER:
 		add_label = false
 	if add_label:
 		var label := Label.new()
@@ -991,6 +994,10 @@ func _get_setting_value(p_setting_name: String) -> Variant:
 			pass
 		"hm_heightmap_image":
 			return plugin.hm_heightmap_image
+		"hm_grass_image":
+			return plugin.hm_grass_image
+		"hm_texture_image":
+			return plugin.hm_texture_image
 		"hm_chunks_x":
 			return plugin.hm_chunks_x
 		"hm_chunks_z":
@@ -1218,6 +1225,62 @@ func _on_import_heightmap_pressed() -> void:
 
 func _on_clear_chunks_pressed() -> void:
 	emit_signal("setting_changed", "clear_chunks", true)
+
+
+func _make_exporter_checkbox_row(label_text: String, setting_name: String, current_val: bool) -> HBoxContainer:
+	var hbox := HBoxContainer.new()
+	var label := Label.new()
+	label.set_text(label_text)
+	label.set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER)
+	label.set_custom_minimum_size(Vector2(90, 25))
+	var lcc := CenterContainer.new()
+	lcc.set_custom_minimum_size(Vector2(90, 35))
+	lcc.add_child(label, true)
+	hbox.add_child(lcc, true)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(spacer, true)
+	var cb := CheckBox.new()
+	cb.set_flat(true)
+	cb.button_pressed = current_val
+	cb.toggled.connect(func(pressed): _on_exporter_setting_changed(setting_name, pressed))
+	cb.set_custom_minimum_size(Vector2(25, 25))
+	var sc := CenterContainer.new()
+	sc.set_custom_minimum_size(Vector2(35, 35))
+	sc.add_child(cb, true)
+	hbox.add_child(sc, true)
+	return hbox
+
+
+func _on_exporter_setting_changed(p_name: String, p_value: Variant) -> void:
+	emit_signal("setting_changed", p_name, p_value)
+
+
+func _open_exporter_folder_dialog(setting_name: String, path_edit: LineEdit) -> void:
+	var dialog := EditorFileDialog.new()
+	dialog.file_mode = EditorFileDialog.FILE_MODE_OPEN_DIR
+	dialog.access = EditorFileDialog.ACCESS_RESOURCES
+	dialog.title = "Select Output Directory"
+
+	var current_path : String = path_edit.text
+	if current_path.is_empty():
+		dialog.current_dir = "res://"
+	else:
+		dialog.current_dir = current_path
+
+	dialog.dir_selected.connect(func(dir: String):
+		path_edit.text = dir
+		_on_exporter_setting_changed(setting_name, dir)
+		dialog.queue_free()
+	)
+	dialog.canceled.connect(func(): dialog.queue_free())
+
+	EditorInterface.get_base_control().add_child(dialog)
+	dialog.popup_centered(Vector2i(600, 400))
+
+
+func _on_export_terrain_pressed() -> void:
+	emit_signal("setting_changed", "export_terrain", true)
 
 
 func _format_constant_string(text: String) -> String:

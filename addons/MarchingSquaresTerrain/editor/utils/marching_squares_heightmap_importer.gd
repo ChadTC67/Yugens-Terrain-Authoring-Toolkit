@@ -10,7 +10,10 @@ static func run(
 	chunks_z: int,
 	max_height: int,
 	merge_mode: int,
-	caller: Node
+	grass_map_image: Texture2D,
+	texture_map_image: Texture2D,
+	caller: Node,
+	combined_map_image: Texture2D = null
 ) -> void:
 	# --- Build progress dialog ---
 	var base_control := EditorInterface.get_base_control()
@@ -100,27 +103,7 @@ static func run(
 		finish_error.call("Terrain has no data directory.\nSave the scene first.")
 		return
 
-	# --- Load and validate the heightmap image ---
-	if not heightmap_image:
-		finish_error.call("No heightmap image assigned.")
-		return
-
-	var image : Image = heightmap_image.get_image()
-	if not image:
-		finish_error.call("Failed to get an Image from the assigned texture.")
-		return
-
-	if image.is_compressed():
-		image.decompress()
-
-	var img_w : int = image.get_width()
-	var img_h : int = image.get_height()
-
-	if img_w < 2 or img_h < 2:
-		finish_error.call("Image is too small (minimum 2×2).")
-		return
-
-	# --- Calculate the full height grid ---
+	# --- Calculate grid dimensions (shared by both paths) ---
 	var cells_x : int = dims.x - 1
 	var cells_z : int = dims.z - 1
 	var grid_w : int = chunks_x * cells_x + 1
@@ -129,23 +112,122 @@ static func run(
 	var total_chunks : int = chunks_x * chunks_z
 	var step_pct : float = 100.0 / float(total_chunks + 1)
 
-	# --- Resample heightmap (1 step of total_chunks + 1) ---
-	status_label.text = "Resampling heightmap..."
+	# --- Grids populated by whichever path runs below ---
 	var full_grid : Array = []
-	full_grid.resize(grid_h)
+	var grass_grid : Array = []
+	var tex_grid : Array = []
 
-	for gz in grid_h:
-		var row : Array = []
-		row.resize(grid_w)
-		for gx in grid_w:
-			var sx : float = float(gx) / float(grid_w - 1) * float(img_w - 1)
-			var sz : float = float(gz) / float(grid_h - 1) * float(img_h - 1)
-			var luminance : float = _sample_bilinear(image, sx, sz, img_w, img_h)
-			row[gx] = roundf(luminance * max_height)
-		full_grid[gz] = row
-		if gz % 10 == 0:
-			progress_bar.value = float(gz) / float(grid_h) * step_pct
-			await caller.get_tree().process_frame
+	if combined_map_image:
+		# ---- Single-file RGBA path ----
+		# R = texture slot 0-255, G = normalised height, B = grass bool (1 or 0)
+		var cimg : Image = combined_map_image.get_image()
+		if not cimg:
+			finish_error.call("Failed to get an Image from the combined map texture.")
+			return
+		if cimg.is_compressed():
+			cimg.decompress()
+		var c_w : int = cimg.get_width()
+		var c_h : int = cimg.get_height()
+		if c_w < 2 or c_h < 2:
+			finish_error.call("Combined map image is too small (minimum 2×2).")
+			return
+		status_label.text = "Resampling combined map..."
+		full_grid.resize(grid_h)
+		grass_grid.resize(grid_h)
+		tex_grid.resize(grid_h)
+		for gz in grid_h:
+			var h_row : Array = []
+			var g_row : Array = []
+			var t_row : Array = []
+			h_row.resize(grid_w)
+			g_row.resize(grid_w)
+			t_row.resize(grid_w)
+			for gx in grid_w:
+				var sx : float = float(gx) / float(grid_w - 1) * float(c_w - 1)
+				var sz : float = float(gz) / float(grid_h - 1) * float(c_h - 1)
+				var col : Color = _sample_bilinear_color(cimg, sx, sz, c_w, c_h)
+				h_row[gx] = roundf(col.g * max_height)             # G channel = height
+				g_row[gx] = col.b                                  # B channel = grass
+				t_row[gx] = clampi(roundi(col.r * 255.0), 0, 255)  # R channel = slot 0-255
+			full_grid[gz]  = h_row
+			grass_grid[gz] = g_row
+			tex_grid[gz]   = t_row
+			if gz % 10 == 0:
+				progress_bar.value = float(gz) / float(grid_h) * step_pct
+				await caller.get_tree().process_frame
+	else:
+		# ---- Multi-file greyscale path ----
+		if not heightmap_image:
+			finish_error.call("No heightmap image assigned.")
+			return
+
+		var image : Image = heightmap_image.get_image()
+		if not image:
+			finish_error.call("Failed to get an Image from the assigned texture.")
+			return
+
+		if image.is_compressed():
+			image.decompress()
+
+		var img_w : int = image.get_width()
+		var img_h : int = image.get_height()
+
+		if img_w < 2 or img_h < 2:
+			finish_error.call("Image is too small (minimum 2×2).")
+			return
+
+		# --- Resample heightmap ---
+		status_label.text = "Resampling heightmap..."
+		full_grid.resize(grid_h)
+		for gz in grid_h:
+			var row : Array = []
+			row.resize(grid_w)
+			for gx in grid_w:
+				var sx : float = float(gx) / float(grid_w - 1) * float(img_w - 1)
+				var sz : float = float(gz) / float(grid_h - 1) * float(img_h - 1)
+				var luminance : float = _sample_bilinear(image, sx, sz, img_w, img_h)
+				row[gx] = roundf(luminance * max_height)
+			full_grid[gz] = row
+			if gz % 10 == 0:
+				progress_bar.value = float(gz) / float(grid_h) * step_pct
+				await caller.get_tree().process_frame
+
+		# --- Optionally resample grass map ---
+		if grass_map_image:
+			var grass_img : Image = grass_map_image.get_image()
+			if grass_img:
+				if grass_img.is_compressed():
+					grass_img.decompress()
+				var g_w : int = grass_img.get_width()
+				var g_h : int = grass_img.get_height()
+				grass_grid.resize(grid_h)
+				for gz in grid_h:
+					var row : Array = []
+					row.resize(grid_w)
+					for gx in grid_w:
+						var sx2 : float = float(gx) / float(grid_w - 1) * float(g_w - 1)
+						var sz2 : float = float(gz) / float(grid_h - 1) * float(g_h - 1)
+						row[gx] = _sample_bilinear(grass_img, sx2, sz2, g_w, g_h)
+					grass_grid[gz] = row
+
+		# --- Optionally resample texture index map (luminance * 15 = slot 0-15) ---
+		if texture_map_image:
+			var tex_img : Image = texture_map_image.get_image()
+			if tex_img:
+				if tex_img.is_compressed():
+					tex_img.decompress()
+				var t_w : int = tex_img.get_width()
+				var t_h : int = tex_img.get_height()
+				tex_grid.resize(grid_h)
+				for gz in grid_h:
+					var row : Array = []
+					row.resize(grid_w)
+					for gx in grid_w:
+						var sx2 : float = float(gx) / float(grid_w - 1) * float(t_w - 1)
+						var sz2 : float = float(gz) / float(grid_h - 1) * float(t_h - 1)
+						var lum : float = _sample_bilinear(tex_img, sx2, sz2, t_w, t_h)
+						row[gx] = clampi(roundi(lum * 15.0), 0, 15)
+					tex_grid[gz] = row
 
 	# --- Calculate chunk coordinate offset for centering ---
 	@warning_ignore("integer_division")
@@ -203,7 +285,29 @@ static func run(
 			chunk.height_map = height_map
 			chunk._data_dirty = false
 			chunk.generate_color_maps()
+			# Override ground color maps from texture index map if provided
+			if not tex_grid.is_empty():
+				var cell_count_tex : int = dims.x * dims.z
+				chunk.color_map_0 = PackedColorArray()
+				chunk.color_map_0.resize(cell_count_tex)
+				chunk.color_map_1 = PackedColorArray()
+				chunk.color_map_1.resize(cell_count_tex)
+				for lz in dims.z:
+					for lx in dims.x:
+						var slot : int = tex_grid[start_gz + lz][start_gx + lx]
+						var tex_colors : Array = MSTDataHandler._texture_idx_to_colors(slot)
+						chunk.color_map_0[lz * dims.x + lx] = tex_colors[0]
+						chunk.color_map_1[lz * dims.x + lx] = tex_colors[1]
 			chunk.generate_grass_mask_map()
+			# Override grass mask from grass map if provided
+			if not grass_grid.is_empty():
+				var cell_count_grass : int = dims.x * dims.z
+				chunk.grass_mask_map = PackedColorArray()
+				chunk.grass_mask_map.resize(cell_count_grass)
+				for lz in dims.z:
+					for lx in dims.x:
+						var g_lum : float = grass_grid[start_gz + lz][start_gx + lx]
+						chunk.grass_mask_map[lz * dims.x + lx] = Color(1.0, 0.0, 0.0, 0.0) if g_lum >= 0.5 else Color(0.0, 0.0, 0.0, 0.0)
 			# Set wall colors to the terrain's default wall texture.
 			# The plugin's generate_wall_color_maps() uses Color(1,0,0,0) which
 			# maps to texture slot 0 (ground), so we build the wall arrays manually.
@@ -247,3 +351,23 @@ static func _sample_bilinear(image: Image, sx: float, sz: float, img_w: int, img
 	var top : float = lerpf(c00, c10, fx)
 	var bot : float = lerpf(c01, c11, fx)
 	return lerpf(top, bot, fz)
+
+
+## Bilinear sample returning a full Color (used for combined RGBA map import).
+static func _sample_bilinear_color(image: Image, sx: float, sz: float, img_w: int, img_h: int) -> Color:
+	var x0 : int = clampi(int(sx), 0, img_w - 1)
+	var z0 : int = clampi(int(sz), 0, img_h - 1)
+	var x1 : int = clampi(x0 + 1, 0, img_w - 1)
+	var z1 : int = clampi(z0 + 1, 0, img_h - 1)
+
+	var fx : float = sx - float(x0)
+	var fz : float = sz - float(z0)
+
+	var c00 : Color = image.get_pixel(x0, z0)
+	var c10 : Color = image.get_pixel(x1, z0)
+	var c01 : Color = image.get_pixel(x0, z1)
+	var c11 : Color = image.get_pixel(x1, z1)
+
+	var top : Color = c00.lerp(c10, fx)
+	var bot : Color = c01.lerp(c11, fx)
+	return top.lerp(bot, fz)
