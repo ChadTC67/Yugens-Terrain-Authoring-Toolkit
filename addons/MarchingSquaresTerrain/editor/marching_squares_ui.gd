@@ -157,6 +157,9 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 		"height":
 			if p_value is float or p_value is int:
 				plugin.height = float(p_value)
+		"curve3d_mode":
+			if p_value is bool:
+				plugin.curve3d_mode = p_value
 		"mask_mode": # Grass mask mode
 			if p_value is bool:
 				plugin.should_mask_grass = p_value
