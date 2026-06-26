@@ -6,15 +6,20 @@ group_uniforms Visuals.Palette;
 uniform sampler2D palette_colors_tex : filter_nearest;
 uniform sampler2D palette_weights_tex : filter_nearest;
 uniform sampler2D palette_meta_tex : filter_nearest;
+uniform sampler2D palette_floor_noise_tex : filter_nearest;
 group_uniforms;
 
 group_uniforms Visuals.Textures;
+// Legacy per-grass-sprite textures (fallback)
 uniform sampler2D grass_texture_1 : source_color, filter_nearest;
 uniform sampler2D grass_texture_2 : source_color, filter_nearest;
 uniform sampler2D grass_texture_3 : source_color, filter_nearest;
 uniform sampler2D grass_texture_4 : source_color, filter_nearest;
 uniform sampler2D grass_texture_5 : source_color, filter_nearest;
 uniform sampler2D grass_texture_6 : source_color, filter_nearest;
+// New: small Texture2DArray for grass sprites so grass uses same runtime atlas pipeline as terrain
+uniform sampler2DArray vc_grass_tex_array : source_color, filter_nearest;
+uniform bool use_grass_tex_array = false;
 group_uniforms;
 
 group_uniforms Visuals.Texture_Mode;
@@ -78,6 +83,10 @@ float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
 
+float hash3(vec3 p) {
+	return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+}
+
 float noise(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);
@@ -111,6 +120,12 @@ int _palette_blend_mode(int slot) {
 	return int(round(_palette_meta(slot).g * 255.0));
 }
 
+vec3 _palette_floor_noise_settings(int slot) {
+	slot = clamp(slot, 0, 255);
+	float v = (float(slot) + 0.5) / 256.0;
+	return texture(palette_floor_noise_tex, vec2(0.5, v)).rgb;
+}
+
 vec4 sample_palette_entry(int slot, int color_idx) {
 	slot = clamp(slot, 0, 255);
 	int idx = clamp(color_idx, 0, 7);
@@ -133,20 +148,21 @@ vec3 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 	if (color_count <= 0) return vec3(0.392, 0.471, 0.318);
 	if (color_count == 1) return sample_palette_entry(slot, 0).rgb;
 
+	int mode = _palette_blend_mode(slot);
+	bool gradient_mode = mode != 1 && mode != 2 && mode != 3;
+
 	float n = 0.0;
 	// Internal remap for palette blending: fixed higher-frequency sampling + inverted.
 	// This keeps the UI Global Noise settings independent of palette blending behavior.
-	float palette_gn_scale = 0.002;
-	vec2 scroll = vec2(0.0);
-	if (global_noise_scroll > 0.0) {
-		vec2 dir = normalize(wind_direction);
-		scroll = dir * TIME * wind_speed * 3.0 * global_noise_scroll;
-	}
-	vec2 uv = fract((world_xz + scroll) * palette_gn_scale);
+	float palette_gn_scale = gradient_mode ? 0.014 : 0.008;
+	vec2 uv = fract(world_xz * palette_gn_scale);
 	n = 1.0 - texture(global_noise_texture, uv).r;
-	n = smoothstep(0.0, 1.0, n);
-
-	int mode = _palette_blend_mode(slot);
+	if (gradient_mode) {
+		float centered = (clamp(n, 0.0, 1.0) - 0.5) * 2.0;
+		n = clamp(sign(centered) * pow(abs(centered), 0.55) * 0.5 + 0.5, 0.0, 1.0);
+	} else {
+		n = smoothstep(0.0, 1.0, n);
+	}
 
 	// Weighted distribution (values are normalized per slot).
 	float ws[8];
@@ -188,29 +204,67 @@ vec3 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 	if (w0 > 0.00001) t = clamp((x - start) / w0, 0.0, 1.0);
 
 	if (mode == 1) {
-		// Retro: hard snap
+		// Retro: hard snap by weighted ownership.
 		return sample_palette_entry(slot, i0).rgb;
 	} else if (mode == 2) {
-		// Dithered (weight-aware)
-		vec2 dither_coord = floor(vec2(
-			world_xz.x + world_y * 0.7,
-			world_xz.y + world_y * 1.3) * 8.0);
-		float dither = hash(dither_coord);
-		float sel = step(dither, t);
-		return mix(sample_palette_entry(slot, i0), sample_palette_entry(slot, i1), sel).rgb;
-	} else if (mode == 3) {
-		// Stipple (weight-aware)
-		float seam = 0.08;
-		if (t < 0.5 - seam) return sample_palette_entry(slot, i0).rgb;
-		else if (t > 0.5 + seam) return sample_palette_entry(slot, i1).rgb;
-		else {
-			vec3 checker_coord = floor(vec3(world_xz.x, world_y, world_xz.y) * 12.0);
-			float checker = mod(checker_coord.x + checker_coord.y + checker_coord.z, 2.0);
-			return checker > 0.5 ? sample_palette_entry(slot, i1).rgb : sample_palette_entry(slot, i0).rgb;
+		// Dithered: weights own area; only non-zero color boundaries dither.
+		vec4 result = sample_palette_entry(slot, i0);
+		float boundary = 0.0;
+		float transition = max(total * 0.06, 0.0001);
+		vec3 dither_coord = floor(vec3(world_xz.x, world_y, world_xz.y) * 8.0);
+		float dither = hash3(dither_coord);
+		for (int i = 0; i < 7; i++) {
+			if (i >= color_count - 1) break;
+			boundary += ws[i];
+			if (ws[i] <= 0.0001 || ws[i + 1] <= 0.0001) continue;
+			float blend_t = smoothstep(boundary - transition, boundary + transition, x);
+			float sel = step(dither, blend_t);
+			result = mix(result, sample_palette_entry(slot, i + 1), sel);
 		}
+		return result.rgb;
+	} else if (mode == 3) {
+		// Stipple: weights own area; only non-zero color boundaries checker/stipple.
+		vec4 result = sample_palette_entry(slot, i0);
+		float boundary = 0.0;
+		float transition = max(total * 0.06, 0.0001);
+		float seam = 0.08;
+		vec3 checker_coord = floor(vec3(world_xz.x, world_y, world_xz.y) * 12.0);
+		float checker = mod(checker_coord.x + checker_coord.y + checker_coord.z, 2.0);
+		for (int i = 0; i < 7; i++) {
+			if (i >= color_count - 1) break;
+			boundary += ws[i];
+			if (ws[i] <= 0.0001 || ws[i + 1] <= 0.0001) continue;
+			float blend_t = smoothstep(boundary - transition, boundary + transition, x);
+			vec4 next_color = sample_palette_entry(slot, i + 1);
+			if (blend_t > 0.5 + seam) {
+				result = next_color;
+			} else if (blend_t >= 0.5 - seam) {
+				result = checker > 0.5 ? next_color : result;
+			}
+		}
+		return result.rgb;
 	} else {
-		// Gradient (weight-aware)
-		return mix(sample_palette_entry(slot, i0), sample_palette_entry(slot, i1), smoothstep(0.0, 1.0, t)).rgb;
+		// Gradient: weighted soft color bands. Slider weights define coverage; edges feather into neighbors.
+		vec4 accum_color = vec4(0.0);
+		float accum_weight = 0.0;
+		float band_start = 0.0;
+		for (int i = 0; i < 8; i++) {
+			if (i >= color_count) break;
+			float wi = ws[i];
+			float band_end = band_start + wi;
+			if (wi > 0.0001) {
+				float left_width = (i == 0) ? 0.0 : max(min(ws[i - 1], wi) * 0.75, total * 0.004);
+				float right_width = (i == color_count - 1) ? 0.0 : max(min(wi, ws[i + 1]) * 0.75, total * 0.004);
+				float left_mask = (i == 0) ? 1.0 : smoothstep(band_start - left_width, band_start + left_width, x);
+				float right_mask = (i == color_count - 1) ? 1.0 : 1.0 - smoothstep(band_end - right_width, band_end + right_width, x);
+				float mask = max(left_mask * right_mask, 0.0);
+				accum_color += sample_palette_entry(slot, i) * mask;
+				accum_weight += mask;
+			}
+			band_start = band_end;
+		}
+		if (accum_weight > 0.0001) return (accum_color / accum_weight).rgb;
+		return sample_palette_entry(slot, i0).rgb;
 	}
 }
 
@@ -272,7 +326,6 @@ void vertex() {
 
 void fragment() {
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
-	vec4 grass_tex = texture(grass_texture_1, UV);
 
 	vec3 grass_color = v_grass_color;
 	int tex_id = 1;
@@ -282,19 +335,35 @@ void fragment() {
 	else if (instance_sprite_id > 0.3) tex_id = 3;
 	else if (instance_sprite_id > 0.1) tex_id = 2;
 
+	// Sample the appropriate grass texture. Prefer Texture2DArray if available.
+	vec4 grass_tex = vec4(0.0);
+	if (use_grass_tex_array) {
+		float layer = float(clamp(tex_id - 1, 0, 5));
+		grass_tex = texture(vc_grass_tex_array, vec3(UV, layer));
+	} else {
+		if (tex_id == 1) grass_tex = texture(grass_texture_1, UV);
+		else if (tex_id == 2) grass_tex = texture(grass_texture_2, UV);
+		else if (tex_id == 3) grass_tex = texture(grass_texture_3, UV);
+		else if (tex_id == 4) grass_tex = texture(grass_texture_4, UV);
+		else if (tex_id == 5) grass_tex = texture(grass_texture_5, UV);
+		else if (tex_id == 6) grass_tex = texture(grass_texture_6, UV);
+	}
 
 	ALBEDO = grass_color;
 
-	if (global_noise_strength > 0.0) {
+	vec3 floor_noise = _palette_floor_noise_settings(tex_id - 1);
+	float floor_noise_strength = clamp(floor_noise.r, 0.0, 1.0) * step(0.5, floor_noise.b);
+	float floor_noise_scale = clamp(floor_noise.g, 0.001, 1.0);
+	if (floor_noise_strength > 0.0) {
 		vec2 scroll = vec2(0.0);
 		if (global_noise_scroll > 0.0) {
 			vec2 dir = normalize(wind_direction);
 			scroll = dir * TIME * wind_speed * 3.0 * global_noise_scroll;
 		}
-		vec2 uv = fract((world_origin.xz + scroll) * global_noise_scale);
+		vec2 uv = fract((world_origin.xz + scroll) * floor_noise_scale);
 		float gn = texture(global_noise_texture, uv).r;
 		// Centered multiplier: darkens and brightens around 1.0.
-		float mult = mix(1.0 - global_noise_strength, 1.0 + global_noise_strength, clamp(gn, 0.0, 1.0));
+		float mult = mix(1.0 - floor_noise_strength, 1.0 + floor_noise_strength, clamp(gn, 0.0, 1.0));
 		ALBEDO *= max(mult, 0.0);
 	}
 
@@ -302,18 +371,23 @@ void fragment() {
 	if (is_merge_round && wall_threshold <= 0.0)
 		w_threshold -= 1.5;
 	if (dot(vertex_normal, vec3(0.0, 1.0, 0.0)) > w_threshold) {
-		if (tex_id == 2) {
-			ALPHA = use_grass_tex_2 ? texture(grass_texture_2, UV).a : 0.0;
-		} else if (tex_id == 3) {
-			ALPHA = use_grass_tex_3 ? texture(grass_texture_3, UV).a : 0.0;
-		} else if (tex_id == 4) {
-			ALPHA = use_grass_tex_4 ? texture(grass_texture_4, UV).a : 0.0;
-		} else if (tex_id == 5) {
-			ALPHA = use_grass_tex_5 ? texture(grass_texture_5, UV).a : 0.0;
-		} else if (tex_id == 6) {
-			ALPHA = use_grass_tex_6 ? texture(grass_texture_6, UV).a : 0.0;
-		} else {
+		// Alpha comes from selected layer; if using array we already sampled the correct layer.
+		if (use_grass_tex_array) {
 			ALPHA = grass_tex.a;
+		} else {
+			if (tex_id == 2) {
+				ALPHA = use_grass_tex_2 ? texture(grass_texture_2, UV).a : 0.0;
+			} else if (tex_id == 3) {
+				ALPHA = use_grass_tex_3 ? texture(grass_texture_3, UV).a : 0.0;
+			} else if (tex_id == 4) {
+				ALPHA = use_grass_tex_4 ? texture(grass_texture_4, UV).a : 0.0;
+			} else if (tex_id == 5) {
+				ALPHA = use_grass_tex_5 ? texture(grass_texture_5, UV).a : 0.0;
+			} else if (tex_id == 6) {
+				ALPHA = use_grass_tex_6 ? texture(grass_texture_6, UV).a : 0.0;
+			} else {
+				ALPHA = grass_tex.a;
+			}
 		}
 	} else {
 		ALPHA = 0.0;
@@ -338,7 +412,7 @@ void light() {
 		toon_light = NdotL * 0.3;
 	}
 
-	toon_light *= ATTENUATION;
+	toon_light = clamp(toon_light, 0.0, 1.0);
 	vec3 light_color = mix(shadow_color.rgb, LIGHT_COLOR.rgb, toon_light);
-	DIFFUSE_LIGHT += light_color;
+	DIFFUSE_LIGHT += light_color * ATTENUATION;
 }

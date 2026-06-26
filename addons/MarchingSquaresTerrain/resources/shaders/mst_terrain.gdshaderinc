@@ -11,22 +11,25 @@ group_uniforms Visuals.Palette;
 // - palette_colors_tex:  8 x 256, RGBA (float).   x=color idx (0..7), y=slot (0..255)
 // - palette_weights_tex: 8 x 256, R in [0..1].    x=color idx (0..7), y=slot (0..255)
 // - palette_meta_tex:    1 x 256, RGBA8 encoded:  r=count(0..8), g=blend_mode(0..3),
-//                          b=has_outline(0/1), a=outline_mode(0/1), each stored as 0..255
+//                          b/a reserved, each stored as 0..255
 // - slot_tex_index_tex:  1 x 256, R8 encoded:    r=base_texture_index(0..15) stored as 0..255
 uniform sampler2D palette_colors_tex : filter_nearest;
 uniform sampler2D palette_weights_tex : filter_nearest;
 uniform sampler2D palette_meta_tex : filter_nearest;
 uniform sampler2D slot_tex_index_tex : filter_nearest;
-// Per-slot outline widths + roughness (width in .r, roughness in .g).
-uniform sampler2D palette_outline_width_tex : filter_nearest;
-
-// Legacy global outline width (kept for backwards-compat / inspector-only tweaking).
-uniform float outline_width : hint_range(0.25, 32.0, 0.25) = 6.0;
+// Per-slot surface settings: roughness=.r, wetness_enabled=.g, wetness_mode=.b.
+uniform sampler2D palette_surface_settings_tex : filter_nearest;
+// Per-slot shared global-noise settings: strength=.r, scale=.g, enabled=.b.
+uniform sampler2D palette_floor_noise_tex : filter_nearest;
+uniform sampler2D palette_wall_noise_tex : filter_nearest;
 
 group_uniforms;
 
 group_uniforms Visuals.Vertex_Painting;
 uniform sampler2DArray vc_tex_array : source_color, filter_nearest;
+uniform sampler2DArray vc_normal_array : filter_linear;
+uniform bool use_normal_array = false;
+uniform float normal_map_strength : hint_range(0.0, 2.0, 0.01) = 1.0;
 group_uniforms;
 
 group_uniforms Visuals.Texture_Scales;
@@ -111,6 +114,10 @@ float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
 
+float hash3(vec3 p) {
+	return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+}
+
 vec2 _mst_surface_plane_uv(vec3 wpos, vec3 n) {
 	vec3 nn = normalize(n);
 	// Pick an "up" that isn't parallel to the normal, so cross() is stable.
@@ -118,6 +125,14 @@ vec2 _mst_surface_plane_uv(vec3 wpos, vec3 n) {
 	vec3 t = normalize(cross(up, nn));
 	vec3 b = cross(nn, t);
 	return vec2(dot(wpos, t), dot(wpos, b));
+}
+
+vec3 _mst_tangent_normal_to_surface(vec3 ts_normal, vec3 n) {
+	vec3 nn = normalize(n);
+	vec3 up = (abs(nn.y) < 0.999) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+	vec3 t = normalize(cross(up, nn));
+	vec3 b = cross(nn, t);
+	return normalize(t * ts_normal.x + b * ts_normal.y + nn * ts_normal.z);
 }
 
 vec2 _mst_blend_mask_uv(vec3 wpos, vec2 world_xz, vec3 n) {
@@ -277,36 +292,76 @@ int _palette_blend_mode(int slot) {
 	return int(round(_palette_meta(slot).g * 255.0));
 }
 
-int _palette_has_outline(int slot) {
-	return int(round(_palette_meta(slot).b * 255.0));
-}
-
-int _palette_outline_mode(int slot) {
-	return int(round(_palette_meta(slot).a * 255.0));
-}
-
-float _palette_outline_width(int slot) {
-	slot = clamp(slot, 0, 255);
-	float v = (float(slot) + 0.5) / 256.0;
-	return max(texture(palette_outline_width_tex, vec2(0.5, v)).r, 0.25);
-}
-
 float _palette_roughness(int slot) {
 	slot = clamp(slot, 0, 255);
 	float v = (float(slot) + 0.5) / 256.0;
-	return clamp(texture(palette_outline_width_tex, vec2(0.5, v)).g, 0.0, 1.0);
+	return clamp(texture(palette_surface_settings_tex, vec2(0.5, v)).r, 0.0, 1.0);
 }
 
 float _palette_wet_enabled(int slot) {
 	slot = clamp(slot, 0, 255);
 	float v = (float(slot) + 0.5) / 256.0;
-	return texture(palette_outline_width_tex, vec2(0.5, v)).b;
+	return texture(palette_surface_settings_tex, vec2(0.5, v)).g;
 }
 
 int _palette_wet_mode(int slot) {
 	slot = clamp(slot, 0, 255);
 	float v = (float(slot) + 0.5) / 256.0;
-	return int(round(clamp(texture(palette_outline_width_tex, vec2(0.5, v)).a, 0.0, 1.0)));
+	return int(round(clamp(texture(palette_surface_settings_tex, vec2(0.5, v)).b, 0.0, 1.0)));
+}
+
+vec3 _palette_noise_settings(int slot, bool floor_surface) {
+	slot = clamp(slot, 0, 255);
+	float v = (float(slot) + 0.5) / 256.0;
+	if (floor_surface) {
+		return texture(palette_floor_noise_tex, vec2(0.5, v)).rgb;
+	}
+	return texture(palette_wall_noise_tex, vec2(0.5, v)).rgb;
+}
+
+vec2 _mixed_noise_settings(bool floor_surface) {
+	if (use_hard_textures) {
+		int hard_slot = (blend_mode == 2) ? material_index : int(round(mat_indices.x));
+		vec3 hard_noise = _palette_noise_settings(hard_slot, floor_surface);
+		return vec2(clamp(hard_noise.r, 0.0, 1.0) * step(0.5, hard_noise.b), max(hard_noise.g, 0.001));
+	}
+
+	int mat_a = int(round(mat_indices.x));
+	int mat_b = int(round(mat_indices.y));
+	int mat_c = int(round(mat_indices.z));
+
+	float weight_a = max(0.0, mat_weights.x);
+	float weight_b = max(0.0, mat_weights.y);
+	float weight_c = max(0.0, 1.0 - weight_a - weight_b);
+	float weight_sum = weight_a + weight_b + weight_c;
+	if (weight_sum > 0.001) {
+		weight_a /= weight_sum;
+		weight_b /= weight_sum;
+		weight_c /= weight_sum;
+	}
+
+	vec3 noise_a = _palette_noise_settings(mat_a, floor_surface);
+	vec3 noise_b = _palette_noise_settings(mat_b, floor_surface);
+	vec3 noise_c = _palette_noise_settings(mat_c, floor_surface);
+	float enabled_a = step(0.5, noise_a.b);
+	float enabled_b = step(0.5, noise_b.b);
+	float enabled_c = step(0.5, noise_c.b);
+	float enabled_weight = enabled_a * weight_a + enabled_b * weight_b + enabled_c * weight_c;
+	if (enabled_weight <= 0.0001) {
+		return vec2(0.0, max(global_noise_scale, 0.001));
+	}
+
+	float strength = (
+		clamp(noise_a.r, 0.0, 1.0) * enabled_a * weight_a
+		+ clamp(noise_b.r, 0.0, 1.0) * enabled_b * weight_b
+		+ clamp(noise_c.r, 0.0, 1.0) * enabled_c * weight_c
+	) / enabled_weight;
+	float scale = (
+		max(noise_a.g, 0.001) * enabled_a * weight_a
+		+ max(noise_b.g, 0.001) * enabled_b * weight_b
+		+ max(noise_c.g, 0.001) * enabled_c * weight_c
+	) / enabled_weight;
+	return vec2(strength * enabled_weight, scale);
 }
 
 vec4 sample_palette_entry(int slot, int color_idx) {
@@ -335,19 +390,20 @@ vec4 get_palette_color(int tex_idx, vec2 world_xz) {
 		return sample_palette_entry(tex_idx, 0);
 
 	int mode = _palette_blend_mode(tex_idx);
+	bool gradient_mode = mode != 1 && mode != 2 && mode != 3;
 
 	float n = 0.0;
 	// Internal remap for palette blending: fixed higher-frequency sampling + inverted.
 	// This keeps the UI Global Noise settings independent of palette blending behavior.
-	float palette_gn_scale = 0.002;
-	vec2 scroll = vec2(0.0);
-	if (global_noise_scroll > 0.0) {
-		vec2 dir = normalize(wind_direction);
-		scroll = dir * TIME * wind_speed * 3.0 * global_noise_scroll;
-	}
-	vec2 uv = fract((world_xz + scroll) * palette_gn_scale);
+	float palette_gn_scale = gradient_mode ? 0.014 : 0.008;
+	vec2 uv = fract(world_xz * palette_gn_scale);
 	n = 1.0 - texture(global_noise_texture, uv).r;
-	n = smoothstep(0.0, 1.0, n);
+	if (gradient_mode) {
+		float centered = (clamp(n, 0.0, 1.0) - 0.5) * 2.0;
+		n = clamp(sign(centered) * pow(abs(centered), 0.55) * 0.5 + 0.5, 0.0, 1.0);
+	} else {
+		n = smoothstep(0.0, 1.0, n);
+	}
 
 	// Weighted distribution (values are normalized per slot).
 	float ws[8];
@@ -389,65 +445,71 @@ vec4 get_palette_color(int tex_idx, vec2 world_xz) {
 	if (w0 > 0.00001) t = clamp((x - start) / w0, 0.0, 1.0);
 
 	if (mode == 1) {
-		// Retro: hard snap
+		// Retro: hard snap by weighted ownership.
 		return sample_palette_entry(tex_idx, i0);
 
 	} else if (mode == 2) {
-		// Dithered (weight-aware)
-		// Use stable world-XZ on floors; surface-plane UV on walls/steep slopes to avoid axis-aligned striping.
-		vec2 uv_mask = _mst_blend_mask_uv(world_pos, world_xz, vertex_normal);
-		vec2 dither_coord = floor(uv_mask * 8.0);
-		float dither = hash(dither_coord);
-		float sel = step(dither, t);
-		return mix(sample_palette_entry(tex_idx, i0), sample_palette_entry(tex_idx, i1), sel);
+		// Dithered: weights own area; only non-zero color boundaries dither.
+		vec4 result = sample_palette_entry(tex_idx, i0);
+		float boundary = 0.0;
+		float transition = max(total * 0.06, 0.0001);
+		vec3 dither_coord = floor(world_pos * 8.0);
+		float dither = hash3(dither_coord);
+		for (int i = 0; i < 7; i++) {
+			if (i >= color_count - 1) break;
+			boundary += ws[i];
+			if (ws[i] <= 0.0001 || ws[i + 1] <= 0.0001) continue;
+			float blend_t = smoothstep(boundary - transition, boundary + transition, x);
+			float sel = step(dither, blend_t);
+			result = mix(result, sample_palette_entry(tex_idx, i + 1), sel);
+		}
+		return result;
 
 	} else if (mode == 3) {
-		// Stipple (weight-aware)
-		// Checker should live in the *surface plane* so it stays checker-like on 8-way diagonals,
-		// instead of collapsing into world-axis stripes.
-		float seam = 0.05;
-		if (t < 0.5 - seam) {
-			return sample_palette_entry(tex_idx, i0);
-		} else if (t > 0.5 + seam) {
-			return sample_palette_entry(tex_idx, i1);
-		} else {
-			vec3 nn = normalize(vertex_normal);
-			float upness = abs(nn.y);
-
-			// Floors: use stable world-XZ so the checker doesn't warp with interpolated normals.
-			// Walls/steep slopes: use surface-plane UV so diagonals don't collapse into stripes.
-			vec2 p;
-			if (upness > 0.85) {
-				p = floor(world_xz * 4.0);
-			} else {
-				vec2 puv = _mst_surface_plane_uv(world_pos, vertex_normal);
-				p = floor(puv * 4.0);
+		// Stipple: weights own area; only non-zero color boundaries checker/stipple.
+		vec4 result = sample_palette_entry(tex_idx, i0);
+		float boundary = 0.0;
+		float transition = max(total * 0.06, 0.0001);
+		float seam = 0.08;
+		vec3 checker_coord = floor(world_pos * 4.0);
+		float checker = mod(checker_coord.x + checker_coord.y + checker_coord.z, 2.0);
+		for (int i = 0; i < 7; i++) {
+			if (i >= color_count - 1) break;
+			boundary += ws[i];
+			if (ws[i] <= 0.0001 || ws[i + 1] <= 0.0001) continue;
+			float blend_t = smoothstep(boundary - transition, boundary + transition, x);
+			vec4 next_color = sample_palette_entry(tex_idx, i + 1);
+			if (blend_t > 0.5 + seam) {
+				result = next_color;
+			} else if (blend_t >= 0.5 - seam) {
+				result = checker > 0.5 ? next_color : result;
 			}
-			float checker = mod(p.x + p.y, 2.0);
-			return checker > 0.5 ? sample_palette_entry(tex_idx, i1) : sample_palette_entry(tex_idx, i0);
 		}
+		return result;
 
 	} else {
-		// Gradient (weight-aware)
-		return mix(sample_palette_entry(tex_idx, i0), sample_palette_entry(tex_idx, i1), smoothstep(0.0, 1.0, t));
+		// Gradient: weighted soft color bands. Slider weights define coverage; edges feather into neighbors.
+		vec4 accum_color = vec4(0.0);
+		float accum_weight = 0.0;
+		float band_start = 0.0;
+		for (int i = 0; i < 8; i++) {
+			if (i >= color_count) break;
+			float wi = ws[i];
+			float band_end = band_start + wi;
+			if (wi > 0.0001) {
+				float left_width = (i == 0) ? 0.0 : max(min(ws[i - 1], wi) * 0.75, total * 0.004);
+				float right_width = (i == color_count - 1) ? 0.0 : max(min(wi, ws[i + 1]) * 0.75, total * 0.004);
+				float left_mask = (i == 0) ? 1.0 : smoothstep(band_start - left_width, band_start + left_width, x);
+				float right_mask = (i == color_count - 1) ? 1.0 : 1.0 - smoothstep(band_end - right_width, band_end + right_width, x);
+				float mask = max(left_mask * right_mask, 0.0);
+				accum_color += sample_palette_entry(tex_idx, i) * mask;
+				accum_weight += mask;
+			}
+			band_start = band_end;
+		}
+		if (accum_weight > 0.0001) return accum_color / accum_weight;
+		return sample_palette_entry(tex_idx, i0);
 	}
-}
-
-vec4 get_outline_palette_color(int slot) {
-	slot = clamp(slot, 0, 255);
-	int count = _palette_count(slot);
-	if (count <= 0) return vec4(0.392, 0.471, 0.318, 1.0);
-
-	int mode = _palette_outline_mode(slot);
-	if (mode == 1) {
-		// Use last palette color (Color N)
-		return sample_palette_entry(slot, max(count - 1, 0));
-	}
-
-	// Darken first palette color (Color 1)
-	vec4 c = sample_palette_entry(slot, 0);
-	c.rgb *= 0.5;
-	return c;
 }
 
 int _slot_base_texture_index(int slot) {
@@ -458,6 +520,7 @@ int _slot_base_texture_index(int slot) {
 
 vec4 sample_texture_layer(int slot, vec2 uv) {
 	slot = clamp(slot, 0, 255);
+	uv = fract(uv);
 	// New behavior: sample the Texture2DArray directly using the slot as the layer index.
 	// Keep legacy VOID slot behavior intact.
 	if (slot == 15) return texture(vc_tex_array, vec3(uv, 15.0));
@@ -478,8 +541,56 @@ vec4 sample_material_by_index(int index, vec2 base_uv) {
 	vec4 tex = sample_texture_layer(index, uv);
 	if (index == 15) return tex;
 	vec4 palette = get_palette_color(index, world_pos.xz);
-	// Blend between texture and palette color using palette.a as blend factor
+	// Heuristic: prefer assigned texture when it contains meaningful data (not a white placeholder).
+	// When a real texture exists, blend the palette additively (tint/multiply) rather than fully replacing the texture.
+	bool tex_has_content = (tex.a > 0.001) && (abs(tex.r - 1.0) > 0.001 || abs(tex.g - 1.0) > 0.001 || abs(tex.b - 1.0) > 0.001);
+	if (tex_has_content) {
+		// Apply palette as a tint multiplier controlled by palette.a (0..1).
+		float pal_alpha = clamp(palette.a, 0.0, 1.0);
+		vec3 tinted = mix(tex.rgb, tex.rgb * palette.rgb, pal_alpha);
+		return vec4(tinted, tex.a);
+	}
+	// Fallback: if texture is effectively empty/placeholder, blend with palette as before.
 	return mix(tex, palette, clamp(palette.a, 0.0, 1.0));
+}
+
+vec3 sample_normal_by_index(int index, vec2 base_uv) {
+	float scale = get_texture_scale(index);
+	vec2 uv = fract(base_uv * scale);
+	vec3 n = texture(vc_normal_array, vec3(uv, float(clamp(index, 0, 255)))).rgb * 2.0 - 1.0;
+	if (dot(n, n) < 0.001) {
+		return vec3(0.0, 0.0, 1.0);
+	}
+	return normalize(n);
+}
+
+vec3 blend_slot_normals(vec2 base_uv) {
+	if (use_hard_textures) {
+		int hard_idx = (blend_mode == 2) ? material_index : int(round(mat_indices.x));
+		return sample_normal_by_index(hard_idx, base_uv);
+	}
+
+	int mat_a = int(round(mat_indices.x));
+	int mat_b = int(round(mat_indices.y));
+	int mat_c = int(round(mat_indices.z));
+
+	float weight_a = max(0.0, mat_weights.x);
+	float weight_b = max(0.0, mat_weights.y);
+	float weight_c = max(0.0, 1.0 - weight_a - weight_b);
+	float weight_sum = weight_a + weight_b + weight_c;
+	if (weight_sum > 0.001) {
+		weight_a /= weight_sum;
+		weight_b /= weight_sum;
+		weight_c /= weight_sum;
+	}
+
+	vec3 n = sample_normal_by_index(mat_a, base_uv) * weight_a
+		+ sample_normal_by_index(mat_b, base_uv) * weight_b
+		+ sample_normal_by_index(mat_c, base_uv) * weight_c;
+	if (dot(n, n) < 0.001) {
+		return vec3(0.0, 0.0, 1.0);
+	}
+	return normalize(n);
 }
 
 void calculate_blend_weights(vec4 vc0, vec4 vc1, float sharpness, out float weights[16]) {
@@ -610,16 +721,16 @@ void fragment() {
 	vec3 wall_color;
 
 	vec2 floor_uv = vec2(0.0);
-	int edge_mat_a = -1;
-	int edge_mat_b = -1;
-	float edge_weight_a = 0.0;
-	float edge_weight_b = 0.0;
 	float out_roughness = 1.0;
 	float out_wet_enabled = 0.0;
 	int out_wet_mode = 0;
 
 	if (is_floor) {
-		floor_uv = UV2 * tiling_factor_floor;
+		vec2 floor_world_tile = cell_size * vec2(float(chunk_size.x - 1), float(chunk_size.z - 1));
+		floor_uv = vec2(
+			world_pos.x / max(floor_world_tile.x, 0.0001),
+			world_pos.z / max(floor_world_tile.y, 0.0001)
+		);
 		int alpha_mat = 15;
 
 		if (use_hard_textures) {
@@ -654,11 +765,6 @@ void fragment() {
 				weight_c /= weight_sum;
 			}
 
-			// Keep a "clean" copy of weights for outlines (pre-jitter), so outlines can stay stable.
-			float weight_a_clean = weight_a;
-			float weight_b_clean = weight_b;
-			float weight_c_clean = weight_c;
-
 			if (blend_noise_strength > 0.0) {
 				// Add a subtle waviness to material boundaries without disturbing solid interiors.
 				float max_w = max(weight_a, max(weight_b, weight_c));
@@ -677,19 +783,14 @@ void fragment() {
 			}
 
 			if (blend_sharpness > 0.0) {
-				float power = 1.0 + blend_sharpness;
-
+				// Use linear weighting by default; keep hook for future sharpness but set neutral for now
+				float power = 1.0;
 				weight_a = pow(weight_a, power);
 				weight_b = pow(weight_b, power);
 				weight_c = pow(weight_c, power);
 				float total = weight_a + weight_b + weight_c;
 				if (total > 0.001) { weight_a /= total; weight_b /= total; weight_c /= total; }
-
-				weight_a_clean = pow(weight_a_clean, power);
-				weight_b_clean = pow(weight_b_clean, power);
-				weight_c_clean = pow(weight_c_clean, power);
-				float total_clean = weight_a_clean + weight_b_clean + weight_c_clean;
-				if (total_clean > 0.001) { weight_a_clean /= total_clean; weight_b_clean /= total_clean; weight_c_clean /= total_clean; }
+			
 			}
 
 			// Top materials for blending/alpha (uses possibly-jittered weights).
@@ -711,31 +812,6 @@ void fragment() {
 				top2_w = weight_c;
 			}
 
-			// Top materials for outlines (optionally uses jittered weights).
-			int top1_idx_clean = mat_a;
-			int top2_idx_clean = mat_b;
-			float top1_w_clean = weight_a_clean;
-			float top2_w_clean = weight_b_clean;
-			if (top2_w_clean > top1_w_clean) {
-				int ti = top1_idx_clean; top1_idx_clean = top2_idx_clean; top2_idx_clean = ti;
-				float tw = top1_w_clean; top1_w_clean = top2_w_clean; top2_w_clean = tw;
-			}
-			if (weight_c_clean > top1_w_clean) {
-				top2_idx_clean = top1_idx_clean;
-				top2_w_clean = top1_w_clean;
-				top1_idx_clean = mat_c;
-				top1_w_clean = weight_c_clean;
-			} else if (weight_c_clean > top2_w_clean) {
-				top2_idx_clean = mat_c;
-				top2_w_clean = weight_c_clean;
-			}
-
-			// Outlines always use clean (non-jittered) weights.
-			edge_mat_a = top1_idx_clean;
-			edge_mat_b = top2_idx_clean;
-			edge_weight_a = top1_w_clean;
-			edge_weight_b = top2_w_clean;
-
 			floor_color = sample_material_by_index(mat_a, floor_uv) * weight_a
 						+ sample_material_by_index(mat_b, floor_uv) * weight_b
 						+ sample_material_by_index(mat_c, floor_uv) * weight_c;
@@ -752,8 +828,9 @@ void fragment() {
 		ALPHA = (alpha_mat == 15) ? 0.0 : 1.0;
 	}
 	else {
-		vec2 uv_x = (vertex_pos.zy / cell_size.yx) * tiling_factor_wall;
-		vec2 uv_z = (vertex_pos.xy / cell_size) * tiling_factor_wall;
+		float wall_u_scale = max(cell_size.x * float(chunk_size.x - 1), 0.0001);
+		float wall_v_scale = max(cell_size.x * float(chunk_size.y - 1), 0.0001);
+		vec2 wall_uv = _mst_surface_plane_uv(world_pos, vertex_normal) / vec2(wall_u_scale, wall_v_scale);
 
 		int mat_a = int(round(mat_indices.x));
 		int mat_b = int(round(mat_indices.y));
@@ -788,7 +865,8 @@ void fragment() {
 		}
 
 		if (blend_sharpness > 0.0) {
-			float power = 1.0 + blend_sharpness;
+			// Use linear weighting by default; keep hook for future sharpness but set neutral for now
+			float power = 1.0;
 			weight_a = pow(weight_a, power);
 			weight_b = pow(weight_b, power);
 			weight_c = pow(weight_c, power);
@@ -806,15 +884,12 @@ void fragment() {
 		out_wet_enabled = _palette_wet_enabled(dom_mat);
 		out_wet_mode = _palette_wet_mode(dom_mat);
 
-		vec4 wall_mat_x = sample_material_by_index(mat_a, uv_x) * weight_a
-						+ sample_material_by_index(mat_b, uv_x) * weight_b
-						+ sample_material_by_index(mat_c, uv_x) * weight_c;
-		vec4 wall_mat_z = sample_material_by_index(mat_a, uv_z) * weight_a
-						+ sample_material_by_index(mat_b, uv_z) * weight_b
-						+ sample_material_by_index(mat_c, uv_z) * weight_c;
+		vec4 wall_mat = sample_material_by_index(mat_a, wall_uv) * weight_a
+					+ sample_material_by_index(mat_b, wall_uv) * weight_b
+					+ sample_material_by_index(mat_c, wall_uv) * weight_c;
 
-		ALBEDO = wall_mat_x.rgb * tri_weights.x + wall_mat_z.rgb * tri_weights.z;
-		ALPHA = wall_mat_x.a;
+		ALBEDO = wall_mat.rgb;
+		ALPHA = wall_mat.a;
 	}
 
 	float blend_noise = get_world_noise(vertex_pos.xyz, rl_noise_tile_size);
@@ -852,39 +927,10 @@ void fragment() {
 	}
 
 
-	// Material outlines ("land foam" style). Uses weight equality band, so it doesn't widen with brush falloff.
-	if (is_floor) {
-		if (edge_mat_a >= 0 && edge_mat_b >= 0
-				&& edge_mat_a != edge_mat_b
-				&& edge_mat_a >= 0 && edge_mat_a < 256 && edge_mat_b >= 0 && edge_mat_b < 256
-				&& edge_weight_b > 0.001) {
-
-			int ha = _palette_has_outline(edge_mat_a);
-			int hb = _palette_has_outline(edge_mat_b);
-			int outline_slot = -1;
-			if (ha == 1 && hb == 0) outline_slot = edge_mat_a;
-			else if (hb == 1 && ha == 0) outline_slot = edge_mat_b;
-			else if (ha == 1 && hb == 1) outline_slot = min(edge_mat_a, edge_mat_b);
-
-			if (outline_slot >= 0) {
-				float min_w = min(edge_weight_a, edge_weight_b);
-				float diff = edge_weight_a - edge_weight_b;
-				float d = abs(diff);
-				float fw = fwidth(diff);
-				float band = max(fw * _palette_outline_width(outline_slot), 0.0001);
-				float mask = 1.0 - smoothstep(0.0, band, d);
-				mask *= smoothstep(0.0, 0.15, min_w);
-
-
-				vec4 tint = get_outline_palette_color(outline_slot);
-				vec3 outline_rgb = sample_material_by_index_tint(outline_slot, floor_uv, tint).rgb;
-				ALBEDO = mix(ALBEDO, outline_rgb, mask);
-			}
-		}
-	}
-
-
-	if (global_noise_strength > 0.0) {
+	vec2 slot_noise = _mixed_noise_settings(is_floor);
+	float slot_noise_strength = slot_noise.x;
+	float slot_noise_scale = slot_noise.y;
+	if (slot_noise_strength > 0.0) {
 		vec2 scroll = vec2(0.0);
 		if (global_noise_scroll > 0.0) {
 			vec2 dir = normalize(wind_direction);
@@ -892,16 +938,16 @@ void fragment() {
 		}
 
 		// Floors: XZ projection. Walls: use ZY or XY (blended by wall orientation) to avoid streaking.
-		vec2 uv_floor = fract((world_pos.xz + scroll) * global_noise_scale);
-		vec2 uv_x = fract((vec2(world_pos.z + scroll.y, world_pos.y)) * global_noise_scale);
-		vec2 uv_z = fract((vec2(world_pos.x + scroll.x, world_pos.y)) * global_noise_scale);
+		vec2 uv_floor = fract((world_pos.xz + scroll) * slot_noise_scale);
+		vec2 uv_x = fract((vec2(world_pos.z + scroll.y, world_pos.y)) * slot_noise_scale);
+		vec2 uv_z = fract((vec2(world_pos.x + scroll.x, world_pos.y)) * slot_noise_scale);
 
 		float gn_floor = texture(global_noise_texture, uv_floor).r;
 		float gn_wall = texture(global_noise_texture, uv_x).r * tri_weights.x + texture(global_noise_texture, uv_z).r * tri_weights.z;
 		float gn = is_floor ? gn_floor : gn_wall;
 
 		// Centered multiplier: darkens and brightens around 1.0.
-		float mult = mix(1.0 - global_noise_strength, 1.0 + global_noise_strength, clamp(gn, 0.0, 1.0));
+		float mult = mix(1.0 - slot_noise_strength, 1.0 + slot_noise_strength, clamp(gn, 0.0, 1.0));
 		ALBEDO *= max(mult, 0.0);
 	}
 
@@ -969,6 +1015,33 @@ void fragment() {
 void light() {
 	vec3 N = NORMAL;
 
+	if (use_normal_array && normal_map_strength > 0.001) {
+		bool is_floor = (UV.x < 1.5) && (dot(vertex_normal, vec3(0.0, 1.0, 0.0)) > wall_threshold);
+		vec2 normal_uv;
+		if (is_floor) {
+			vec2 floor_world_tile = cell_size * vec2(float(chunk_size.x - 1), float(chunk_size.z - 1));
+			normal_uv = vec2(
+				world_pos.x / max(floor_world_tile.x, 0.0001),
+				world_pos.z / max(floor_world_tile.y, 0.0001)
+			);
+		} else {
+			float wall_u_scale = max(cell_size.x * float(chunk_size.x - 1), 0.0001);
+			float wall_v_scale = max(cell_size.x * float(chunk_size.y - 1), 0.0001);
+			normal_uv = _mst_surface_plane_uv(world_pos, vertex_normal) / vec2(wall_u_scale, wall_v_scale);
+		}
+
+		vec3 nts = blend_slot_normals(normal_uv);
+		nts = normalize(vec3(nts.xy * normal_map_strength, nts.z));
+		vec3 n_local;
+		if (is_floor) {
+			n_local = normalize(vec3(nts.x, nts.z, nts.y));
+		} else {
+			n_local = _mst_tangent_normal_to_surface(nts, vertex_normal);
+		}
+		vec3 n_vs = normalize(mat3(VIEW_MATRIX) * n_local);
+		N = n_vs;
+	}
+
 	// Optional detail normal to break up lighting on flat surfaces.
 	if (detail_normal_strength > 0.001) {
 		// Treat wall vertices explicitly via UV sentinel (walls use UV=(2,2)).
@@ -1013,8 +1086,9 @@ void light() {
 		? mix(shadow_intensity, 0.3, stepped)
 		: (NdotL * 0.3);
 
-	float toon_light = toon_weight * ATTENUATION;
-	DIFFUSE_LIGHT += mix(shadow_color.rgb, LIGHT_COLOR.rgb, toon_light);
+	float toon_light = clamp(toon_weight, 0.0, 1.0);
+	vec3 direct_light = mix(shadow_color.rgb, LIGHT_COLOR.rgb, toon_light);
+	DIFFUSE_LIGHT += direct_light * ATTENUATION;
 
 	// Specular (needed so ROUGHNESS actually changes the look).
 	// NOTE: On perfectly flat surfaces (no normal variation) spec can look very uniform.
@@ -1028,8 +1102,7 @@ void light() {
 	float shininess = mix(256.0, 12.0, r);
 	// Wet/glossy surfaces need a broader highlight to read at low resolutions.
 	shininess = mix(shininess, 32.0, wet);
-	// Don't let spec disappear completely in shadow for puddles (stylized "sheen").
-	float spec = pow(NdotH, shininess) * max(NdotL, 0.25);
+	float spec = pow(NdotH, shininess) * NdotL;
 	if (use_cell_shading) {
 		// When wet/glossy, lower the threshold so highlights show up at low resolutions.
 		float th = mix(specular_threshold, 0.08, wet);

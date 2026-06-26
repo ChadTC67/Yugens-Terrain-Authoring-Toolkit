@@ -11,6 +11,8 @@ var current_terrain_node : MarchingSquaresTerrain
 var texture_preset_data : MarchingSquaresTextureList
 var filename_dialog : AcceptDialog
 var filename_input : LineEdit
+var save_path_input : LineEdit
+var include_texture_library_check : CheckBox
 
 
 func _ready() -> void:
@@ -35,6 +37,20 @@ func _create_texture_export_dialog() -> void:
 	filename_input = LineEdit.new()
 	filename_input.placeholder_text = "new_texture_preset"
 	cont.add_child(filename_input)
+
+	var path_label := Label.new()
+	path_label.text = "Save path:"
+	cont.add_child(path_label)
+
+	save_path_input = LineEdit.new()
+	save_path_input.text = PRESET_DIR
+	save_path_input.placeholder_text = PRESET_DIR
+	cont.add_child(save_path_input)
+
+	include_texture_library_check = CheckBox.new()
+	include_texture_library_check.text = "Include Texture Library / Baked Arrays (*)"
+	include_texture_library_check.tooltip_text = "Creates a self-contained preset folder with a texture library snapshot and any baked Texture2DArray resources."
+	cont.add_child(include_texture_library_check)
 	
 	filename_dialog.add_child(cont)
 	
@@ -46,6 +62,8 @@ func _export_to_texture_preset() -> void:
 	texture_preset_data = _get_current_texture_data()
 	
 	filename_input.text = "new_texture_preset"
+	save_path_input.text = PRESET_DIR
+	include_texture_library_check.button_pressed = false
 	
 	filename_dialog.popup_centered(Vector2(400, 150))
 	filename_input.grab_focus()
@@ -63,7 +81,15 @@ func _on_filename_confirmed() -> void:
 	if not dir.dir_exists(PRESET_DIR):
 		dir.make_dir_recursive(PRESET_DIR)
 	
-	var path := PRESET_DIR + filename + ".tres"
+	var save_dir := _normalize_save_dir(save_path_input.text)
+	var include_library := include_texture_library_check != null and include_texture_library_check.button_pressed
+	var path := save_dir + filename + ".tres"
+	if include_library:
+		var preset_folder := save_dir.path_join(filename)
+		var dir_abs := ProjectSettings.globalize_path(preset_folder)
+		if not DirAccess.dir_exists_absolute(dir_abs):
+			DirAccess.make_dir_recursive_absolute(dir_abs)
+		path = preset_folder.path_join(filename + ".tres")
 	
 	if FileAccess.file_exists(path):
 		_show_overwrite_confirmation(path)
@@ -90,9 +116,12 @@ func _show_overwrite_confirmation(path: String) -> void:
 
 func _save_preset(path: String) -> void:
 	var new_tex_preset := MarchingSquaresTexturePreset.new()
+	var include_library := include_texture_library_check != null and include_texture_library_check.button_pressed
 	
 	new_tex_preset.preset_name = filename_input.text
 	new_tex_preset.new_textures = texture_preset_data
+	if not include_library:
+		_strip_texture_resources(new_tex_preset.new_textures)
 	
 	# Copy per-slot names from the currently active preset (if present) so names persist.
 	var src_names : MarchingSquaresTextureNames = TEXTURE_NAMES
@@ -101,49 +130,64 @@ func _save_preset(path: String) -> void:
 	MarchingSquaresTerrainPlugin._ensure_texture_names_resource(src_names)
 	new_tex_preset.new_tex_names = src_names.duplicate(true)
 	
-	# Copy palette/outline settings from the current terrain so the exported preset is a true "look" preset.
-	if current_terrain_node !=  null:
+	# Copy palette and surface settings from the current terrain so the exported preset is a true "look" preset.
+	if current_terrain_node != null:
 		if current_terrain_node.get("slot_color_indices") is Array:
 			new_tex_preset.slot_color_indices = current_terrain_node.slot_color_indices.duplicate(true)
 		if current_terrain_node.get("slot_blend_modes") is Array:
 			new_tex_preset.slot_blend_modes = current_terrain_node.slot_blend_modes.duplicate()
 		if current_terrain_node.get("palette_weights") is Array:
 			new_tex_preset.palette_weights = current_terrain_node.palette_weights.duplicate()
-		if current_terrain_node.get("slot_has_outline") is Array:
-			new_tex_preset.slot_has_outline = current_terrain_node.slot_has_outline.duplicate()
-		if current_terrain_node.get("slot_outline_modes") is Array:
-			new_tex_preset.slot_outline_modes = current_terrain_node.slot_outline_modes.duplicate()
-		if current_terrain_node.get("slot_outline_widths") is Array:
-			new_tex_preset.slot_outline_widths = current_terrain_node.slot_outline_widths.duplicate()
 		if current_terrain_node.get("slot_wet_enabled") is Array:
 			new_tex_preset.slot_wet_enabled = current_terrain_node.slot_wet_enabled.duplicate()
 		if current_terrain_node.get("slot_wet_modes") is Array:
 			new_tex_preset.slot_wet_modes = current_terrain_node.slot_wet_modes.duplicate()
 		if current_terrain_node.get("slot_roughnesses") is Array:
 			new_tex_preset.slot_roughnesses = current_terrain_node.slot_roughnesses.duplicate()
+		if current_terrain_node.get("slot_floor_noise_enabled") is Array:
+			new_tex_preset.slot_floor_noise_enabled = current_terrain_node.slot_floor_noise_enabled.duplicate()
+		if current_terrain_node.get("slot_floor_noise_strengths") is Array:
+			new_tex_preset.slot_floor_noise_strengths = current_terrain_node.slot_floor_noise_strengths.duplicate()
+		if current_terrain_node.get("slot_floor_noise_scales") is Array:
+			new_tex_preset.slot_floor_noise_scales = current_terrain_node.slot_floor_noise_scales.duplicate()
+		if current_terrain_node.get("slot_wall_noise_enabled") is Array:
+			new_tex_preset.slot_wall_noise_enabled = current_terrain_node.slot_wall_noise_enabled.duplicate()
+		if current_terrain_node.get("slot_wall_noise_strengths") is Array:
+			new_tex_preset.slot_wall_noise_strengths = current_terrain_node.slot_wall_noise_strengths.duplicate()
+		if current_terrain_node.get("slot_wall_noise_scales") is Array:
+			new_tex_preset.slot_wall_noise_scales = current_terrain_node.slot_wall_noise_scales.duplicate()
+		if current_terrain_node.get("texture_slots") is Array:
+			new_tex_preset.slot_texture_scales.resize(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS)
+			for i in range(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS):
+				var slot = current_terrain_node.texture_slots[i] if i < current_terrain_node.texture_slots.size() else null
+				new_tex_preset.slot_texture_scales[i] = float(slot.scale) if slot != null else 1.0
 	
 	# If a preset is currently selected, inherit its Global Settings apply flags so exports preserve intent.
-	if current_terrain_node !=  null and current_terrain_node.current_texture_preset != null:
+	if current_terrain_node != null and current_terrain_node.current_texture_preset != null:
 		var src_preset := current_terrain_node.current_texture_preset
-		if src_preset.get("apply_terrain_settings") !=  null:
+		if src_preset.get("apply_terrain_settings") != null:
 			new_tex_preset.apply_terrain_settings = bool(src_preset.apply_terrain_settings)
-		if src_preset.get("apply_chunk_settings") !=  null:
+		if src_preset.get("apply_chunk_settings") != null:
 			new_tex_preset.apply_chunk_settings = bool(src_preset.apply_chunk_settings)
-		if src_preset.get("apply_vertex_painter_settings") !=  null:
+		if src_preset.get("apply_vertex_painter_settings") != null:
 			new_tex_preset.apply_vertex_painter_settings = bool(src_preset.apply_vertex_painter_settings)
-		if src_preset.get("apply_grass_settings") !=  null:
+		if src_preset.get("apply_grass_settings") != null:
 			new_tex_preset.apply_grass_settings = bool(src_preset.apply_grass_settings)
 	
 	# PR1: Do not export terrain/global settings unless explicitly enabled.
 	# This prevents PR2/PR4 keys (wind/global noise/etc.) from leaking into PR1 presets.
-	if new_tex_preset.apply_terrain_settings and current_terrain_node !=  null and current_terrain_node.has_method("_gather_preset_terrain_settings"):
+	if new_tex_preset.apply_terrain_settings and current_terrain_node != null and current_terrain_node.has_method("_gather_preset_terrain_settings"):
 		new_tex_preset.terrain_settings = current_terrain_node._gather_preset_terrain_settings(new_tex_preset)
 	else:
 		new_tex_preset.terrain_settings = {}
+
+	if include_library:
+		_save_texture_library_snapshot(new_tex_preset, path)
+		_copy_baked_arrays_to_preset(new_tex_preset, path)
 	
 	var save_error := ResourceSaver.save(new_tex_preset, path)
 	if save_error == OK:
-		print("Texture preset saved to: " + path)
+		print_verbose("Texture preset saved to: " + path)
 		EditorInterface.get_resource_filesystem().scan()
 	else:
 		push_error("Failed to save texture preset: ", save_error)
@@ -234,13 +278,20 @@ func _get_current_texture_data() -> MarchingSquaresTextureList:
 	# Slot-based grass sprites + has-grass flags (0..255)
 	if current_terrain_node.has_method("_ensure_texture_slots"):
 		current_terrain_node._ensure_texture_slots()
-	if current_terrain_node.get("texture_slots") is Array and current_terrain_node.texture_slots.size() >=  MarchingSquaresTextureList.MAX_TEXTURE_SLOTS:
+	if current_terrain_node.get("texture_slots") is Array and current_terrain_node.texture_slots.size() >= MarchingSquaresTextureList.MAX_TEXTURE_SLOTS:
 		new_texture_list.grass_sprites.resize(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS)
 		new_texture_list.has_grass.resize(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS)
+		new_texture_list.terrain_texture_indices.resize(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS)
 		for i in range(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS):
 			var slot = current_terrain_node.texture_slots[i]
 			new_texture_list.grass_sprites[i] = slot.grass_texture if slot != null else null
 			new_texture_list.has_grass[i] = bool(slot.has_grass) if slot != null else (i < 6)
+			if i == 15:
+				new_texture_list.terrain_texture_indices[i] = 15
+			elif slot != null and slot.get("terrain_texture_index") != null:
+				new_texture_list.terrain_texture_indices[i] = clampi(int(slot.terrain_texture_index), 0, 15)
+			else:
+				new_texture_list.terrain_texture_indices[i] = i if i < 15 else 0
 	else:
 		# Legacy fallback (first 6 only); keep arrays at MAX_TEXTURE_SLOTS.
 		new_texture_list.grass_sprites[0] = current_terrain_node.grass_sprite_tex_1
@@ -257,3 +308,86 @@ func _get_current_texture_data() -> MarchingSquaresTextureList:
 		new_texture_list.has_grass[5] = bool(current_terrain_node.tex6_has_grass)
 	
 	return new_texture_list
+
+
+func _strip_texture_resources(texture_list: MarchingSquaresTextureList) -> void:
+	if texture_list == null:
+		return
+	for i in range(texture_list.terrain_textures.size()):
+		texture_list.terrain_textures[i] = null
+	for i in range(texture_list.grass_sprites.size()):
+		texture_list.grass_sprites[i] = null
+
+
+func _normalize_save_dir(raw_dir: String) -> String:
+	var save_dir := raw_dir.strip_edges().replace("\\", "/")
+	if save_dir.is_empty():
+		save_dir = PRESET_DIR
+	if not save_dir.begins_with("res://"):
+		save_dir = PRESET_DIR
+	if not save_dir.ends_with("/"):
+		save_dir += "/"
+	var dir := DirAccess.open("res://")
+	if not dir.dir_exists(save_dir):
+		dir.make_dir_recursive(save_dir)
+	return save_dir
+
+
+func _copy_resource_file(src_res_path: String, dst_res_path: String) -> bool:
+	if src_res_path.is_empty() or not ResourceLoader.exists(src_res_path):
+		return false
+	var src_abs := ProjectSettings.globalize_path(src_res_path)
+	var dst_abs := ProjectSettings.globalize_path(dst_res_path)
+	var src := FileAccess.open(src_abs, FileAccess.READ)
+	if src == null:
+		push_warning("Failed to read baked array: " + src_res_path)
+		return false
+	var data := src.get_buffer(src.get_length())
+	src.close()
+	var dst := FileAccess.open(dst_abs, FileAccess.WRITE)
+	if dst == null:
+		push_warning("Failed to write baked array: " + dst_res_path)
+		return false
+	dst.store_buffer(data)
+	dst.close()
+	return true
+
+
+func _copy_baked_arrays_to_preset(preset: MarchingSquaresTexturePreset, preset_path: String) -> void:
+	if current_terrain_node == null:
+		return
+	var preset_dir := preset_path.get_base_dir()
+	var baked_dir := preset_dir
+	var dir_abs := ProjectSettings.globalize_path(baked_dir)
+	if not DirAccess.dir_exists_absolute(dir_abs):
+		DirAccess.make_dir_recursive_absolute(dir_abs)
+	var paths := {
+		"albedo": str(current_terrain_node.get("baked_albedo_array_path")) if current_terrain_node.get("baked_albedo_array_path") != null else "",
+		"normal": str(current_terrain_node.get("baked_normal_array_path")) if current_terrain_node.get("baked_normal_array_path") != null else "",
+		"grass": str(current_terrain_node.get("baked_grass_array_path")) if current_terrain_node.get("baked_grass_array_path") != null else "",
+	}
+	var albedo_dst := baked_dir.path_join("baked_albedo_array.res")
+	var normal_dst := baked_dir.path_join("baked_normal_array.res")
+	var grass_dst := baked_dir.path_join("baked_grass_array.res")
+	if _copy_resource_file(paths["albedo"], albedo_dst):
+		preset.baked_albedo_array_path = albedo_dst
+	if _copy_resource_file(paths["normal"], normal_dst):
+		preset.baked_normal_array_path = normal_dst
+	if _copy_resource_file(paths["grass"], grass_dst):
+		preset.baked_grass_array_path = grass_dst
+
+
+func _save_texture_library_snapshot(preset: MarchingSquaresTexturePreset, preset_path: String) -> void:
+	if current_terrain_node == null or not current_terrain_node.has_method("get"):
+		return
+	var lib_res = current_terrain_node.get("texture_library")
+	if lib_res == null or not (lib_res is Resource):
+		return
+	var lib_copy: Resource = lib_res.duplicate(true)
+	var lib_path := preset_path.get_base_dir().path_join("texture_library.tres")
+	var save_error := ResourceSaver.save(lib_copy, lib_path)
+	if save_error == OK:
+		var loaded: Resource = ResourceLoader.load(lib_path)
+		preset.texture_library = loaded if loaded != null else lib_copy
+	else:
+		push_warning("Failed to save texture library snapshot for preset: " + str(save_error))

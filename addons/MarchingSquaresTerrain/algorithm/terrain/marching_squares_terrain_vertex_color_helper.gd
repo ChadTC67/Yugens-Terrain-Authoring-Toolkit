@@ -35,8 +35,8 @@ var chunk
 var cell
 
 
-func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool =  false) -> Dictionary[String, Color]:
-	var colors : Dictionary[String, Color] = {}
+func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool =  false) -> Dictionary:
+	var colors : Dictionary = {}
 	var blend_threshold : float = cell.merge_threshold * BLEND_EDGE_SENSITIVITY # COMMENT: We can tweak the BLEND_EDGE_SENSITIVITY to allow more "agressive" Cliff vs Slope detection
 	var blend_ab : bool = abs(cell.ay-cell.by) < blend_threshold
 	var blend_ac : bool = abs(cell.ay-cell.cy) < blend_threshold
@@ -69,7 +69,8 @@ func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool =  false) ->
 	colors["color_1"] = Color(0, 0, 0, 0) # CUSTOM0.r is set after blend data is calculated.
 	
 	# is_ridge & is_ledge are already calculated above
-	var c_1_val: Color = Color(chunk.grass_mask_map[cell.cell_coords.y*chunk.dimensions.x + cell.cell_coords.x]) # Grass mask
+	var _idx = cell.cell_coords.y * chunk.dimensions.x + cell.cell_coords.x
+	var c_1_val: Color = _safe_color(chunk.grass_mask_map, _idx) # Grass mask
 	c_1_val.g = 1.0 if is_ridge else 0.0
 	c_1_val.b = 1.0 if is_ledge else 0.0
 	
@@ -84,10 +85,10 @@ func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool =  false) ->
 	var w_c = (1.0 - vertex.x) * vertex.z
 	var w_d = vertex.x * vertex.z
 	
-	var wall_a = get_texture_index_from_colors(chunk.wall_color_map_0[base], chunk.wall_color_map_1[base])
-	var wall_b = get_texture_index_from_colors(chunk.wall_color_map_0[base + 1], chunk.wall_color_map_1[base + 1])
-	var wall_c = get_texture_index_from_colors(chunk.wall_color_map_0[base + chunk.dimensions.x], chunk.wall_color_map_1[base + chunk.dimensions.x])
-	var wall_d = get_texture_index_from_colors(chunk.wall_color_map_0[base + chunk.dimensions.x + 1], chunk.wall_color_map_1[base + chunk.dimensions.x + 1])
+	var wall_a = get_texture_index_from_colors(_safe_color(chunk.wall_color_map_0, base), _safe_color(chunk.wall_color_map_1, base))
+	var wall_b = get_texture_index_from_colors(_safe_color(chunk.wall_color_map_0, base + 1), _safe_color(chunk.wall_color_map_1, base + 1))
+	var wall_c = get_texture_index_from_colors(_safe_color(chunk.wall_color_map_0, base + chunk.dimensions.x), _safe_color(chunk.wall_color_map_1, base + chunk.dimensions.x))
+	var wall_d = get_texture_index_from_colors(_safe_color(chunk.wall_color_map_0, base + chunk.dimensions.x + 1), _safe_color(chunk.wall_color_map_1, base + chunk.dimensions.x + 1))
 	
 	var rl_idx = wall_a
 	var best_w = w_a
@@ -172,7 +173,7 @@ func calculate_corner_colors():
 #region cell_geometry helpers & calculation functions and color interpolation helpers
 
 ## Returns 4 source_maps based on floor/wall[0][1] state, and for setting ridge/ledge[2][3] textures.
-func _get_color_sources(is_floor: bool) -> Array[PackedColorArray]:
+func _get_color_sources(is_floor: bool) -> Array:
 	var use_wall_colors = not is_floor
 	
 	var src_0 : PackedColorArray = chunk.wall_color_map_0 if use_wall_colors else chunk.color_map_0
@@ -301,40 +302,54 @@ static func get_texture_index_from_colors(c0: Color, c1: Color) -> int:
 
 
 # Convert texture index (0-255) to color pair.
-static func texture_index_to_colors(idx: int) -> Array[Color]:
+static func texture_index_to_colors(idx: int) -> Array:
 	idx = clampi(idx, 0, 255)
 	return [Color(float(idx) / 255.0, 0, 0, 0), Color(0, 0, 0, 0)]
 
 
 # Calculate 2 dominant textures for current cell 
 func calculate_cell_material_pair(source_map_0: PackedColorArray, source_map_1: PackedColorArray) -> void:
-	var cell_coords = cell.cell_coords
-	var tex_a : int = get_texture_index_from_colors(
-		source_map_0[cell_coords.y * chunk.dimensions.x + cell_coords.x],
-		source_map_1[cell_coords.y * chunk.dimensions.x + cell_coords.x])
-	var tex_b : int = get_texture_index_from_colors(
-		source_map_0[cell_coords.y * chunk.dimensions.x + cell_coords.x + 1],
-		source_map_1[cell_coords.y * chunk.dimensions.x + cell_coords.x + 1])
-	var tex_c : int = get_texture_index_from_colors(
-		source_map_0[(cell_coords.y + 1) * chunk.dimensions.x + cell_coords.x],
-		source_map_1[(cell_coords.y + 1) * chunk.dimensions.x + cell_coords.x])
-	var tex_d : int = get_texture_index_from_colors(
-		source_map_0[(cell_coords.y + 1) * chunk.dimensions.x + cell_coords.x + 1],
-		source_map_1[(cell_coords.y + 1) * chunk.dimensions.x + cell_coords.x + 1])
-	
-	var tex_counts : Dictionary = {}
-	tex_counts[tex_a] = tex_counts.get(tex_a, 0) + 1
-	tex_counts[tex_b] = tex_counts.get(tex_b, 0) + 1
-	tex_counts[tex_c] = tex_counts.get(tex_c, 0) + 1
-	tex_counts[tex_d] = tex_counts.get(tex_d, 0) + 1
-	
-	var sorted_textures : Array = tex_counts.keys()
-	sorted_textures.sort_custom(func(a, b): return tex_counts[a] > tex_counts[b])
-	
-	cell_mat_a = sorted_textures[0]
-	cell_mat_b = sorted_textures[1] if sorted_textures.size() > 1 else sorted_textures[0]
-	cell_mat_c = sorted_textures[2] if sorted_textures.size() > 2 else cell_mat_b
+		var cell_coords = cell.cell_coords
+		var idx_base: int = int(cell_coords.y * chunk.dimensions.x + cell_coords.x)
+		# Helper: safely read a color from a PackedColorArray, moved to top-level to avoid nested function parse errors
 
+		var tex_a : int = get_texture_index_from_colors(
+			_safe_color(source_map_0, idx_base),
+			_safe_color(source_map_1, idx_base))
+		var tex_b : int = get_texture_index_from_colors(
+			_safe_color(source_map_0, idx_base + 1),
+			_safe_color(source_map_1, idx_base + 1))
+		var tex_c : int = get_texture_index_from_colors(
+			_safe_color(source_map_0, idx_base + chunk.dimensions.x),
+			_safe_color(source_map_1, idx_base + chunk.dimensions.x))
+		var tex_d : int = get_texture_index_from_colors(
+			_safe_color(source_map_0, idx_base + chunk.dimensions.x + 1),
+			_safe_color(source_map_1, idx_base + chunk.dimensions.x + 1))
+	
+		var tex_counts : Dictionary = {}
+		tex_counts[tex_a] = tex_counts.get(tex_a, 0) + 1
+		tex_counts[tex_b] = tex_counts.get(tex_b, 0) + 1
+		tex_counts[tex_c] = tex_counts.get(tex_c, 0) + 1
+		tex_counts[tex_d] = tex_counts.get(tex_d, 0) + 1
+	
+		var sorted_textures : Array = tex_counts.keys()
+		# Sort descending by count
+		sorted_textures.sort_custom(func(a, b): return tex_counts[b] - tex_counts[a])
+	
+		if sorted_textures.size() == 0:
+			cell_mat_a = 0
+			cell_mat_b = 0
+			cell_mat_c = 0
+			return
+	
+		cell_mat_a = sorted_textures[0]
+		cell_mat_b = sorted_textures[1] if sorted_textures.size() > 1 else sorted_textures[0]
+		cell_mat_c = sorted_textures[2] if sorted_textures.size() > 2 else cell_mat_b
+
+func _safe_color(src, idx):
+	if src is PackedColorArray and idx >= 0 and idx < src.size():
+		return src[idx]
+	return Color(0,0,0,0)
 
 # Calculate blend data for up to 3 textures.
 # New encoding for 256 slots:
@@ -343,18 +358,11 @@ func calculate_cell_material_pair(source_map_0: PackedColorArray, source_map_1: 
 #   CUSTOM0.r   = weight_b (0..1)
 func calculate_material_blend_data(vert_x: float, vert_z: float, source_map_0: PackedColorArray, source_map_1: PackedColorArray) -> Color:
 	var cell_coords = cell.cell_coords
-	var tex_a : int = get_texture_index_from_colors(
-		source_map_0[cell_coords.y * chunk.dimensions.x + cell_coords.x],
-		source_map_1[cell_coords.y * chunk.dimensions.x + cell_coords.x])
-	var tex_b : int = get_texture_index_from_colors(
-		source_map_0[cell_coords.y * chunk.dimensions.x + cell_coords.x + 1],
-		source_map_1[cell_coords.y * chunk.dimensions.x + cell_coords.x + 1])
-	var tex_c : int = get_texture_index_from_colors(
-		source_map_0[(cell_coords.y + 1) * chunk.dimensions.x + cell_coords.x],
-		source_map_1[(cell_coords.y + 1) * chunk.dimensions.x + cell_coords.x])
-	var tex_d : int = get_texture_index_from_colors(
-		source_map_0[(cell_coords.y + 1) * chunk.dimensions.x + cell_coords.x + 1],
-		source_map_1[(cell_coords.y + 1) * chunk.dimensions.x + cell_coords.x + 1])
+	var base_idx = cell_coords.y * chunk.dimensions.x + cell_coords.x
+	var tex_a : int = get_texture_index_from_colors(_safe_color(source_map_0, base_idx), _safe_color(source_map_1, base_idx))
+	var tex_b : int = get_texture_index_from_colors(_safe_color(source_map_0, base_idx + 1), _safe_color(source_map_1, base_idx + 1))
+	var tex_c : int = get_texture_index_from_colors(_safe_color(source_map_0, base_idx + chunk.dimensions.x), _safe_color(source_map_1, base_idx + chunk.dimensions.x))
+	var tex_d : int = get_texture_index_from_colors(_safe_color(source_map_0, base_idx + chunk.dimensions.x + 1), _safe_color(source_map_1, base_idx + chunk.dimensions.x + 1))
 	
 	# Position weights for bilinear interpolation
 	var w_a : float = (1.0 - vert_x) * (1.0 - vert_z)
@@ -397,12 +405,12 @@ func calculate_material_blend_data(vert_x: float, vert_z: float, source_map_0: P
 
 #region terrain palette + texture array helpers
 
-const PS_LOG_NORMALIZATION_WARNINGS := "mst/debug/log_texture_array_normalization_warnings"
+const PS_LOG_NORMALIZATION_WARNINGS = "mst/debug/log_texture_array_normalization_warnings"
 
 static func get_decompressed_image(tex: Texture2D) -> Image:
 	if tex == null:
 		return null
-	var img := tex.get_image()
+	var img = tex.get_image()
 	if img == null:
 		return null
 	if img.is_compressed():
@@ -452,7 +460,9 @@ static func rebuild_palette_uniforms(terrain) -> void:
 	var img_colors := Image.create_empty(8, max_slots, false, Image.FORMAT_RGBAF)
 	var img_weights := Image.create_empty(8, max_slots, false, Image.FORMAT_RGBAF)
 	var img_meta := Image.create_empty(1, max_slots, false, Image.FORMAT_RGBA8)
-	var img_outline_width := Image.create_empty(1, max_slots, false, Image.FORMAT_RGBAF)
+	var img_surface_settings := Image.create_empty(1, max_slots, false, Image.FORMAT_RGBAF)
+	var img_floor_noise := Image.create_empty(1, max_slots, false, Image.FORMAT_RGBAF)
+	var img_wall_noise := Image.create_empty(1, max_slots, false, Image.FORMAT_RGBAF)
 	var img_slot_tex_index := Image.create_empty(1, max_slots, false, Image.FORMAT_R8)
 
 	# Palette colors are edited/stored as sRGB-style values.
@@ -466,12 +476,14 @@ static func rebuild_palette_uniforms(terrain) -> void:
 
 		# Meta packing (0..255 per channel)
 		var mode := clampi(int(terrain.slot_blend_modes[slot]), 0, 3)
-		var has_outline := 1 if bool(terrain.slot_has_outline[slot]) else 0
-		var outline_mode := clampi(int(terrain.slot_outline_modes[slot]), 0, 1)
-		img_meta.set_pixel(0, slot, Color(float(out_count) / 255.0, float(mode) / 255.0, float(has_outline) / 255.0, float(outline_mode) / 255.0))
+		img_meta.set_pixel(0, slot, Color(float(out_count) / 255.0, float(mode) / 255.0, 0.0, 0.0))
 		var wet_on := 1.0 if bool(terrain.slot_wet_enabled[slot]) else 0.0
 		var wet_mode := float(clampi(int(terrain.slot_wet_modes[slot]), 0, 1))
-		img_outline_width.set_pixel(0, slot, Color(float(terrain.slot_outline_widths[slot]), float(terrain.slot_roughnesses[slot]), wet_on, wet_mode))
+		img_surface_settings.set_pixel(0, slot, Color(float(terrain.slot_roughnesses[slot]), wet_on, wet_mode, 1.0))
+		var floor_noise_on: float = 1.0 if bool(terrain.slot_floor_noise_enabled[slot]) else 0.0
+		var wall_noise_on: float = 1.0 if bool(terrain.slot_wall_noise_enabled[slot]) else 0.0
+		img_floor_noise.set_pixel(0, slot, Color(float(terrain.slot_floor_noise_strengths[slot]), float(terrain.slot_floor_noise_scales[slot]), floor_noise_on, 1.0))
+		img_wall_noise.set_pixel(0, slot, Color(float(terrain.slot_wall_noise_strengths[slot]), float(terrain.slot_wall_noise_scales[slot]), wall_noise_on, 1.0))
 
 		# Slot->base texture mapping (0..15 stored as 0..255)
 		var base_idx := 0
@@ -501,19 +513,23 @@ static func rebuild_palette_uniforms(terrain) -> void:
 	var tex_colors := ImageTexture.create_from_image(img_colors)
 	var tex_weights := ImageTexture.create_from_image(img_weights)
 	var tex_meta := ImageTexture.create_from_image(img_meta)
-	var tex_outline_width := ImageTexture.create_from_image(img_outline_width)
+	var tex_surface_settings := ImageTexture.create_from_image(img_surface_settings)
+	var tex_floor_noise := ImageTexture.create_from_image(img_floor_noise)
+	var tex_wall_noise := ImageTexture.create_from_image(img_wall_noise)
 	var tex_slot_tex_index := ImageTexture.create_from_image(img_slot_tex_index)
 
 	terrain.terrain_material.set_shader_parameter("palette_colors_tex", tex_colors)
 	terrain.terrain_material.set_shader_parameter("palette_weights_tex", tex_weights)
 	terrain.terrain_material.set_shader_parameter("palette_meta_tex", tex_meta)
-	terrain.terrain_material.set_shader_parameter("palette_outline_width_tex", tex_outline_width)
+	terrain.terrain_material.set_shader_parameter("palette_surface_settings_tex", tex_surface_settings)
+	terrain.terrain_material.set_shader_parameter("palette_floor_noise_tex", tex_floor_noise)
+	terrain.terrain_material.set_shader_parameter("palette_wall_noise_tex", tex_wall_noise)
 	terrain.terrain_material.set_shader_parameter("slot_tex_index_tex", tex_slot_tex_index)
 
 	var grass_mat := terrain.grass_mesh.material as ShaderMaterial
 	grass_mat.set_shader_parameter("palette_colors_tex", tex_colors)
 	grass_mat.set_shader_parameter("palette_weights_tex", tex_weights)
 	grass_mat.set_shader_parameter("palette_meta_tex", tex_meta)
-	grass_mat.set_shader_parameter("palette_outline_width_tex", tex_outline_width)
+	grass_mat.set_shader_parameter("palette_floor_noise_tex", tex_floor_noise)
 
 #endregion

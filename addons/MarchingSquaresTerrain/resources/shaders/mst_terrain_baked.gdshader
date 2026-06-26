@@ -20,10 +20,9 @@ void light() {
 
 	float stepped = ceil(NdotL * float(bands)) / float(bands);
 	float toon_light = mix(shadow_intensity, 0.3, stepped);
-
-	toon_light *= ATTENUATION;
+	toon_light = clamp(toon_light, 0.0, 1.0);
 
 	vec3 light_color = mix(shadow_color.rgb, LIGHT_COLOR.rgb, toon_light);
 
-	DIFFUSE_LIGHT += light_color;
+	DIFFUSE_LIGHT += light_color * ATTENUATION;
 }

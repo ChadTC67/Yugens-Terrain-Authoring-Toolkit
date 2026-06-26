@@ -25,6 +25,3 @@ func get_slot_albedo(idx: int) -> Texture2D:
 func set_slot_albedo(idx: int, tex: Texture2D) -> void:
 	if idx >=  0 and idx < max_slots:
 		albedo_textures[idx] = tex
-
-
-

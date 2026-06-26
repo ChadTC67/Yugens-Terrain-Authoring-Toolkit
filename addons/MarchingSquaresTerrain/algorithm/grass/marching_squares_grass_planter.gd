@@ -114,14 +114,15 @@ func setup(chunk: MarchingSquaresTerrainChunk, redo: bool =  true) -> void:
 	cast_shadow = SHADOW_CASTING_SETTING_OFF
 
 
-func ensure_multimesh_count() -> void:
+func ensure_multimesh_count() -> bool:
 	if not multimesh or not _chunk or not terrain_system:
-		return
+		return false
 	
 	var expected := (_chunk.dimensions.x - 1) * (_chunk.dimensions.z - 1) * terrain_system.grass_subdivisions * terrain_system.grass_subdivisions
 	if multimesh.instance_count !=  expected:
 		multimesh.instance_count = expected
-		regenerate_all_cells()
+		return true
+	return false
 
 
 func regenerate_all_cells() -> void:
