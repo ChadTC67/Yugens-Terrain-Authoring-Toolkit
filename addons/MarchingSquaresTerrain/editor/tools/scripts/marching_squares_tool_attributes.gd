@@ -46,6 +46,31 @@ var terrain_settings_data : Dictionary[String, String] = {
 	"use_cell_shading": "CheckBox",
 }
 
+
+func _add_texture_preset_options(preset_button: OptionButton, base_path: String) -> void:
+	var dir := DirAccess.open(base_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var file_name := dir.get_next()
+	while file_name != "":
+		if file_name == "." or file_name == "..":
+			file_name = dir.get_next()
+			continue
+		var path := base_path.path_join(file_name)
+		if dir.current_is_dir():
+			_add_texture_preset_options(preset_button, path)
+		elif file_name.ends_with(".tres") or file_name.ends_with(".res"):
+			var texture_preset: MarchingSquaresTexturePreset = load(path) as MarchingSquaresTexturePreset
+			if texture_preset:
+				var label := texture_preset.preset_name
+				if texture_preset.has_method("has_baked_arrays") and texture_preset.has_baked_arrays():
+					label += " *"
+				preset_button.add_item(label)
+				preset_button.set_item_metadata(preset_button.item_count - 1, texture_preset)
+		file_name = dir.get_next()
+	dir.list_dir_end()
+
 var plugin : MarchingSquaresTerrainPlugin
 var attribute_list : MarchingSquaresToolAttributesList
 var settings : Dictionary = {}
@@ -270,23 +295,10 @@ func add_setting(p_params: Dictionary) -> void:
 			hbox_container.add_child(cont, true)
 		SettingType.PRESET:
 			var preset_button := OptionButton.new()
-			var dir : DirAccess
-			var file_name : String
 			preset_button.add_item("None") # First option is no preset
 			preset_button.set_item_metadata(0, null)
 			if setting_name == "texture_preset":
-				dir = DirAccess.open(TEXTURE_PRESETS_PATH)
-				if dir:
-					dir.list_dir_begin()
-					file_name = dir.get_next()
-					while file_name !=  "":
-						if file_name.ends_with(".tres") or file_name.ends_with(".res"):
-							var texture_preset := load(TEXTURE_PRESETS_PATH + file_name) as MarchingSquaresTexturePreset
-							if texture_preset:
-								preset_button.add_item(texture_preset.preset_name)
-								preset_button.set_item_metadata(preset_button.item_count - 1, texture_preset)
-						file_name = dir.get_next()
-					dir.list_dir_end()
+				_add_texture_preset_options(preset_button, TEXTURE_PRESETS_PATH)
 				
 				preset_button.set_flat(true)
 				preset_button.item_selected.connect(func(index):
@@ -472,17 +484,12 @@ func add_setting(p_params: Dictionary) -> void:
 					"EditorSpinSlider":
 						var spin_slider := EditorSpinSlider.new()
 						spin_slider.set_flat(true)
-						if setting == "outline_width":
-							spin_slider.set_min(0.25)
-							spin_slider.set_max(32.0)
-							spin_slider.set_step(0.25)
+						spin_slider.set_min(0.0)
+						if setting == "wall_threshold":
+							spin_slider.set_max(0.5)
 						else:
-							spin_slider.set_min(0.0)
-							if setting == "wall_threshold":
-								spin_slider.set_max(0.5)
-							else:
-								spin_slider.set_max(1.0)
-							spin_slider.set_step(0.01)
+							spin_slider.set_max(1.0)
+						spin_slider.set_step(0.01)
 						spin_slider.set_value(s_value)
 						spin_slider.value_changed.connect(func(value): _on_terrain_setting_changed(setting, value))
 						spin_slider.set_custom_minimum_size(Vector2(105, 35))

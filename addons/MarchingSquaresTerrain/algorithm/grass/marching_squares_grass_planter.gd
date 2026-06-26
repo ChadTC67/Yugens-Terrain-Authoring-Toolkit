@@ -115,28 +115,15 @@ func setup(chunk: MarchingSquaresTerrainChunk, redo: bool =  true) -> void:
 	cast_shadow = SHADOW_CASTING_SETTING_OFF
 
 
-func fetch_texture_data() -> void:
-	var all_tex_names = ["vc_tex_rg", "vc_tex_rb", "vc_tex_ra", "vc_tex_gr", "vc_tex_gg", "vc_tex_rr", "tex_prefab_colormap"]
-	_image_cache.clear()
-	for tex_name in all_tex_names:
-		var texture : Texture2D = terrain_system.terrain_material.get_shader_parameter(tex_name)
-		if texture == null:
-			continue
-		var img : Image = texture.get_image()
-		if img:
-			img.decompress()
-		_image_cache[tex_name] = img
-	
-
-
-func ensure_multimesh_count() -> void:
+func ensure_multimesh_count() -> bool:
 	if not multimesh or not _chunk or not terrain_system:
-		return
+		return false
 	
 	var expected := (_chunk.dimensions.x - 1) * (_chunk.dimensions.z - 1) * terrain_system.grass_subdivisions * terrain_system.grass_subdivisions
 	if multimesh.instance_count !=  expected:
 		multimesh.instance_count = expected
-		regenerate_all_cells()
+		return true
+	return false
 
 
 func regenerate_all_cells() -> void:

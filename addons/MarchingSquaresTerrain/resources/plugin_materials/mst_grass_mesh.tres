@@ -5,6 +5,7 @@
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_fa4te"]
 render_priority = 0
 shader = ExtResource("1_jmvec")
+shader_parameter/use_grass_tex_array = false
 shader_parameter/use_grass_tex_2 = true
 shader_parameter/use_grass_tex_3 = true
 shader_parameter/use_grass_tex_4 = true

@@ -5,6 +5,7 @@ class_name MarchingSquaresTerrainChunk
 # Explicit preloads avoid tool-script class resolution issues.
 const MSTVertexColorHelper := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_vertex_color_helper.gd")
 const MSTTerrainCell := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_cell.gd")
+const MSTDataHandler := preload("res://addons/MarchingSquaresTerrain/resources/mst_data_handler.gd")
 
 enum Mode {CUBIC, POLYHEDRON, ROUNDED_POLYHEDRON, SEMI_ROUND, SPHERICAL}
 
@@ -86,8 +87,19 @@ var upper_thresh : float = 0.7 #, > 0.7 = upper color, middle = blend
 var blend_zone := upper_thresh - lower_thresh
 #endregion
 
+
+func _apply_shadow_visibility_settings() -> void:
+	cast_shadow = SHADOW_CASTING_SETTING_ON
+	if terrain_system == null:
+		return
+	var world_w := float(max(dimensions.x - 1, 1)) * cell_size.x
+	var world_d := float(max(dimensions.z - 1, 1)) * cell_size.y
+	var world_h := float(max(dimensions.y, 1))
+	extra_cull_margin = max(max(world_w, world_d), world_h)
+
 # Called by TerrainSystem parent
 func initialize_terrain(should_regenerate_mesh: bool =  true):
+	_apply_shadow_visibility_settings()
 	needs_update = []
 	# Initally all cells will need to be updated to show the newly loaded height
 	for z in range(dimensions.z - 1):
@@ -95,31 +107,29 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 		for x in range(dimensions.x - 1):
 			needs_update[z].append(true)
 	
-	if not get_node_or_null("GrassPlanter"):
-		grass_planter = get_node_or_null("GrassPlanter")
-		if not grass_planter:
-			grass_planter = MarchingSquaresGrassPlanter.new()
-			if not color_map_0 or not color_map_1:
-				generate_color_maps()
-			if not grass_mask_map:
-				generate_grass_mask_map()
-			add_child(grass_planter)
-		grass_planter.name = "GrassPlanter"
-		grass_planter._chunk = self
-		grass_planter.setup(self)
-		EngineWrapper.instance.set_owner_recursive(grass_planter)
-	else:
-		if not grass_planter:
-			grass_planter = get_node_or_null("GrassPlanter")
-		grass_planter.terrain_system = terrain_system
-		grass_planter._chunk = self
-		
+	grass_planter = get_node_or_null("GrassPlanter")
+	if not grass_planter:
+		grass_planter = MarchingSquaresGrassPlanter.new()
+		if not color_map_0 or not color_map_1:
+			generate_color_maps()
+		if not grass_mask_map:
+			generate_grass_mask_map()
+		add_child(grass_planter)
+	grass_planter.name = "GrassPlanter"
+	grass_planter._chunk = self
+	grass_planter.terrain_system = terrain_system
+	grass_planter.setup(self)
+	EngineWrapper.instance.set_owner_recursive(grass_planter)
+	
+	var has_baked_grass_multimesh := _temp_grass_multimesh != null
 	if _temp_grass_multimesh:
 		grass_planter.multimesh = _temp_grass_multimesh
-	grass_planter.ensure_multimesh_count()
+	if not EngineWrapper.instance.is_editor():
+		grass_planter.ensure_multimesh_count()
 	if not grass_planter.multimesh:
 		grass_planter.setup(self)
-		grass_planter.regenerate_all_cells()
+		if not EngineWrapper.instance.is_editor():
+			grass_planter.regenerate_all_cells()
 	grass_planter.multimesh.mesh = terrain_system.grass_mesh
 	
 	# Generate maps if not loaded from external storage (works for both editor and runtime)
@@ -154,8 +164,17 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 					child.free()
 			create_trimesh_collision()
 			_apply_collision_layers()
+
+	if not EngineWrapper.instance.is_editor() and grass_planter:
+		var grass_count_changed := grass_planter.ensure_multimesh_count()
+		if not has_baked_grass_multimesh or grass_count_changed:
+			grass_planter.regenerate_all_cells()
 	
-	if not EngineWrapper.instance.is_editor() and terrain_system.enable_runtime_texture_baking:
+	var has_texture_array_source := (
+		terrain_system.get("texture_library") != null
+		or str(terrain_system.get("baked_albedo_array_path")) != ""
+	)
+	if not EngineWrapper.instance.is_editor() and terrain_system.enable_runtime_texture_baking and not has_texture_array_source:
 		var baker := MarchingSquaresGeometryBaker.new()
 		baker.terrain_system = terrain_system
 		baker.polygon_texture_resolution = terrain_system.polygon_texture_resolution
@@ -180,12 +199,35 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 		baker.bake_geometry_texture(self, get_tree())
 
 
+func _save_external_data_before_scene_strip() -> bool:
+	if not terrain_system or _skip_save_on_exit:
+		return false
+	var dir_path := terrain_system.data_directory
+	if dir_path == null or dir_path == "":
+		return false
+	var needs_save := _data_dirty
+	if not needs_save:
+		needs_save = not MSTDataHandler.metadata_exists(dir_path, chunk_coords)
+	if not needs_save:
+		return true
+	if not MSTDataHandler.ensure_directory_exists(dir_path):
+		return false
+	if not MSTDataHandler.save_chunk_resources(terrain_system, self):
+		return false
+	_data_dirty = false
+	terrain_system._storage_initialized = true
+	return MSTDataHandler.metadata_exists(dir_path, chunk_coords)
+
 func _notification(what: int) -> void:
 	if not EngineWrapper.instance.is_editor():
 		return
 	
 	match what:
 		NOTIFICATION_EDITOR_PRE_SAVE:
+			var can_strip_scene_data := _save_external_data_before_scene_strip()
+			if not can_strip_scene_data:
+				push_error("MST: Refusing to strip chunk source data because external save failed for " + str(chunk_coords))
+				return
 			# Store height_map and clear - source data saved to external storage, not scene
 			_skip_save_on_exit = _skip_save_on_exit # Surpress warning
 			_temp_height_map = height_map
@@ -293,6 +335,7 @@ func _exit_tree() -> void:
 
 
 func regenerate_mesh(use_threads: bool =  false):
+	_apply_shadow_visibility_settings()
 	st = SurfaceTool.new()
 	if mesh and mesh.get_surface_count() > 0:
 		st.create_from(mesh, 0)
@@ -397,13 +440,32 @@ func generate_terrain_cells(use_threads: bool):
 			}
 			
 			var color_helper := MSTVertexColorHelper.new()
-			var cell := MSTTerrainCell.new(self, color_helper, height_map[z][x], height_map[z][x+1], height_map[z+1][x], height_map[z+1][x+1], merge_threshold)
+			# Defensive: guard against malformed/serialized height_map rows
+			var h00 := 0.0
+			var h01 := 0.0
+			var h10 := 0.0
+			var h11 := 0.0
+			if height_map is Array and height_map.size() > z and height_map[z] is Array and height_map[z].size() > x:
+				h00 = float(height_map[z][x])
+			if height_map is Array and height_map.size() > z and height_map[z] is Array and height_map[z].size() > x+1:
+				h01 = float(height_map[z][x+1])
+			else:
+				h01 = h00
+			if height_map is Array and height_map.size() > z+1 and height_map[z+1] is Array and height_map[z+1].size() > x:
+				h10 = float(height_map[z+1][x])
+			else:
+				h10 = h00
+			if height_map is Array and height_map.size() > z+1 and height_map[z+1] is Array and height_map[z+1].size() > x+1:
+				h11 = float(height_map[z+1][x+1])
+			else:
+				h11 = h00
+			var cell := MSTTerrainCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold)
 			color_helper.chunk = self
 			color_helper.cell = cell
 			
 			work_load =  func():
 				cell.generate_geometry(cell_coords)
-				if grass_planter and grass_planter.terrain_system:
+				if not use_threads and EngineWrapper.instance.is_editor() and grass_planter and grass_planter.terrain_system:
 					grass_planter.generate_grass_on_cell(cell_coords)
 			if use_threads:
 				thread_pool.enqueue(work_load)

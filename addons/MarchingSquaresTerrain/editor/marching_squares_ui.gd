@@ -88,9 +88,12 @@ func _exit_tree() -> void:
 
 func set_visible(is_visible: bool) -> void:
 	visible = is_visible
-	toolbar.set_visible(is_visible)
-	tool_attributes.set_visible(is_visible)
-	texture_settings.set_visible(is_visible)
+	if toolbar != null and is_instance_valid(toolbar) and toolbar.has_method("set_visible"):
+		toolbar.set_visible(is_visible)
+	if tool_attributes != null and is_instance_valid(tool_attributes) and tool_attributes.has_method("set_visible"):
+		tool_attributes.set_visible(is_visible)
+	if texture_settings != null and is_instance_valid(texture_settings) and texture_settings.has_method("set_visible"):
+		texture_settings.set_visible(is_visible)
 	
 	if is_visible:
 		await get_tree().create_timer(.01).timeout

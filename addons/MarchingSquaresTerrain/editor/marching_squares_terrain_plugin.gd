@@ -322,6 +322,43 @@ func _refresh_editor_state() -> void:
 			if node is MarchingSquaresTerrain and node in EditorInterface.get_selection().get_selected_nodes():
 				EditorInterface.edit_node(node)
 
+
+# Lazy grass rebuild helpers
+func _maybe_rebuild_grass_on_scene_open() -> void:
+	# Only run in editor
+	if not EngineWrapper.instance.is_editor():
+		return
+	var root := EditorInterface.get_edited_scene_root()
+	if root == null:
+		return
+	for node in root.find_children("", "Node3D", true, false):
+		if not is_instance_valid(node):
+			continue
+		if node is MarchingSquaresTerrain:
+			# Decide whether to rebuild: if runtime grass array is missing OR any slot requests grass
+			var needs := false
+			if node.has_method("get") and (node._runtime_grass_texture_array == null):
+				needs = true
+			else:
+				# Check slots for has_grass flags
+				if node.texture_slots:
+					for si in range(node.texture_slots.size()):
+						var s = node.texture_slots[si]
+						if s != null and bool(s.get("has_grass")):
+							needs = true
+							break
+			if needs:
+				# Defer the actual rebuild so editor finishes loading
+				call_deferred("_rebuild_grass_for_node", node)
+
+func _rebuild_grass_for_node(node: Object) -> void:
+	if not is_instance_valid(node):
+		return
+	if node.has_method("rebuild_grass_texture_array"):
+		node.rebuild_grass_texture_array()
+	if node.has_method("_request_grass_regen"):
+		node._request_grass_regen()
+
 func _ready():
 	if BRUSH_RADIUS_MATERIAL:
 		# Avoid mutating the shared .tres resource on disk.
@@ -747,7 +784,7 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 			var draw_value_cc
 			if mode == TerrainToolMode.GRASS_MASK:
 				restore_value = chunk.get_grass_mask(draw_cell_coords)
-				draw_value = Color(0.0, 0.0, 0.0, 0.0) if should_mask_grass else Color(1.0, 0.0, 0.0, 0.0)
+				draw_value = Color(0.0, 0.0, 0.0, 0.0) if should_mask_grass else Color(1.0, 1.0, 1.0, 1.0)
 			elif mode == TerrainToolMode.LEVEL:
 				restore_value = chunk.get_height(draw_cell_coords)
 				draw_value = lerp(restore_value, height, sample)
@@ -868,7 +905,7 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 			elif mode == TerrainToolMode.DEBUG_BRUSH:
 				var g_pos := chunk.to_global(Vector3(float(draw_cell_coords.x), chunk.get_height(draw_cell_coords), float(draw_cell_coords.y)))
 				var normal := get_cell_normal(chunk, draw_cell_coords)
-				print("DEBUG INFO: global pos = " + str(g_pos) +
+				print_verbose("MST debug brush: global pos = " + str(g_pos) +
 					", color id = " + str(chunk.get_color_0(draw_cell_coords)) + " " + str(chunk.get_color_1(draw_cell_coords)) +
 					", normal = " + str(normal))
 				continue
@@ -1080,7 +1117,7 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 				for cell_coords in pattern[chunk_coords]:
 					grass_restore[chunk_coords][cell_coords] = chunk.get_grass_mask(cell_coords)
 					if current_quick_paint.has_grass:
-						grass_pattern[chunk_coords][cell_coords] = Color(1, 1, 0, 0)
+						grass_pattern[chunk_coords][cell_coords] = Color(1, 1, 1, 1)
 					else:
 						grass_pattern[chunk_coords][cell_coords] = Color(0, 0, 0, 0)
 			

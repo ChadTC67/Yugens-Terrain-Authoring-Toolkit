@@ -162,6 +162,8 @@ static func push_tex_scales(terrain) -> void:
 
 
 static func _try_load_baked(terrain, path_var_name: String) -> Texture2DArray:
+	if Engine.is_editor_hint():
+		return null
 	if terrain == null or not terrain.has_method("get"):
 		return null
 	var raw: Variant = ""
@@ -178,6 +180,33 @@ static func _try_load_baked(terrain, path_var_name: String) -> Texture2DArray:
 			push_warning("[MST] Baked Texture2DArray at %s exists but failed to load as Texture2DArray." % p)
 	return null
 
+
+static func _build_texture_array_from_textures(textures: Array, target_size: int, placeholder_color: Color) -> Texture2DArray:
+	var images := []
+	for i in range(MAX_TEXTURE_SLOTS):
+		var tex = textures[i] if i < textures.size() else null
+		var img: Image = null
+		if tex != null and tex is Texture2D:
+			img = MSTVertexColorHelper.get_decompressed_image(tex)
+			img = MSTVertexColorHelper.normalize_image_for_texture_array(img, target_size, target_size)
+		if img == null:
+			img = Image.create(target_size, target_size, false, Image.FORMAT_RGBA8)
+			img.fill(placeholder_color)
+		images.append(img)
+	var arr := Texture2DArray.new()
+	var err := arr.create_from_images(images)
+	if err != OK:
+		return null
+	return arr
+
+
+static func _has_texture2d(textures: Array) -> bool:
+	for tex in textures:
+		if tex != null and tex is Texture2D:
+			return true
+	return false
+
+
 static func rebuild_texture_array(terrain) -> void:
 	# New builder: prefer pre-baked external Texture2DArray resources (for performance and small scene files).
 	# If not present, attempt to build from an attached MSTextureLibrary resource. Fall back to legacy 16-layer builder for compatibility.
@@ -188,6 +217,10 @@ static func rebuild_texture_array(terrain) -> void:
 	if baked !=  null:
 		terrain._runtime_texture_array = baked
 		terrain.terrain_material.set_shader_parameter("vc_tex_array", terrain._runtime_texture_array)
+		var baked_normal := _try_load_baked(terrain, "baked_normal_array_path")
+		terrain._runtime_normal_texture_array = baked_normal
+		terrain.terrain_material.set_shader_parameter("vc_normal_array", terrain._runtime_normal_texture_array)
+		terrain.terrain_material.set_shader_parameter("use_normal_array", terrain._runtime_normal_texture_array != null)
 		return
 
 	# Priority 2: build from a linked MSTextureLibrary resource (non-destructive, uses placeholders)
@@ -209,31 +242,20 @@ static func rebuild_texture_array(terrain) -> void:
 			# Ensure library arrays are sized (guard method call on placeholder)
 			if lib.has_method("ensure_length"):
 				lib.ensure_length()
-			var target_size := int(terrain.get("baked_texture_size")) if terrain.get("baked_texture_size") != null else 512
-			var images := []
-			for i in range(MAX_TEXTURE_SLOTS):
-				var tex = null
-				if i < lib.albedo_textures.size():
-					tex = lib.albedo_textures[i]
-				var img: Image
-				if tex !=  null and tex is Texture2D:
-					img = MSTVertexColorHelper.get_decompressed_image(tex)
-					if img !=  null:
-						img.resize(target_size, target_size, Image.INTERPOLATE_LANCZOS)
-					else:
-						img = Image.create(target_size, target_size, false, Image.FORMAT_RGBA8)
-						img.fill(Color(1, 1, 1, 1))
-				else:
-					img = Image.create(target_size, target_size, false, Image.FORMAT_RGBA8)
-					img.fill(Color(1, 1, 1, 1))
-				images.append(img)
-			var arr := Texture2DArray.new()
-			var err := arr.create_from_images(images)
-			if err !=  OK:
-				push_warning("[MST] Failed to build runtime Texture2DArray from MSTextureLibrary (err=%s)." % str(err))
+			var target_size := int(terrain.get("runtime_baked_texture_size")) if terrain.get("runtime_baked_texture_size") != null else 512
+			if Engine.is_editor_hint():
+				target_size = int(terrain.get("editor_preview_texture_size")) if terrain.get("editor_preview_texture_size") != null else 128
+			var arr := _build_texture_array_from_textures(lib.albedo_textures, target_size, Color(1, 1, 1, 1))
+			if arr == null:
+				push_warning("[MST] Failed to build runtime Texture2DArray from MSTextureLibrary.")
 				return
+			var has_normal_maps := _has_texture2d(lib.normal_textures)
+			var normal_arr := _build_texture_array_from_textures(lib.normal_textures, target_size, Color(0.5, 0.5, 1.0, 1.0)) if has_normal_maps else null
 			terrain._runtime_texture_array = arr
+			terrain._runtime_normal_texture_array = normal_arr
 			terrain.terrain_material.set_shader_parameter("vc_tex_array", terrain._runtime_texture_array)
+			terrain.terrain_material.set_shader_parameter("vc_normal_array", terrain._runtime_normal_texture_array)
+			terrain.terrain_material.set_shader_parameter("use_normal_array", has_normal_maps and terrain._runtime_normal_texture_array != null)
 			return
 	
 	# Priority 3: Legacy fallback (build 16 canonical slices as before)
@@ -294,11 +316,16 @@ static func rebuild_texture_array(terrain) -> void:
 
 	terrain._runtime_texture_array = arr
 	terrain.terrain_material.set_shader_parameter("vc_tex_array", terrain._runtime_texture_array)
+	terrain._runtime_normal_texture_array = null
+	terrain.terrain_material.set_shader_parameter("vc_normal_array", null)
+	terrain.terrain_material.set_shader_parameter("use_normal_array", false)
 
 
 static func rebuild_grass_texture_array(terrain) -> void:
-	# PR1: The current grass shader (mst_grass.gdshader) expects 6 individual sprite textures
-	# (grass_texture_1..6). The Texture2DArray path is not used by that shader.
+	# PR1: The current grass shader historically expected 6 individual sprite textures
+	# (grass_texture_1..6). Build a small Texture2DArray for grass sprites so the grass
+	# shader can use the same runtime Texture2DArray pipeline as terrain. Keep legacy
+	# individual uniforms as a fallback.
 	ensure_texture_slots(terrain)
 	maybe_migrate_legacy_grass(terrain)
 	if terrain.grass_mesh == null or terrain.grass_mesh.material == null:
@@ -306,13 +333,60 @@ static func rebuild_grass_texture_array(terrain) -> void:
 
 	var grass_mat := terrain.grass_mesh.material as ShaderMaterial
 
+	# Gather up to 6 grass images from slots or legacy exports
+	var targetsz := int(terrain.get("baked_grass_texture_size")) if terrain.get("baked_grass_texture_size") != null else 64
+	var images := []
+	images.resize(6)
+	for i in range(6):
+		var tex: Texture2D = null
+		if i < terrain.texture_slots.size() and terrain.texture_slots[i] != null and terrain.texture_slots[i].get("grass_texture") != null and terrain.texture_slots[i].grass_texture != null:
+			tex = terrain.texture_slots[i].grass_texture
+		else:
+			# Fallback to legacy exported vars
+			match i:
+				0:
+					tex = terrain.grass_sprite_tex_1
+				1:
+					tex = terrain.grass_sprite_tex_2
+				2:
+					tex = terrain.grass_sprite_tex_3
+				3:
+					tex = terrain.grass_sprite_tex_4
+				4:
+					tex = terrain.grass_sprite_tex_5
+				_:
+					tex = terrain.grass_sprite_tex_6
+		
+		var img: Image = null
+		if tex != null and tex is Texture2D:
+			img = MSTVertexColorHelper.get_decompressed_image(tex)
+			img = MSTVertexColorHelper.normalize_image_for_texture_array(img, targetsz, targetsz)
+		if img == null:
+			img = Image.create(targetsz, targetsz, false, Image.FORMAT_RGBA8)
+			img.fill(Color(0,0,0,0))
+		images[i] = img
+
+	# Attempt to build Texture2DArray for grass
+	var arr := Texture2DArray.new()
+	var err := arr.create_from_images(images)
+	if err == OK:
+		terrain._runtime_grass_texture_array = arr
+		# Expose to grass shader and enable array usage
+		grass_mat.set_shader_parameter("vc_grass_tex_array", terrain._runtime_grass_texture_array)
+		grass_mat.set_shader_parameter("use_grass_tex_array", true)
+	else:
+		# Fallback: clear array and disable array usage so shader uses individual textures
+		terrain._runtime_grass_texture_array = null
+		grass_mat.set_shader_parameter("vc_grass_tex_array", null)
+		grass_mat.set_shader_parameter("use_grass_tex_array", false)
+
+	# Still set legacy uniforms for compatibility/fallback
 	var t1: Texture2D = terrain.grass_sprite_tex_1
 	var t2: Texture2D = terrain.grass_sprite_tex_2
 	var t3: Texture2D = terrain.grass_sprite_tex_3
 	var t4: Texture2D = terrain.grass_sprite_tex_4
 	var t5: Texture2D = terrain.grass_sprite_tex_5
 	var t6: Texture2D = terrain.grass_sprite_tex_6
-
 	if terrain.texture_slots.size() >=  6:
 		var s0 = terrain.texture_slots[0]
 		if s0 !=  null and s0.get("grass_texture") != null and s0.grass_texture != null:
@@ -332,15 +406,12 @@ static func rebuild_grass_texture_array(terrain) -> void:
 		var s5 = terrain.texture_slots[5]
 		if s5 !=  null and s5.get("grass_texture") != null and s5.grass_texture != null:
 			t6 = s5.grass_texture
-
 	grass_mat.set_shader_parameter("grass_texture_1", t1)
 	grass_mat.set_shader_parameter("grass_texture_2", t2)
 	grass_mat.set_shader_parameter("grass_texture_3", t3)
 	grass_mat.set_shader_parameter("grass_texture_4", t4)
 	grass_mat.set_shader_parameter("grass_texture_5", t5)
 	grass_mat.set_shader_parameter("grass_texture_6", t6)
-
-	terrain._runtime_grass_texture_array = null
 
 
 # ---------------- Palette Helpers ----------------
@@ -359,27 +430,27 @@ static func ensure_palette_settings(terrain) -> void:
 		if terrain.slot_blend_modes[i] == null:
 			terrain.slot_blend_modes[i] = 3
 
-	if terrain.slot_has_outline.size() !=  MAX_TEXTURE_SLOTS:
-		terrain.slot_has_outline.resize(MAX_TEXTURE_SLOTS)
-	if terrain.slot_outline_modes.size() !=  MAX_TEXTURE_SLOTS:
-		terrain.slot_outline_modes.resize(MAX_TEXTURE_SLOTS)
-	if terrain.slot_outline_widths.size() !=  MAX_TEXTURE_SLOTS:
-		terrain.slot_outline_widths.resize(MAX_TEXTURE_SLOTS)
 	if terrain.slot_wet_enabled.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_wet_enabled.resize(MAX_TEXTURE_SLOTS)
 	if terrain.slot_wet_modes.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_wet_modes.resize(MAX_TEXTURE_SLOTS)
 	if terrain.slot_roughnesses.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_roughnesses.resize(MAX_TEXTURE_SLOTS)
+	var had_floor_noise: bool = terrain.slot_floor_noise_enabled.size() > 0
+	var had_wall_noise: bool = terrain.slot_wall_noise_enabled.size() > 0
+	if terrain.slot_floor_noise_enabled.size() !=  MAX_TEXTURE_SLOTS:
+		terrain.slot_floor_noise_enabled.resize(MAX_TEXTURE_SLOTS)
+	if terrain.slot_floor_noise_strengths.size() !=  MAX_TEXTURE_SLOTS:
+		terrain.slot_floor_noise_strengths.resize(MAX_TEXTURE_SLOTS)
+	if terrain.slot_floor_noise_scales.size() !=  MAX_TEXTURE_SLOTS:
+		terrain.slot_floor_noise_scales.resize(MAX_TEXTURE_SLOTS)
+	if terrain.slot_wall_noise_enabled.size() !=  MAX_TEXTURE_SLOTS:
+		terrain.slot_wall_noise_enabled.resize(MAX_TEXTURE_SLOTS)
+	if terrain.slot_wall_noise_strengths.size() !=  MAX_TEXTURE_SLOTS:
+		terrain.slot_wall_noise_strengths.resize(MAX_TEXTURE_SLOTS)
+	if terrain.slot_wall_noise_scales.size() !=  MAX_TEXTURE_SLOTS:
+		terrain.slot_wall_noise_scales.resize(MAX_TEXTURE_SLOTS)
 	for i in range(MAX_TEXTURE_SLOTS):
-		if terrain.slot_has_outline[i] == null:
-			terrain.slot_has_outline[i] = false
-		if terrain.slot_outline_modes[i] == null:
-			terrain.slot_outline_modes[i] = 0
-		terrain.slot_outline_modes[i] = clampi(int(terrain.slot_outline_modes[i]), 0, 1)
-		if terrain.slot_outline_widths[i] == null:
-			terrain.slot_outline_widths[i] = terrain.outline_width
-		terrain.slot_outline_widths[i] = clampf(float(terrain.slot_outline_widths[i]), 0.25, 32.0)
 		if terrain.slot_wet_enabled[i] == null:
 			terrain.slot_wet_enabled[i] = false
 		if terrain.slot_wet_modes[i] == null:
@@ -388,6 +459,22 @@ static func ensure_palette_settings(terrain) -> void:
 		if terrain.slot_roughnesses[i] == null:
 			terrain.slot_roughnesses[i] = 1.0
 		terrain.slot_roughnesses[i] = clampf(float(terrain.slot_roughnesses[i]), 0.0, 1.0)
+		if terrain.slot_floor_noise_enabled[i] == null:
+			terrain.slot_floor_noise_enabled[i] = not had_floor_noise and float(terrain.global_noise_strength) > 0.0
+		if terrain.slot_floor_noise_strengths[i] == null:
+			terrain.slot_floor_noise_strengths[i] = terrain.global_noise_strength
+		if terrain.slot_floor_noise_scales[i] == null:
+			terrain.slot_floor_noise_scales[i] = 0.037
+		if terrain.slot_wall_noise_enabled[i] == null:
+			terrain.slot_wall_noise_enabled[i] = not had_wall_noise and float(terrain.global_noise_strength) > 0.0
+		if terrain.slot_wall_noise_strengths[i] == null:
+			terrain.slot_wall_noise_strengths[i] = terrain.global_noise_strength
+		if terrain.slot_wall_noise_scales[i] == null:
+			terrain.slot_wall_noise_scales[i] = 0.037
+		terrain.slot_floor_noise_strengths[i] = clampf(float(terrain.slot_floor_noise_strengths[i]), 0.0, 1.0)
+		terrain.slot_floor_noise_scales[i] = clampf(float(terrain.slot_floor_noise_scales[i]), 0.001, 1.0)
+		terrain.slot_wall_noise_strengths[i] = clampf(float(terrain.slot_wall_noise_strengths[i]), 0.0, 1.0)
+		terrain.slot_wall_noise_scales[i] = clampf(float(terrain.slot_wall_noise_scales[i]), 0.001, 1.0)
 
 
 static func ensure_palette_weights(terrain) -> void:

@@ -41,15 +41,11 @@ void light() {
 	float NdotL = dot(NORMAL, LIGHT);
 	NdotL = clamp(NdotL, 0.0, 1.0);
 
-	float toon_light;
-	if (use_cell_shading) {
-		float stepped = ceil(NdotL * float(bands)) / float(bands);
-		toon_light = mix(shadow_intensity, 0.3, stepped);
-	}
-	else 
-		toon_light = NdotL * 0.3;
+	float stepped = ceil(NdotL * float(bands)) / float(bands);
+	float toon_light = mix(shadow_intensity, 0.3, stepped);
+	toon_light = clamp(toon_light, 0.0, 1.0);
 
-	toon_light *= ATTENUATION;
 	vec3 light_color = mix(shadow_color.rgb, LIGHT_COLOR.rgb, toon_light);
-	DIFFUSE_LIGHT += light_color;
+
+	DIFFUSE_LIGHT += light_color * ATTENUATION;
 }

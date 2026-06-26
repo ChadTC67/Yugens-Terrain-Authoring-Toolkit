@@ -348,7 +348,3 @@ static func _store_geometry(mesh: Mesh, name: String):
 			"f %d/%d/%d %d/%d/%d %d/%d/%d"
 			% [a, a, a, c, c, c, b, b, b]
 		)
-
-
-
-
