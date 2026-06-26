@@ -142,6 +142,9 @@ func _redraw():
 			var wall_normal : Vector3 = Vector3.BACK
 			if hit_result:
 				wall_normal = hit_result.normal
+				terrain_plugin.brush_surface_normal = (terrain_system.global_transform.basis.inverse() * wall_normal).normalized()
+			else:
+				terrain_plugin.brush_surface_normal = Vector3.UP
 			
 			var basis := _create_brush_basis(wall_normal, terrain_plugin.brush_size * 2.0)
 			if wall_normal.y > 0.5:
@@ -185,6 +188,23 @@ func _redraw():
 							world_pos, brush_pos, terrain_plugin.brush_size, terrain_plugin.current_brush_index,
 							max_distance, use_falloff, terrain_plugin.falloff_curve
 						)
+						if is_wall_painting:
+							var wall_sample_pos := BrushPatternCalculator.cell_to_wall_sample_pos(
+								cursor_chunk_coords,
+								cursor_cell_coords,
+								terrain_system,
+								pos
+							)
+							sample = BrushPatternCalculator.calculate_wall_falloff_sample(
+								wall_sample_pos,
+								pos,
+								terrain_plugin.brush_surface_normal,
+								terrain_plugin.brush_size,
+								terrain_plugin.current_brush_index,
+								max_distance,
+								use_falloff,
+								terrain_plugin.falloff_curve
+							)
 						
 						if sample < 0:
 							continue  # Outside brush

@@ -9,6 +9,7 @@ const VOID_TEXTURE_SLOT := 15
 const _TEXTURE_SLOT_SCRIPT := preload("res://addons/MarchingSquaresTerrain/resources/marching_squares_texture_slot.gd")
 const VOID_TEXTURE := preload("res://addons/MarchingSquaresTerrain/resources/plugin_materials/void_texture.tres")
 const MSTVertexColorHelper := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_vertex_color_helper.gd")
+const MSTextureLibraryScript := preload("res://addons/MarchingSquaresTerrain/resources/marching_squares_terrain_texture_library.gd")
 
 
 # ---------------- Texture Slots / Texture Arrays ----------------
@@ -162,8 +163,6 @@ static func push_tex_scales(terrain) -> void:
 
 
 static func _try_load_baked(terrain, path_var_name: String) -> Texture2DArray:
-	if Engine.is_editor_hint():
-		return null
 	if terrain == null or not terrain.has_method("get"):
 		return null
 	var raw: Variant = ""
@@ -181,9 +180,25 @@ static func _try_load_baked(terrain, path_var_name: String) -> Texture2DArray:
 	return null
 
 
-static func _build_texture_array_from_textures(textures: Array, target_size: int, placeholder_color: Color) -> Texture2DArray:
+static func _highest_texture_slot(textures: Array) -> int:
+	var highest := -1
+	for i in range(textures.size()):
+		if textures[i] != null and textures[i] is Texture2D:
+			highest = i
+	return highest
+
+
+static func _required_texture_layer_count(albedo_textures: Array, normal_textures: Array, grass_textures: Array) -> int:
+	var highest := max(
+		_highest_texture_slot(albedo_textures),
+		max(_highest_texture_slot(normal_textures), _highest_texture_slot(grass_textures))
+	)
+	return clampi(max(highest + 1, 16), 1, MAX_TEXTURE_SLOTS)
+
+
+static func _build_texture_array_from_textures(textures: Array, target_size: int, placeholder_color: Color, layer_count: int) -> Texture2DArray:
 	var images := []
-	for i in range(MAX_TEXTURE_SLOTS):
+	for i in range(layer_count):
 		var tex = textures[i] if i < textures.size() else null
 		var img: Image = null
 		if tex != null and tex is Texture2D:
@@ -227,10 +242,10 @@ static func rebuild_texture_array(terrain) -> void:
 	if terrain.has_method("get") and terrain.get("texture_library") !=  null:
 		var lib = terrain.get("texture_library")
 		# If this is a placeholder Resource in the editor, attempt to load the real resource from disk.
-		if not (lib is MSTextureLibrary):
+		if not (lib is MSTextureLibraryScript):
 			if lib is Resource and lib.resource_path and str(lib.resource_path) !=  "":
 				var loaded_lib = ResourceLoader.load(str(lib.resource_path))
-				if loaded_lib and loaded_lib is MSTextureLibrary:
+				if loaded_lib and loaded_lib is MSTextureLibraryScript:
 					lib = loaded_lib
 				else:
 					push_warning("[MST] texture_library path did not load a valid MSTextureLibrary. Falling back to legacy builder.")
@@ -245,12 +260,15 @@ static func rebuild_texture_array(terrain) -> void:
 			var target_size := int(terrain.get("runtime_baked_texture_size")) if terrain.get("runtime_baked_texture_size") != null else 512
 			if Engine.is_editor_hint():
 				target_size = int(terrain.get("editor_preview_texture_size")) if terrain.get("editor_preview_texture_size") != null else 128
-			var arr := _build_texture_array_from_textures(lib.albedo_textures, target_size, Color(1, 1, 1, 1))
+			var layer_count := _required_texture_layer_count(lib.albedo_textures, lib.normal_textures, lib.grass_textures)
+			if terrain.has_method("get") and terrain.get("visible_texture_slot_count") != null:
+				layer_count = max(layer_count, clampi(int(terrain.get("visible_texture_slot_count")), 1, MAX_TEXTURE_SLOTS))
+			var arr := _build_texture_array_from_textures(lib.albedo_textures, target_size, Color(1, 1, 1, 1), layer_count)
 			if arr == null:
 				push_warning("[MST] Failed to build runtime Texture2DArray from MSTextureLibrary.")
 				return
 			var has_normal_maps := _has_texture2d(lib.normal_textures)
-			var normal_arr := _build_texture_array_from_textures(lib.normal_textures, target_size, Color(0.5, 0.5, 1.0, 1.0)) if has_normal_maps else null
+			var normal_arr := _build_texture_array_from_textures(lib.normal_textures, target_size, Color(0.5, 0.5, 1.0, 1.0), layer_count) if has_normal_maps else null
 			terrain._runtime_texture_array = arr
 			terrain._runtime_normal_texture_array = normal_arr
 			terrain.terrain_material.set_shader_parameter("vc_tex_array", terrain._runtime_texture_array)
@@ -332,6 +350,15 @@ static func rebuild_grass_texture_array(terrain) -> void:
 		return
 
 	var grass_mat := terrain.grass_mesh.material as ShaderMaterial
+
+	var baked: Texture2DArray = null
+	if not Engine.is_editor_hint():
+		baked = _try_load_baked(terrain, "baked_grass_array_path")
+	if baked != null:
+		terrain._runtime_grass_texture_array = baked
+		grass_mat.set_shader_parameter("vc_grass_tex_array", terrain._runtime_grass_texture_array)
+		grass_mat.set_shader_parameter("use_grass_tex_array", true)
+		return
 
 	# Gather up to 6 grass images from slots or legacy exports
 	var targetsz := int(terrain.get("baked_grass_texture_size")) if terrain.get("baked_grass_texture_size") != null else 64

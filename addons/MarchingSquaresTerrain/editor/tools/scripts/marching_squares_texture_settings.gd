@@ -7,7 +7,7 @@ signal texture_setting_changed(setting: String, value: Variant)
 
 var plugin : MarchingSquaresTerrainPlugin
 var vp_tex_names : MarchingSquaresTextureNames = preload("uid://dd7fens03aosa")
-var _compact_list := true
+var _built_for_terrain_id: int = 0
 
 const MAX_TEXTURE_SLOTS := 256
 
@@ -237,6 +237,22 @@ func _save_resource_if_external(res: Resource) -> void:
 		ResourceSaver.save(res, res.resource_path)
 
 
+func _sync_texture_library_from_slots(terrain, lib_res) -> void:
+	if terrain == null or lib_res == null or not _ensure_terrain_arrays(terrain):
+		return
+	if lib_res.has_method("ensure_length"):
+		lib_res.ensure_length()
+	for i in range(min(MAX_TEXTURE_SLOTS, terrain.texture_slots.size())):
+		var slot = terrain.texture_slots[i]
+		if slot == null:
+			continue
+		if i < lib_res.albedo_textures.size():
+			lib_res.albedo_textures[i] = slot.texture if slot.texture is Texture2D else null
+		if i < lib_res.grass_textures.size():
+			lib_res.grass_textures[i] = slot.grass_texture if slot.grass_texture is Texture2D else null
+	_save_resource_if_external(lib_res)
+
+
 func _sync_slot_legacy_fields(terrain, slot_idx: int) -> void:
 	if terrain == null or slot_idx < 0 or slot_idx >= 15:
 		return
@@ -257,6 +273,7 @@ func _refresh_slot_runtime(terrain, p_refresh_ui: bool = false) -> void:
 		return
 	terrain.set("baked_albedo_array_path", "")
 	terrain.set("baked_normal_array_path", "")
+	terrain.set("baked_grass_array_path", "")
 	if terrain.has_method("rebuild_texture_array"):
 		terrain.rebuild_texture_array()
 	if terrain.has_method("rebuild_grass_texture_array"):
@@ -423,7 +440,9 @@ func add_texture_settings() -> void:
 	
 	var terrain := plugin.current_terrain_node
 	if terrain == null:
+		_built_for_terrain_id = 0
 		return
+	_built_for_terrain_id = terrain.get_instance_id()
 	
 	# Ensure slot/palette arrays are initialized before we build UI.
 	if not _ensure_terrain_arrays(terrain):
@@ -547,294 +566,18 @@ func add_texture_settings() -> void:
 
 	vbox.add_child(HSeparator.new())
 
-	var compact_cb := CheckBox.new()
-	compact_cb.text = "Compact Texture List"
-	compact_cb.set_flat(true)
-	compact_cb.button_pressed = _compact_list
-	compact_cb.toggled.connect(func(pressed):
-		_compact_list = pressed
-		call_deferred("add_texture_settings")
-	)
-	vbox.add_child(compact_cb, true)
-
 	var visible_count := clampi(int(terrain.visible_texture_slot_count), 1, 256)
 	
-	if _compact_list:
-		# Compact actions (Add + Export)
-		var actions_v := VBoxContainer.new()
-		actions_v.set_custom_minimum_size(Vector2(120, 56))
-		actions_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var add_compact := Button.new()
-		add_compact.text = "+ Add Texture"
-		add_compact.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		add_compact.pressed.connect(func():
-			if not _ensure_terrain_arrays(terrain):
-				return
-			# Reuse add logic.
-			var made_active := false
-			for idx in range(clampi(int(terrain.visible_texture_slot_count), 1, 256)):
-				if idx == 0 or idx == 15:
-					continue
-				var s = terrain.texture_slots[idx]
-				if s != null and bool(s.get("active")) == false:
-					s.active = true
-					made_active = true
-					break
-			if not made_active:
-				terrain.visible_texture_slot_count = mini(int(terrain.visible_texture_slot_count) + 1, 256)
-			if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
-				terrain.save_to_preset()
-			call_deferred("add_texture_settings")
-		)
-		actions_v.add_child(add_compact)
-		var export_compact := MarchingSquaresTexturePresetExporter.new()
-		export_compact.current_terrain_node = terrain
-		export_compact.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		actions_v.add_child(export_compact)
-		var grid := GridContainer.new()
-		grid.columns = 1
-		grid.set_h_size_flags(Control.SIZE_EXPAND_FILL)
-		for i in range(visible_count):
-			var slot_idx := i
-			var slot_obj = terrain.texture_slots[slot_idx] if slot_idx < terrain.texture_slots.size() else null
-			# Hide inactive slots (except reserved ones).
-			if slot_idx != 15 and _is_slot_inactive(slot_obj):
-				continue
-			var __si := slot_idx
-			var tile := VBoxContainer.new()
-			tile.set_custom_minimum_size(Vector2(136, 156))
-			tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			var tex_var : Texture2D = slot_obj.texture if slot_obj != null else null
-			if tex_var != null and not (tex_var is Texture2D):
-				tex_var = null
-			var thumb := _make_slot_preview(tex_var, 96)
-			var thumb_center := CenterContainer.new()
-			thumb_center.add_child(thumb)
-			tile.add_child(thumb_center)
-			var nameplate := PanelContainer.new()
-			nameplate.set_custom_minimum_size(Vector2(132, 24))
-			nameplate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-			var lbl := Label.new()
-			lbl.text = names[slot_idx] if slot_idx < names.size() else ("Texture " + str(slot_idx + 1))
-			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
-			lbl.clip_text = true
-			lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-			lbl.set_custom_minimum_size(Vector2(124, 20))
-			nameplate.add_child(lbl)
-			var nameplate_center := CenterContainer.new()
-			nameplate_center.add_child(nameplate)
-			tile.add_child(nameplate_center)
-			var btn_h := HBoxContainer.new()
-			btn_h.alignment = BoxContainer.ALIGNMENT_CENTER
-			var edit_btn := Button.new()
-			edit_btn.text = "Edit"
-			edit_btn.set_custom_minimum_size(Vector2(48, 24))
-			edit_btn.pressed.connect(func(): _open_slot_modal(__si))
-			btn_h.add_child(edit_btn)
-			var rem_btn := Button.new()
-			rem_btn.text = "X"
-			rem_btn.set_custom_minimum_size(Vector2(28, 24))
-			rem_btn.pressed.connect(func(): _clear_slot(terrain, __si, true))
-			btn_h.add_child(rem_btn)
-			var btn_center := CenterContainer.new()
-			btn_center.add_child(btn_h)
-			tile.add_child(btn_center)
-			grid.add_child(tile)
-		# End for.
-		vbox.add_child(grid, true)
-		vbox.add_child(actions_v, true)
-		add_child(vbox, true)
-		# Ensure grass arrays are rebuilt when in compact mode too so grass appears on scene start
-		if plugin != null and plugin.current_terrain_node != null:
-			var _t2 := plugin.current_terrain_node
-			if _t2.has_method("rebuild_grass_texture_array"):
-				_t2.rebuild_grass_texture_array()
-			if _t2.has_method("_request_grass_regen"):
-				_t2._request_grass_regen()
-		return
-
-	for i in range(visible_count):
-		var slot_idx := i
-		var slot_obj = terrain.texture_slots[slot_idx] if slot_idx < terrain.texture_slots.size() else null
-		# Hide inactive slots (except reserved ones).
-		if slot_idx != 0 and slot_idx != 15 and slot_obj != null and bool(slot_obj.get("active")) == false:
-			continue
-		
-		# Slot display name (saved in preset.new_tex_names when a preset is active)
-		var name_row := HBoxContainer.new()
-		# Negative separation makes the X "push into" the name field visually.
-		name_row.add_theme_constant_override("separation", -16)
-		
-		var name_edit := LineEdit.new()
-		name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_edit.text = names[slot_idx] if slot_idx < names.size() else ("Texture " + str(slot_idx + 1))
-		name_edit.placeholder_text = "Texture %d" % (slot_idx + 1)
-		name_edit.set_custom_minimum_size(Vector2(220, 25))
-		name_edit.tooltip_text = "Rename this texture slot (saved in the active preset)"
-		
-		var remove_btn := Button.new()
-		remove_btn.text = "X"
-		remove_btn.flat = true
-		remove_btn.focus_mode = Control.FOCUS_NONE
-		remove_btn.set_custom_minimum_size(Vector2(22, 25))
-		remove_btn.tooltip_text = "Deactivate (clear) this texture slot"
-		
-		# Texture 1 and Void are reserved.
-		if slot_idx == 0:
-			remove_btn.disabled = true
-			remove_btn.tooltip_text = "Texture 1 is reserved"
-		if slot_idx == 15:
-			name_edit.text = "Void"
-			name_edit.editable = false
-			name_edit.tooltip_text = "Void (reserved)"
-			remove_btn.disabled = true
-			remove_btn.tooltip_text = "Void is reserved"
-		
-		# Only persist names into a real preset resource.
-		var persist_name := func(p_idx: int):
-			if preset == null or preset.new_tex_names == null:
-				return
-			MarchingSquaresTerrainPlugin._ensure_texture_names_resource(preset.new_tex_names)
-			var n := preset.new_tex_names.get("texture_names")
-			if n is Array and p_idx < n.size():
-				n[p_idx] = name_edit.text
-				preset.new_tex_names.set("texture_names", n)
-			# Refresh dropdowns (Material + Default Wall)
-			if plugin and plugin.ui and plugin.ui.tool_attributes:
-				plugin.ui.tool_attributes.show_tool_attributes(plugin.ui.active_tool)
-			if preset.resource_path != null and not str(preset.resource_path).is_empty():
-				ResourceSaver.save(preset)
-		
-		var deactivate_slot := func(p_idx: int):
-			_clear_slot(terrain, p_idx, true)
-		
-		var __s = slot_idx
-		name_edit.text_submitted.connect(func(_t): persist_name.call(__s))
-		name_edit.focus_exited.connect(func(): persist_name.call(__s))
-		remove_btn.pressed.connect(func(): deactivate_slot.call(__s))
-		
-		name_row.add_child(name_edit, true)
-		name_row.add_child(remove_btn, false)
-		# Edit button opens per-slot modal editor
-		var edit_btn := Button.new()
-		edit_btn.text = "Edit"
-		edit_btn.focus_mode = Control.FOCUS_NONE
-		edit_btn.set_custom_minimum_size(Vector2(50, 25))
-		edit_btn.tooltip_text = "Open per-slot editor"
-		edit_btn.pressed.connect(func(): _open_slot_modal(__s))
-		name_row.add_child(edit_btn, false)
-		vbox.add_child(name_row, true)
-		
-		# Terrain texture picker (slot-based)
-		var slot = terrain.texture_slots[i]
-		var tex_var : Texture2D = slot.texture if slot != null else null
-		if tex_var != null and not (tex_var is Texture2D):
-			tex_var = null
-		
-		# For the reserved Void slot, don't allow editing the texture.
-		if slot_idx == 15:
-			var void_tex_label := Label.new()
-			void_tex_label.text = "(Void texture is reserved)"
-			vbox.add_child(void_tex_label, true)
-		else:
-			# Show per-slot albedo + normal pickers bound to MSTextureLibrary (for all slots except Void)
-			var adv_h := HBoxContainer.new()
-			adv_h.set_custom_minimum_size(Vector2(300, 24))
-			# Albedo picker
-			var alb_picker := EditorResourcePicker.new()
-			alb_picker.set_base_type("Texture2D")
-			var lib_res: Resource = terrain.get("texture_library") if terrain.has_method("get") else null
-			var initial_albedo: Texture2D = null
-			if lib_res != null and lib_res is MSTextureLibrary and slot_idx < lib_res.albedo_textures.size():
-				var maybe_alb = lib_res.albedo_textures[slot_idx]
-				if maybe_alb != null and maybe_alb is Texture2D:
-					initial_albedo = maybe_alb
-			else:
-				if tex_var != null and tex_var is Texture2D:
-					initial_albedo = tex_var
-			alb_picker.edited_resource = initial_albedo
-			alb_picker.resource_changed.connect(func(resource):
-				_apply_slot_albedo(terrain, __s, resource, false)
-			)
-			alb_picker.set_custom_minimum_size(Vector2(140, 25))
-			adv_h.add_child(alb_picker)
-			# Normal picker
-			var nrm_picker := EditorResourcePicker.new()
-			nrm_picker.set_base_type("Texture2D")
-			var initial_norm: Texture2D = null
-			if lib_res != null and lib_res is MSTextureLibrary and slot_idx < lib_res.normal_textures.size():
-				var maybe_nrm = lib_res.normal_textures[slot_idx]
-				if maybe_nrm != null and maybe_nrm is Texture2D:
-					initial_norm = maybe_nrm
-			nrm_picker.edited_resource = initial_norm
-			nrm_picker.resource_changed.connect(func(resource):
-				_apply_slot_normal(terrain, __s, resource)
-			)
-			nrm_picker.set_custom_minimum_size(Vector2(140, 25))
-			adv_h.add_child(nrm_picker)
-			vbox.add_child(adv_h, true)
-		
-		# Grass settings are built next to palette settings in _build_palette_ui() for each slot.
-		
-		# Scale slider (slot-based)
-		var scale_value : float = float(slot.scale) if slot != null else 1.0
-		var scale_hbox := HBoxContainer.new()
-		scale_hbox.set_custom_minimum_size(Vector2(150, 20))
-		
-		var scale_label := Label.new()
-		scale_label.text = "Scale:"
-		scale_label.set_custom_minimum_size(Vector2(40, 20))
-		scale_hbox.add_child(scale_label)
-		
-		var c_cont_2 := CenterContainer.new()
-		var scale_slider := HSlider.new()
-		scale_slider.min_value = 0.1
-		scale_slider.max_value = 40.0
-		scale_slider.step = 0.1
-		scale_slider.set_custom_minimum_size(Vector2(80, 20))
-		scale_slider.drag_ended.connect(func(val): _on_slider_drag_ended(val))
-		c_cont_2.add_child(scale_slider, true)
-		scale_slider.set_value_no_signal(scale_value)
-		scale_slider.value_changed.connect(func(val, p_idx := slot_idx):
-			if not _ensure_terrain_arrays(terrain):
-				return
-			if terrain.texture_slots[p_idx] == null:
-				terrain.texture_slots[p_idx] = _TEXTURE_SLOT_SCRIPT.new()
-			terrain.texture_slots[p_idx].scale = float(val)
-			
-			# Keep legacy properties in sync for slots 1..15 so presets save correctly.
-			if p_idx >= 0 and p_idx < 15:
-				terrain.set("texture_scale_%d" % (p_idx + 1), float(val))
-			else:
-				terrain._push_tex_scales()
-			
-			if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
-				terrain.save_to_preset()
-		)
-		scale_hbox.add_child(c_cont_2, true)
-		
-		var scale_value_label := Label.new()
-		scale_value_label.text = str(scale_value)
-		scale_value_label.set_custom_minimum_size(Vector2(25, 20))
-		scale_slider.value_changed.connect(func(val): scale_value_label.text = str(snapped(val, 0.1)))
-		scale_hbox.add_child(scale_value_label)
-		
-		vbox.add_child(scale_hbox, true)
-		
-		# Palette UI for ALL visible slots
-		_build_palette_ui(vbox, terrain, i)
-		
-		vbox.add_child(HSeparator.new())
-	
-	# Reveal more slots without rendering all 256 controls by default.
-	var add_button := Button.new()
-	add_button.text = "+ Add Texture"
-	add_button.pressed.connect(func():
+	# Compact slot list. Per-slot editing lives in _open_slot_modal().
+	var actions_v := VBoxContainer.new()
+	actions_v.set_custom_minimum_size(Vector2(120, 56))
+	actions_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var add_compact := Button.new()
+	add_compact.text = "+ Add Texture"
+	add_compact.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_compact.pressed.connect(func():
 		if not _ensure_terrain_arrays(terrain):
 			return
-		
-		# Prefer re-enabling the first inactive slot that is already in-range.
 		var made_active := false
 		for idx in range(clampi(int(terrain.visible_texture_slot_count), 1, 256)):
 			if idx == 0 or idx == 15:
@@ -844,32 +587,76 @@ func add_texture_settings() -> void:
 				s.active = true
 				made_active = true
 				break
-		
-		# Otherwise, extend the visible range by one.
 		if not made_active:
 			terrain.visible_texture_slot_count = mini(int(terrain.visible_texture_slot_count) + 1, 256)
-		
 		if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
 			terrain.save_to_preset()
 		call_deferred("add_texture_settings")
 	)
-	vbox.add_child(add_button, true)
-	
-	var m_cont := MarginContainer.new()
-	m_cont.add_theme_constant_override("margin_bottom", 7)
-	var export_button := MarchingSquaresTexturePresetExporter.new()
-	export_button.current_terrain_node = terrain
-	m_cont.add_child(export_button, true)
-	vbox.add_child(m_cont, true)
-	
+	actions_v.add_child(add_compact)
+	var export_compact := MarchingSquaresTexturePresetExporter.new()
+	export_compact.current_terrain_node = terrain
+	export_compact.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions_v.add_child(export_compact)
+	var grid := GridContainer.new()
+	grid.columns = 1
+	grid.set_h_size_flags(Control.SIZE_EXPAND_FILL)
+	for i in range(visible_count):
+		var slot_idx := i
+		var slot_obj = terrain.texture_slots[slot_idx] if slot_idx < terrain.texture_slots.size() else null
+		# Hide inactive slots (except reserved ones).
+		if slot_idx != 0 and slot_idx != 15 and _is_slot_inactive(slot_obj):
+			continue
+		var __si := slot_idx
+		var tile := VBoxContainer.new()
+		tile.set_custom_minimum_size(Vector2(136, 156))
+		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var tex_var : Texture2D = slot_obj.texture if slot_obj != null else null
+		if tex_var != null and not (tex_var is Texture2D):
+			tex_var = null
+		var thumb := _make_slot_preview(tex_var, 96)
+		var thumb_center := CenterContainer.new()
+		thumb_center.add_child(thumb)
+		tile.add_child(thumb_center)
+		var nameplate := PanelContainer.new()
+		nameplate.set_custom_minimum_size(Vector2(132, 24))
+		nameplate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		var lbl := Label.new()
+		lbl.text = names[slot_idx] if slot_idx < names.size() else ("Texture " + str(slot_idx + 1))
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		lbl.clip_text = true
+		lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		lbl.set_custom_minimum_size(Vector2(124, 20))
+		nameplate.add_child(lbl)
+		var nameplate_center := CenterContainer.new()
+		nameplate_center.add_child(nameplate)
+		tile.add_child(nameplate_center)
+		var btn_h := HBoxContainer.new()
+		btn_h.alignment = BoxContainer.ALIGNMENT_CENTER
+		var edit_btn := Button.new()
+		edit_btn.text = "Edit"
+		edit_btn.set_custom_minimum_size(Vector2(48, 24))
+		edit_btn.pressed.connect(func(): _open_slot_modal(__si))
+		btn_h.add_child(edit_btn)
+		var rem_btn := Button.new()
+		rem_btn.text = "X"
+		rem_btn.set_custom_minimum_size(Vector2(28, 24))
+		rem_btn.disabled = slot_idx == 0 or slot_idx == 15
+		rem_btn.pressed.connect(func(): _clear_slot(terrain, __si, true))
+		btn_h.add_child(rem_btn)
+		var btn_center := CenterContainer.new()
+		btn_center.add_child(btn_h)
+		tile.add_child(btn_center)
+		grid.add_child(tile)
+	vbox.add_child(grid, true)
+	vbox.add_child(actions_v, true)
 	add_child(vbox, true)
-	# Ensure grass arrays are rebuilt on open so grass shows by default in the scene
-	if plugin != null and plugin.current_terrain_node != null:
-		var _t := plugin.current_terrain_node
-		if _t.has_method("rebuild_grass_texture_array"):
-			_t.rebuild_grass_texture_array()
-		if _t.has_method("_request_grass_regen"):
-			_t._request_grass_regen()
+
+
+func is_built_for_current_terrain() -> bool:
+	var terrain := plugin.current_terrain_node if plugin != null else null
+	return terrain != null and _built_for_terrain_id == terrain.get_instance_id() and get_child_count() > 0
 	
 func _open_slot_modal(slot_idx: int) -> void:
 	var terrain := plugin.current_terrain_node
@@ -1416,6 +1203,11 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 		# Keep legacy properties in sync for slots 1..6 so presets/UI stay compatible.
 		if __s_grass2 >= 0 and __s_grass2 < 6:
 			terrain.set("grass_sprite_tex_%d" % (__s_grass2 + 1), resource)
+		var lib_res := _get_texture_library(terrain)
+		if lib_res != null and __s_grass2 < lib_res.grass_textures.size():
+			lib_res.grass_textures[__s_grass2] = resource
+			_save_resource_if_external(lib_res)
+		terrain.set("baked_grass_array_path", "")
 		# Always rebuild grass arrays + request regen so scene updates immediately when a grass texture is changed
 		if terrain.has_method("rebuild_grass_texture_array"):
 			terrain.rebuild_grass_texture_array()
@@ -1607,6 +1399,7 @@ func _on_bake_pressed() -> void:
 	if lib == null:
 		push_error("[MST] Terrain has no texture_library assigned. Assign an MSTextureLibrary resource first.")
 		return
+	_sync_texture_library_from_slots(terrain, lib)
 	var out_dir := "res://scenes/baked_texture_arrays"
 	# If the terrain has a data_directory, prefer saving alongside it (convert Windows paths to resource-style).
 	if terrain.get("data_directory") != null and terrain.get("data_directory") != "":

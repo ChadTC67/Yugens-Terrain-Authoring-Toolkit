@@ -55,15 +55,25 @@ func _add_texture_preset_options(preset_button: OptionButton, base_path: String)
 		if dir.current_is_dir():
 			_add_texture_preset_options(preset_button, path)
 		elif file_name.ends_with(".tres") or file_name.ends_with(".res"):
-			var texture_preset: MarchingSquaresTexturePreset = load(path) as MarchingSquaresTexturePreset
-			if texture_preset:
-				var label := texture_preset.preset_name
-				if texture_preset.has_method("has_baked_arrays") and texture_preset.has_baked_arrays():
-					label += " *"
-				preset_button.add_item(label)
-				preset_button.set_item_metadata(preset_button.item_count - 1, texture_preset)
+			preset_button.add_item(_resource_label_from_file(path, "preset_name", path.get_file().get_basename()))
+			preset_button.set_item_metadata(preset_button.item_count - 1, path)
 		file_name = dir.get_next()
 	dir.list_dir_end()
+
+
+func _resource_label_from_file(path: String, property_name: String, fallback: String) -> String:
+	if not path.ends_with(".tres"):
+		return fallback
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return fallback
+	var needle := property_name + " = "
+	while not file.eof_reached():
+		var line := file.get_line().strip_edges()
+		if line.begins_with(needle):
+			var value := line.substr(needle.length()).strip_edges()
+			return value.trim_prefix("\"").trim_suffix("\"")
+	return fallback
 
 var plugin : MarchingSquaresTerrainPlugin
 var attribute_list : MarchingSquaresToolAttributesList
@@ -290,6 +300,8 @@ func add_setting(p_params: Dictionary) -> void:
 				preset_button.set_flat(true)
 				preset_button.item_selected.connect(func(index):
 					var selected_texture_preset = preset_button.get_item_metadata(index)
+					if selected_texture_preset is String:
+						selected_texture_preset = load(selected_texture_preset)
 					_on_setting_changed(setting_name, selected_texture_preset)
 				)
 				preset_button.set_custom_minimum_size(Vector2(100, 35))
@@ -302,7 +314,13 @@ func add_setting(p_params: Dictionary) -> void:
 				else:
 					# Find matching preset in dropdown
 					for i in range(preset_button.item_count):
-						if preset_button.get_item_metadata(i) == current_texture_preset:
+						var item_meta = preset_button.get_item_metadata(i)
+						var matches_current := false
+						if item_meta is String:
+							matches_current = item_meta == current_texture_preset.resource_path
+						else:
+							matches_current = item_meta == current_texture_preset
+						if matches_current:
 							preset_button.select(i)
 							break
 				
@@ -324,10 +342,9 @@ func add_setting(p_params: Dictionary) -> void:
 				var file_name := dir.get_next()
 				while file_name !=  "":
 					if file_name.ends_with(".tres") or file_name.ends_with(".res"):
-						var quick_paint := load(GLOBAL_QUICK_PAINTS_PATH + file_name) as MarchingSquaresQuickPaint
-						if quick_paint:
-							quick_paint_button.add_item(quick_paint.paint_name)
-							quick_paint_button.set_item_metadata(quick_paint_button.item_count - 1, quick_paint)
+						var quick_paint_path := GLOBAL_QUICK_PAINTS_PATH + file_name
+						quick_paint_button.add_item(_resource_label_from_file(quick_paint_path, "paint_name", file_name.get_basename()))
+						quick_paint_button.set_item_metadata(quick_paint_button.item_count - 1, quick_paint_path)
 					file_name = dir.get_next()
 				dir.list_dir_end()
 			
@@ -345,6 +362,8 @@ func add_setting(p_params: Dictionary) -> void:
 			quick_paint_button.set_flat(true)
 			quick_paint_button.item_selected.connect(func(index):
 				var selected_quick_paint = quick_paint_button.get_item_metadata(index)
+				if selected_quick_paint is String:
+					selected_quick_paint = load(selected_quick_paint)
 				_on_setting_changed(setting_name, selected_quick_paint)
 			)
 			quick_paint_button.set_custom_minimum_size(Vector2(100, 35))
@@ -356,7 +375,13 @@ func add_setting(p_params: Dictionary) -> void:
 			else:
 				# Find matching quick paint in dropdown
 				for i in range(quick_paint_button.item_count):
-					if quick_paint_button.get_item_metadata(i) == current_quick_paint:
+					var item_meta = quick_paint_button.get_item_metadata(i)
+					var matches_current := false
+					if item_meta is String:
+						matches_current = current_quick_paint is Resource and item_meta == current_quick_paint.resource_path
+					else:
+						matches_current = item_meta == current_quick_paint
+					if matches_current:
 						quick_paint_button.select(i)
 						break
 			

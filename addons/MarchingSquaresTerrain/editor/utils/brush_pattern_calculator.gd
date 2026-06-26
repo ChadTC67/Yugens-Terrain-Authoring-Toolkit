@@ -90,6 +90,75 @@ static func calculate_falloff_sample(
 	return falloff_curve.sample(clamp(t, 0.0, 1.0))
 
 
+static func calculate_wall_falloff_sample(
+	world_pos: Vector3,
+	brush_pos: Vector3,
+	wall_normal: Vector3,
+	brush_size: float,
+	brush_index: int,
+	max_distance: float,
+	use_falloff: bool,
+	falloff_curve: Curve
+	) -> float:
+	var n := wall_normal.normalized()
+	if n.length_squared() < 0.001:
+		n = Vector3.BACK
+	var tangent := Vector3.UP.cross(n)
+	if tangent.length_squared() < 0.001:
+		tangent = Vector3.RIGHT.cross(n)
+	tangent = tangent.normalized()
+	var bitangent := n.cross(tangent).normalized()
+	var delta := world_pos - brush_pos
+	var plane_pos := Vector2(delta.dot(tangent), delta.dot(bitangent))
+	return calculate_falloff_sample(
+		plane_pos,
+		Vector2.ZERO,
+		brush_size,
+		brush_index,
+		max_distance,
+		use_falloff,
+		falloff_curve
+	)
+
+
+static func _sample_chunk_height(chunk: MarchingSquaresTerrainChunk, x: int, z: int, fallback: float) -> float:
+	if chunk == null:
+		return fallback
+	if not (chunk.height_map is Array):
+		return fallback
+	if z < 0 or z >= chunk.height_map.size():
+		return fallback
+	if not (chunk.height_map[z] is Array):
+		return fallback
+	if x < 0 or x >= chunk.height_map[z].size():
+		return fallback
+	return float(chunk.height_map[z][x])
+
+
+static func cell_to_wall_sample_pos(
+	chunk_coords: Vector2i,
+	cell_coords: Vector2i,
+	terrain: MarchingSquaresTerrain,
+	brush_pos: Vector3
+	) -> Vector3:
+	var world_pos := cell_to_world_pos(chunk_coords, cell_coords, terrain)
+	if terrain == null or not terrain.chunks.has(chunk_coords):
+		return Vector3(world_pos.x, brush_pos.y, world_pos.y)
+	var chunk: MarchingSquaresTerrainChunk = terrain.chunks[chunk_coords]
+	var center_height := _sample_chunk_height(chunk, cell_coords.x, cell_coords.y, brush_pos.y)
+	var min_height := center_height
+	var max_height := center_height
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			if abs(dx) + abs(dz) > 1:
+				continue
+			var h := _sample_chunk_height(chunk, cell_coords.x + dx, cell_coords.y + dz, center_height)
+			min_height = min(min_height, h)
+			max_height = max(max_height, h)
+	var sample_y := clampf(brush_pos.y, min_height, max_height)
+	return Vector3(world_pos.x, sample_y, world_pos.y)
+
+
 ## Calculate world position for a cell in a chunk.
 ## p_centered=true returns the center of the cell (half-cell offset). This is useful for Vertex Paint
 ## so round brushes look less octagon-y on low-resolution grids.

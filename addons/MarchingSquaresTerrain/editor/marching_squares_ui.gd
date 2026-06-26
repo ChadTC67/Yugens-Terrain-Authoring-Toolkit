@@ -115,7 +115,8 @@ func _on_tool_changed(tool_index: int) -> void:
 	if tool_index == 5: # Vertex Painting:
 		tool_attributes.attribute_list = MarchingSquaresToolAttributesList.new()
 		texture_settings.show()
-		texture_settings.add_texture_settings()
+		if not texture_settings.has_method("is_built_for_current_terrain") or not texture_settings.is_built_for_current_terrain():
+			texture_settings.add_texture_settings()
 	else:
 		texture_settings.hide()
 	
@@ -179,6 +180,8 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 			else:
 				plugin.current_texture_preset = null
 			tool_attributes.show_tool_attributes(active_tool)
+			if active_tool == 5 and texture_settings != null:
+				texture_settings.add_texture_settings()
 		"quick_paint_selection":
 					if p_value is MarchingSquaresQuickPaint:
 						plugin.current_quick_paint = p_value
