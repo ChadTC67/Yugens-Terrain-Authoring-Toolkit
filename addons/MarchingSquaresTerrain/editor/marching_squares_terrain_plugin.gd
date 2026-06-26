@@ -83,6 +83,7 @@ var BrushMat : Dictionary = {
 var current_brush_index : int = 0
 
 var brush_position : Vector3
+var brush_surface_normal : Vector3 = Vector3.UP
 
 var BRUSH_VISUAL : Mesh = EngineWrapper.load_resource("uid://ch6cb07rh0m3l") as Mesh
 var BRUSH_RADIUS_VISUAL : Mesh = EngineWrapper.load_resource("uid://cg3lvmu68oaaa") as Mesh
@@ -491,8 +492,13 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 			_queue_raycast(_ray_origin, _ray_dir, camera)
 			if queued_ray_result and queued_ray_result.has("position"):
 				draw_position = terrain.to_local(queued_ray_result.position)
+				if queued_ray_result.has("normal"):
+					brush_surface_normal = (terrain.global_transform.basis.inverse() * queued_ray_result.normal).normalized()
+				else:
+					brush_surface_normal = Vector3.UP
 				draw_area_hovered = true
 			else:
+				brush_surface_normal = Vector3.UP
 				# FALLBACK: If we didn't hit a chunk, project onto a virtual plane at draw_height
 				# This allows painting onto chunks while the mouse is in "negative space"
 				var fallback_height := 0.0
@@ -673,7 +679,7 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 func update_draw_pattern(b_pos: Vector3):
 	var terrain_system : MarchingSquaresTerrain = current_terrain_node
 	
-	var bounds: Dictionary = BrushPatternCalculator.calculate_bounds(b_pos, brush_size, terrain_system)
+	var bounds: BrushPatternCalculator.BrushBounds = BrushPatternCalculator.calculate_bounds(b_pos, brush_size, terrain_system)
 	var max_distance : float = BrushPatternCalculator.calculate_max_distance(brush_size, current_brush_index)
 	var brush_pos : Vector2 = Vector2(b_pos.x, b_pos.z)
 	
@@ -701,6 +707,23 @@ func update_draw_pattern(b_pos: Vector3):
 						world_pos, brush_pos, brush_size, current_brush_index,
 						max_distance, use_falloff, falloff_curve
 					)
+					if mode == TerrainToolMode.VERTEX_PAINTING and paint_walls_mode:
+						var wall_sample_pos: Vector3 = BrushPatternCalculator.cell_to_wall_sample_pos(
+							cursor_chunk_coords,
+							cursor_cell_coords,
+							terrain_system,
+							b_pos
+						)
+						sample = BrushPatternCalculator.calculate_wall_falloff_sample(
+							wall_sample_pos,
+							b_pos,
+							brush_surface_normal,
+							brush_size,
+							current_brush_index,
+							max_distance,
+							use_falloff,
+							falloff_curve
+						)
 					
 					if sample < 0:
 						continue  # Outside brush

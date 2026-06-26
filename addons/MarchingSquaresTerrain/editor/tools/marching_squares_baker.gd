@@ -5,6 +5,8 @@ class_name MarchingSquaresBaker
 const DEFAULT_SIZE := 512
 const PLACEHOLDER_ALBEDO := Color(1, 1, 1, 1)
 const PLACEHOLDER_NORMAL := Color(0.5, 0.5, 1.0, 1.0)
+const PLACEHOLDER_GRASS := Color(0, 0, 0, 0)
+const MSTextureLibraryScript := preload("res://addons/MarchingSquaresTerrain/resources/marching_squares_terrain_texture_library.gd")
 
 func _normalize_array_image(source: Image, size: int, fill_color: Color) -> Image:
 	var img: Image = Image.create(size, size, false, Image.FORMAT_RGBA8)
@@ -35,7 +37,7 @@ func _highest_texture_slot(textures: Array) -> int:
 	return highest
 
 
-func _required_layer_count(lib: MSTextureLibrary) -> int:
+func _required_layer_count(lib) -> int:
 	var highest := max(
 		_highest_texture_slot(lib.albedo_textures),
 		max(_highest_texture_slot(lib.normal_textures), _highest_texture_slot(lib.grass_textures))
@@ -45,11 +47,13 @@ func _required_layer_count(lib: MSTextureLibrary) -> int:
 
 
 ## Returns paths for the baked albedo, normal, and grass Texture2DArray resources.
-func _bake_array(lib: MSTextureLibrary, textures: Array, out_dir: String, filename: String, size: int, layer_count: int) -> String:
+func _bake_array(lib, textures: Array, out_dir: String, filename: String, size: int, layer_count: int) -> String:
 	var images := []
 	var fill_color := PLACEHOLDER_ALBEDO
 	if filename.find("normal") != -1:
 		fill_color = PLACEHOLDER_NORMAL
+	elif filename.find("grass") != -1:
+		fill_color = PLACEHOLDER_GRASS
 	for i in range(layer_count):
 		var tex = null
 		if i < textures.size():
@@ -78,15 +82,15 @@ func _bake_array(lib: MSTextureLibrary, textures: Array, out_dir: String, filena
 		return ""
 	return out_path
 
-func bake_library(lib: MSTextureLibrary, out_dir: String, albedo_size: int = DEFAULT_SIZE, grass_size: int = DEFAULT_SIZE) -> Dictionary:
+func bake_library(lib, out_dir: String, albedo_size: int = DEFAULT_SIZE, grass_size: int = DEFAULT_SIZE) -> Dictionary:
 	if lib == null:
 		push_error("MarchingSquaresBaker: No MSTextureLibrary provided.")
 		return {}
 	# If lib is a placeholder Resource in the editor, attempt to load the real resource from disk.
-	if not (lib is MSTextureLibrary):
+	if not (lib is MSTextureLibraryScript):
 		if lib is Resource and lib.resource_path and str(lib.resource_path) != "":
 			var loaded_lib = ResourceLoader.load(str(lib.resource_path))
-			if loaded_lib and loaded_lib is MSTextureLibrary:
+			if loaded_lib and loaded_lib is MSTextureLibraryScript:
 				lib = loaded_lib
 			else:
 				push_error("MarchingSquaresBaker: texture_library is not a valid MSTextureLibrary resource.")

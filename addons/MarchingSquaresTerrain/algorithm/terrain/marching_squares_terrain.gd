@@ -1557,8 +1557,6 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 			var gtex = lib_res.grass_textures[i] if i < lib_res.grass_textures.size() else null
 			if gtex != null and gtex is Texture2D:
 				texture_slots[i].grass_texture = gtex
-			else:
-				texture_slots[i].grass_texture = null
 			if i < preset_slot_scales.size() and preset_slot_scales[i] != null:
 				texture_slots[i].scale = float(preset_slot_scales[i])
 		if highest_library_slot >= 0:
