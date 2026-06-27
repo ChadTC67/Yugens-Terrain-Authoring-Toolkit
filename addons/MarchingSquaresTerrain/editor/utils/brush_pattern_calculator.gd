@@ -88,6 +88,24 @@ static func cell_to_world_pos(chunk_coords: Vector2i, cell_coords: Vector2i, ter
 	return Vector2(world_x, world_z)
 
 
+## Helper function that calculates a global cell from a world position
+static func world_to_global_cell(world_pos: Vector2, terrain: MarchingSquaresTerrain) -> Vector2i:
+	var cell_size := terrain.cell_size
+	return Vector2i(floori(world_pos.x / cell_size.x), floori(world_pos.y / cell_size.y))
+
+
+## Calculate the corresponding local cell and chunk coords for a global cell
+static func global_cell_to_local(global_cell: Vector2i, terrain: MarchingSquaresTerrain) -> Dictionary:
+	var chunk_size := Vector2i(terrain.dimensions.x - 1, terrain.dimensions.z - 1)
+	var chunk := Vector2i(floori(float(global_cell.x) / chunk_size.x), floori(float(global_cell.y) / chunk_size.y))
+	var local_cell := Vector2i(posmod(global_cell.x, chunk_size.x), posmod(global_cell.y, chunk_size.y))
+	
+	return {
+		"chunk": chunk,
+		"cell": local_cell
+	}
+
+
 ## Get cell range for a specific chunk within the brush bounds
 static func get_cell_range_for_chunk(chunk_coords: Vector2i, bounds: BrushBounds, terrain: MarchingSquaresTerrain) -> Dictionary:
 	var x_min : int = bounds.cell_tl.x if chunk_coords.x == bounds.chunk_tl.x else 0
