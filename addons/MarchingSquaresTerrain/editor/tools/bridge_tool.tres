@@ -24,6 +24,6 @@ Used to create a bridge between two points.
 [INFO]
 • The bridge curve falloff can be set via the \"ease value\" attribute. 
 For reference see the ease value cheatsheet in the documentation+ folder.
-• Enabling \"Curve3D Mode\" changes the bridge calculations to be point based instead of shortest distance."
+• Enabling \"Curve3D Mode\" changes the bridge calculations to be point based, allowing for free form bridges."
 attributes = SubResource("Resource_l6yvy")
 metadata/_custom_type_script = "uid://brkjbcthwswel"

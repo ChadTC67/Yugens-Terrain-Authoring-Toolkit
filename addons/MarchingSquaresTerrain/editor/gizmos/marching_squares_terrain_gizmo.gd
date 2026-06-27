@@ -137,7 +137,7 @@ func _redraw():
 		
 		pos = terrain_plugin.brush_position
 		
-		var bounds = BrushPatternCalculator.calculate_bounds(pos, terrain_plugin.brush_size, terrain_system)
+		var bounds := BrushPatternCalculator.calculate_bounds(pos, terrain_plugin.brush_size, terrain_system)
 		var max_distance : float = BrushPatternCalculator.calculate_max_distance(terrain_plugin.brush_size, terrain_plugin.current_brush_index)
 		var brush_pos : Vector2 = Vector2(pos.x, pos.z)
 		
@@ -161,12 +161,45 @@ func _redraw():
 				var chunk_coords : Vector2i = cell_info.chunk
 				var cell_coords : Vector2i = cell_info.cell
 				
-				if not terrain_system.chunks.has(chunk_coords):
-						continue
+				var line_world_pos : Vector2 = BrushPatternCalculator.cell_to_world_pos(chunk_coords, cell_coords, terrain_system)
+				# Calculate the bounds cell's bounds on which the brush radius will be overlayed (printed)
+				var brushprint_bounds := BrushPatternCalculator.calculate_bounds(
+					Vector3(line_world_pos.x, 0, line_world_pos.y),
+					terrain_plugin.brush_size,
+					terrain_system
+				)
 				
-				if not terrain_plugin.current_draw_pattern.has(chunk_coords):
-					terrain_plugin.current_draw_pattern[chunk_coords] = {}
-				terrain_plugin.current_draw_pattern[chunk_coords][cell_coords] = 1.0
+				var max_dist_line : float = BrushPatternCalculator.calculate_max_distance(terrain_plugin.brush_size, terrain_plugin.current_brush_index)
+				
+				for chunk_z in range(brushprint_bounds.chunk_tl.y, brushprint_bounds.chunk_br.y + 1):
+					for chunk_x in range(brushprint_bounds.chunk_tl.x, brushprint_bounds.chunk_br.x + 1):
+						var brushprint_chunk := Vector2i(chunk_x, chunk_z)
+						if not terrain_system.chunks.has(brushprint_chunk):
+							continue
+						
+						var cell_range : Dictionary = BrushPatternCalculator.get_cell_range_for_chunk(brushprint_chunk, brushprint_bounds, terrain_system)
+						
+						for z in range(cell_range.z_min, cell_range.z_max):
+							for x in range(cell_range.x_min, cell_range.x_max):
+								var brushprint_cell := Vector2i(x, z)
+								var world_pos : Vector2 = BrushPatternCalculator.cell_to_world_pos(brushprint_chunk, brushprint_cell, terrain_system)
+								
+								var sample : float = BrushPatternCalculator.calculate_falloff_sample(
+									world_pos - Vector2(1, 1), line_world_pos, terrain_plugin.brush_size, terrain_plugin.current_brush_index,
+									max_dist_line, terrain_plugin.falloff, terrain_plugin.falloff_curve
+								)
+								
+								if sample < 0:
+									continue # Outside brush
+								
+								if not terrain_plugin.current_draw_pattern.has(brushprint_chunk):
+									terrain_plugin.current_draw_pattern[brushprint_chunk] = {}
+								if terrain_plugin.current_draw_pattern[brushprint_chunk].has(brushprint_cell):
+									var prev_sample = terrain_plugin.current_draw_pattern[brushprint_chunk][brushprint_cell]
+									if sample > prev_sample:
+										terrain_plugin.current_draw_pattern[brushprint_chunk][brushprint_cell] = sample
+								else:
+									terrain_plugin.current_draw_pattern[brushprint_chunk][brushprint_cell] = sample
 		
 		else:
 			for chunk_z in range(bounds.chunk_tl.y, bounds.chunk_br.y + 1):
