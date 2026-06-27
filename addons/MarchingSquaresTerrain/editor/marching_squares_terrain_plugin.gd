@@ -1029,25 +1029,39 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 						restore_pattern_cc[adjacent_chunk_coords][adjacent_cell_coords] = restore_value_cc
 	
 	if mode == TerrainToolMode.VERTEX_PAINTING:
-		# Standard 2D painting (ground or walls)
-		# Create ONE composite action instead of 2 separate actions
-		# Use wall_color keys when painting walls, color keys when painting ground
-		var color_key_0 := "wall_color_0" if paint_walls_mode else "color_0"
-		var color_key_1 := "wall_color_1" if paint_walls_mode else "color_1"
-		var do_patterns := {
-			color_key_0: pattern,
-			color_key_1: pattern_cc
-		}
-		var undo_patterns := {
-			color_key_0: restore_pattern,
-			color_key_1: restore_pattern_cc
-		}
-		
-		var action_name := "terrain wall paint" if paint_walls_mode else "terrain vertex paint"
-		undo_redo.create_action(action_name)
-		undo_redo.add_do_method(self, "apply_composite_pattern_action", terrain, do_patterns)
-		undo_redo.add_undo_method(self, "apply_composite_pattern_action", terrain, undo_patterns)
-		undo_redo.commit_action()
+		if paint_walls_mode:
+			var do_states := {}
+			var undo_states := {}
+			for draw_chunk_coords: Vector2i in current_draw_pattern.keys():
+				var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(draw_chunk_coords)
+				if chunk == null:
+					continue
+				undo_states[draw_chunk_coords] = chunk.get_wall_paint_stamp_state()
+				do_states[draw_chunk_coords] = chunk.append_wall_paint_stamp(
+					brush_position,
+					(terrain.global_transform.basis * brush_surface_normal).normalized(),
+					brush_size,
+					vertex_color_idx
+				)
+			if not do_states.is_empty():
+				undo_redo.create_action("terrain wall paint")
+				undo_redo.add_do_method(self, "apply_wall_paint_stamp_states_action", terrain, do_states)
+				undo_redo.add_undo_method(self, "apply_wall_paint_stamp_states_action", terrain, undo_states)
+				undo_redo.commit_action()
+		else:
+			# Standard 2D ground painting
+			var do_patterns := {
+				"color_0": pattern,
+				"color_1": pattern_cc
+			}
+			var undo_patterns := {
+				"color_0": restore_pattern,
+				"color_1": restore_pattern_cc
+			}
+			undo_redo.create_action("terrain vertex paint")
+			undo_redo.add_do_method(self, "apply_composite_pattern_action", terrain, do_patterns)
+			undo_redo.add_undo_method(self, "apply_composite_pattern_action", terrain, undo_patterns)
+			undo_redo.commit_action()
 	elif mode == TerrainToolMode.GRASS_MASK:
 		undo_redo.create_action("terrain grass mask draw")
 		undo_redo.add_do_method(self, "draw_grass_mask_pattern_action", terrain, pattern)
@@ -1335,6 +1349,13 @@ func draw_wall_color_1_pattern_action(terrain: MarchingSquaresTerrain, pattern: 
 			var color : Color = draw_chunk_dict[draw_cell_coords]
 			chunk.draw_wall_color_1(draw_cell_coords.x, draw_cell_coords.y, color)
 		chunk.regenerate_mesh()
+
+
+func apply_wall_paint_stamp_states_action(terrain: MarchingSquaresTerrain, states: Dictionary) -> void:
+	for chunk_coords: Vector2i in states:
+		var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(chunk_coords)
+		if chunk:
+			chunk.set_wall_paint_stamp_state(states[chunk_coords])
 
 
 # Applies all terrain patterns  (for quick paint brush and vertex painting operations)

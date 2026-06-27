@@ -44,6 +44,13 @@ uniform float blend_noise_scale : hint_range(0.0, 50.0, 1.0) = 10.0;
 uniform float blend_noise_strength : hint_range(0.0, 1.0, 0.05) = 0.0;
 group_uniforms;
 
+group_uniforms Effects.WallPaint;
+uniform int wall_paint_count = 0;
+uniform vec4 wall_paint_stamps_a[64];
+uniform vec4 wall_paint_stamps_b[64];
+uniform float wall_paint_plane_thickness : hint_range(0.001, 1.0, 0.001) = 0.03;
+group_uniforms;
+
 group_uniforms Visuals.Normals;
 uniform bool use_flat_normals = false;
 
@@ -91,6 +98,7 @@ group_uniforms;
 
 
 varying vec3 vertex_normal;
+varying vec3 world_normal;
 varying vec3 custom1;
 varying flat float nearest_wall_color_idx;
 varying vec3 world_pos;
@@ -666,6 +674,7 @@ float get_world_noise(vec3 world_position, float tile_size) {
 
 void vertex() {
 	vertex_normal = NORMAL;
+	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	custom1 = CUSTOM1.rgb;
 	float a = CUSTOM1.a;
 	nearest_wall_color_idx = floor(a);
@@ -888,6 +897,39 @@ void fragment() {
 		vec4 wall_mat = sample_material_by_index(mat_a, wall_uv) * weight_a
 					+ sample_material_by_index(mat_b, wall_uv) * weight_b
 					+ sample_material_by_index(mat_c, wall_uv) * weight_c;
+
+		int wall_override_mat = -1;
+		vec3 frag_wall_normal = normalize(world_normal);
+		for (int i = 63; i >= 0; i--) {
+			if (i >= wall_paint_count) {
+				continue;
+			}
+			vec4 stamp_a = wall_paint_stamps_a[i];
+			vec4 stamp_b = wall_paint_stamps_b[i];
+			vec3 stamp_normal = normalize(stamp_b.xyz);
+			if (length(stamp_normal) < 0.0001) {
+				continue;
+			}
+			if (dot(frag_wall_normal, stamp_normal) < 0.35) {
+				continue;
+			}
+			vec3 delta = world_pos - stamp_a.xyz;
+			float signed_plane = dot(delta, stamp_normal);
+			if (abs(signed_plane) > wall_paint_plane_thickness) {
+				continue;
+			}
+			vec3 plane_delta = delta - stamp_normal * signed_plane;
+			if (length(plane_delta) <= stamp_a.w) {
+				wall_override_mat = int(round(stamp_b.w));
+				break;
+			}
+		}
+		if (wall_override_mat >= 0) {
+			wall_mat = sample_material_by_index(wall_override_mat, wall_uv);
+			out_roughness = _palette_roughness(wall_override_mat);
+			out_wet_enabled = _palette_wet_enabled(wall_override_mat);
+			out_wet_mode = _palette_wet_mode(wall_override_mat);
+		}
 
 		ALBEDO = wall_mat.rgb;
 		ALPHA = wall_mat.a;

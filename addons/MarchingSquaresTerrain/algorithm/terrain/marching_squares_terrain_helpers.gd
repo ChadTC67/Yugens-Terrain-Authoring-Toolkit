@@ -352,7 +352,11 @@ static func rebuild_grass_texture_array(terrain) -> void:
 	var grass_mat := terrain.grass_mesh.material as ShaderMaterial
 
 	var baked: Texture2DArray = null
-	if not Engine.is_editor_hint():
+	if not bool(terrain.bake_grass):
+		terrain._runtime_grass_texture_array = null
+		grass_mat.set_shader_parameter("vc_grass_tex_array", null)
+		grass_mat.set_shader_parameter("use_grass_tex_array", false)
+	elif str(terrain.baked_grass_array_path) != "":
 		baked = _try_load_baked(terrain, "baked_grass_array_path")
 	if baked != null:
 		terrain._runtime_grass_texture_array = baked
