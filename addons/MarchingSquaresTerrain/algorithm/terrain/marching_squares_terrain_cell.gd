@@ -274,7 +274,7 @@ func add_point(x: float, y: float, z: float, u: float, v: float):
 	pts.append(vert)
 	uvs.append(uv)
 	uv2s.append(uv2)
-	var colors: Dictionary = color_helper.blend_colors(Vector3(x,y,z), uv)
+	var colors: Dictionary = color_helper.blend_colors(Vector3(x,y,z), uv, false, vert)
 	custom_1_values.append(colors["custom_1_value"])
 	color_0s.append(colors["color_0"])
 	color_1s.append(colors["color_1"])

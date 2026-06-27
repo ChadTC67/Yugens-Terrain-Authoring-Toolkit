@@ -33,6 +33,10 @@ extends Resource
 @export var mesh : Mesh
 @export var collision_faces : PackedVector3Array
 @export var grass_multimesh : MultiMesh
+@export var wall_paint_stamp_positions : PackedVector3Array
+@export var wall_paint_stamp_normals : PackedVector3Array
+@export var wall_paint_stamp_radii : PackedFloat32Array
+@export var wall_paint_stamp_texture_indices : PackedInt32Array
 
 
 ## Helper to set collision from a ConcavePolygonShape3D

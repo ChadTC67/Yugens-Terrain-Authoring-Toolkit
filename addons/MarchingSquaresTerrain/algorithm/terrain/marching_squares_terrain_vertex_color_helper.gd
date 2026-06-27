@@ -35,7 +35,7 @@ var chunk
 var cell
 
 
-func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool =  false) -> Dictionary:
+func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool =  false, local_vert: Variant = null) -> Dictionary:
 	var colors : Dictionary = {}
 	var blend_threshold : float = cell.merge_threshold * BLEND_EDGE_SENSITIVITY # COMMENT: We can tweak the BLEND_EDGE_SENSITIVITY to allow more "agressive" Cliff vs Slope detection
 	var blend_ab : bool = abs(cell.ay-cell.by) < blend_threshold
@@ -98,7 +98,6 @@ func blend_colors(vertex: Vector3, uv: Vector2, diag_midpoint: bool =  false) ->
 	c_1_val.a = rl_idx
 	colors["custom_1_value"] = c_1_val
 	
-	# Material blend data is always driven by the CUSTOM2 encoding.
 	colors["mat_blend"] = calculate_material_blend_data(vertex.x, vertex.z, source_map_0, source_map_1)
 	colors["color_1"].r = cell_weight_b
 	return colors

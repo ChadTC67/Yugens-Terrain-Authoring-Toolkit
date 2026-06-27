@@ -6,6 +6,7 @@ class_name MarchingSquaresTerrainChunk
 const MSTVertexColorHelper := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_vertex_color_helper.gd")
 const MSTTerrainCell := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_cell.gd")
 const MSTDataHandler := preload("res://addons/MarchingSquaresTerrain/resources/mst_data_handler.gd")
+const MAX_WALL_PAINT_STAMPS := 64
 
 enum Mode {CUBIC, POLYHEDRON, ROUNDED_POLYHEDRON, SEMI_ROUND, SPHERICAL}
 
@@ -46,6 +47,10 @@ var grass_mask_map : PackedColorArray # Stores if a cell should have grass or no
 var merge_threshold : float = MERGE_MODE[Mode.POLYHEDRON]
 
 var grass_planter : MarchingSquaresGrassPlanter
+var wall_paint_stamp_positions : PackedVector3Array = PackedVector3Array()
+var wall_paint_stamp_normals : PackedVector3Array = PackedVector3Array()
+var wall_paint_stamp_radii : PackedFloat32Array = PackedFloat32Array()
+var wall_paint_stamp_texture_indices : PackedInt32Array = PackedInt32Array()
 
 var global_position_cached : Vector3 = Vector3.ZERO
 
@@ -124,12 +129,10 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 	var has_baked_grass_multimesh := _temp_grass_multimesh != null
 	if _temp_grass_multimesh:
 		grass_planter.multimesh = _temp_grass_multimesh
-	if not EngineWrapper.instance.is_editor():
-		grass_planter.ensure_multimesh_count()
+	var grass_count_changed := grass_planter.ensure_multimesh_count()
 	if not grass_planter.multimesh:
 		grass_planter.setup(self)
-		if not EngineWrapper.instance.is_editor():
-			grass_planter.regenerate_all_cells()
+		grass_count_changed = true
 	grass_planter.multimesh.mesh = terrain_system.grass_mesh
 	
 	# Generate maps if not loaded from external storage (works for both editor and runtime)
@@ -155,7 +158,7 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 		regenerate_mesh(true)
 	elif mesh:
 		if terrain_system:
-			mesh.surface_set_material(0, terrain_system.terrain_material)
+			_apply_chunk_surface_material()
 		if not _temp_collision_shapes.is_empty():
 			_recreate_collision_body()
 		else:
@@ -165,10 +168,8 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 			create_trimesh_collision()
 			_apply_collision_layers()
 
-	if not EngineWrapper.instance.is_editor() and grass_planter:
-		var grass_count_changed := grass_planter.ensure_multimesh_count()
-		if not has_baked_grass_multimesh or grass_count_changed:
-			grass_planter.regenerate_all_cells()
+	if grass_planter and (not has_baked_grass_multimesh or grass_count_changed):
+		grass_planter.regenerate_all_cells()
 	
 	var has_texture_array_source := (
 		terrain_system.get("texture_library") != null
@@ -350,7 +351,7 @@ func regenerate_mesh(use_threads: bool =  false):
 	mesh = st.commit()
 		
 	if mesh and terrain_system and mesh.get_surface_count() > 0:
-		mesh.surface_set_material(0, terrain_system.terrain_material)
+		_apply_chunk_surface_material()
 	
 	for child in get_children():
 		if child is StaticBody3D:
@@ -734,7 +735,82 @@ func draw_grass_mask(x: int, z: int, masked: Color):
 	notify_needs_update(z-1, x)
 	notify_needs_update(z-1, x-1)
 
+
+func get_wall_paint_stamp_state() -> Dictionary:
+	return {
+		"positions": wall_paint_stamp_positions.duplicate(),
+		"normals": wall_paint_stamp_normals.duplicate(),
+		"radii": wall_paint_stamp_radii.duplicate(),
+		"texture_indices": wall_paint_stamp_texture_indices.duplicate(),
+	}
+
+
+func set_wall_paint_stamp_state(state: Dictionary) -> void:
+	wall_paint_stamp_positions = state.get("positions", PackedVector3Array())
+	wall_paint_stamp_normals = state.get("normals", PackedVector3Array())
+	wall_paint_stamp_radii = state.get("radii", PackedFloat32Array())
+	wall_paint_stamp_texture_indices = state.get("texture_indices", PackedInt32Array())
+	mark_dirty()
+	_apply_chunk_surface_material()
+
+
+func append_wall_paint_stamp(world_pos: Vector3, world_normal: Vector3, radius: float, texture_idx: int) -> Dictionary:
+	var positions := wall_paint_stamp_positions.duplicate()
+	var normals := wall_paint_stamp_normals.duplicate()
+	var radii := wall_paint_stamp_radii.duplicate()
+	var texture_indices := wall_paint_stamp_texture_indices.duplicate()
+	if positions.size() >= MAX_WALL_PAINT_STAMPS:
+		positions.remove_at(0)
+		normals.remove_at(0)
+		radii.remove_at(0)
+		texture_indices.remove_at(0)
+	positions.append(world_pos)
+	normals.append(world_normal.normalized())
+	radii.append(maxf(radius, 0.001))
+	texture_indices.append(clampi(texture_idx, 0, 255))
+	return {
+		"positions": positions,
+		"normals": normals,
+		"radii": radii,
+		"texture_indices": texture_indices,
+	}
+
 #endregion
+
+
+func _apply_chunk_surface_material() -> void:
+	if mesh == null or terrain_system == null or mesh.get_surface_count() <= 0:
+		return
+	var base_mat := terrain_system.get_chunk_surface_material()
+	if base_mat == null or not (base_mat is ShaderMaterial):
+		mesh.surface_set_material(0, base_mat)
+		return
+	var mat: ShaderMaterial = (base_mat as ShaderMaterial).duplicate(true)
+	_sync_wall_paint_shader_params(mat)
+	mesh.surface_set_material(0, mat)
+
+
+func _sync_wall_paint_shader_params(mat: ShaderMaterial) -> void:
+	var positions: Array[Vector4] = []
+	var data_b: Array[Vector4] = []
+	var stamp_count := min(
+		wall_paint_stamp_positions.size(),
+		min(wall_paint_stamp_normals.size(), min(wall_paint_stamp_radii.size(), wall_paint_stamp_texture_indices.size()))
+	)
+	stamp_count = mini(stamp_count, MAX_WALL_PAINT_STAMPS)
+	for i in range(MAX_WALL_PAINT_STAMPS):
+		if i < stamp_count:
+			var p := wall_paint_stamp_positions[i]
+			var n := wall_paint_stamp_normals[i].normalized()
+			positions.append(Vector4(p.x, p.y, p.z, float(wall_paint_stamp_radii[i])))
+			data_b.append(Vector4(n.x, n.y, n.z, float(wall_paint_stamp_texture_indices[i])))
+		else:
+			positions.append(Vector4.ZERO)
+			data_b.append(Vector4.ZERO)
+	mat.set_shader_parameter("wall_paint_count", stamp_count)
+	mat.set_shader_parameter("wall_paint_stamps_a", positions)
+	mat.set_shader_parameter("wall_paint_stamps_b", data_b)
+	mat.set_shader_parameter("wall_paint_plane_thickness", maxf(minf(cell_size.x, cell_size.y) * 0.08, 0.03))
 
 func notify_needs_update(z: int, x: int):
 	if z < 0 or z >=  terrain_system.dimensions.z-1 or x < 0 or x >= terrain_system.dimensions.x-1:

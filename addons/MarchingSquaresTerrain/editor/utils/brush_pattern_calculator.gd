@@ -141,7 +141,10 @@ static func cell_to_wall_sample_pos(
 	terrain: MarchingSquaresTerrain,
 	brush_pos: Vector3
 	) -> Vector3:
-	var world_pos := cell_to_world_pos(chunk_coords, cell_coords, terrain)
+	# Sample wall painting from the center of each cell instead of the corner.
+	# This keeps the old wall-color workflow, but makes the brush footprint feel
+	# less like a snapped column selection and more like the visible brush area.
+	var world_pos := cell_to_world_pos(chunk_coords, cell_coords, terrain, true)
 	if terrain == null or not terrain.chunks.has(chunk_coords):
 		return Vector3(world_pos.x, brush_pos.y, world_pos.y)
 	var chunk: MarchingSquaresTerrainChunk = terrain.chunks[chunk_coords]

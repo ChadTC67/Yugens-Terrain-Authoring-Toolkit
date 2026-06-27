@@ -342,6 +342,10 @@ static func export_chunk_data(chunk: MarchingSquaresTerrainChunk) -> MSTChunkDat
 	
 	if chunk.terrain_system.bake_grass and chunk.grass_planter:
 		data.grass_multimesh = chunk.grass_planter.multimesh
+	data.wall_paint_stamp_positions = chunk.wall_paint_stamp_positions
+	data.wall_paint_stamp_normals = chunk.wall_paint_stamp_normals
+	data.wall_paint_stamp_radii = chunk.wall_paint_stamp_radii
+	data.wall_paint_stamp_texture_indices = chunk.wall_paint_stamp_texture_indices
 	
 	if chunk.terrain_system.bake_collision:
 		# Find collision shape
@@ -390,6 +394,10 @@ static func import_chunk_data(chunk: MarchingSquaresTerrainChunk, data: MSTChunk
 	
 	if data.grass_multimesh:
 		chunk._temp_grass_multimesh = data.grass_multimesh
+	chunk.wall_paint_stamp_positions = data.wall_paint_stamp_positions
+	chunk.wall_paint_stamp_normals = data.wall_paint_stamp_normals
+	chunk.wall_paint_stamp_radii = data.wall_paint_stamp_radii
+	chunk.wall_paint_stamp_texture_indices = data.wall_paint_stamp_texture_indices
 	
 	if not data.collision_faces.is_empty():
 		chunk._temp_collision_shapes = [data.get_collision_shape()]
