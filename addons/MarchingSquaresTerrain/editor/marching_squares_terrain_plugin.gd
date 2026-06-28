@@ -615,7 +615,7 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 					bridge_curve.bake_interval = terrain.cell_size.x
 					
 					for point in curve3d_bridge_points:
-						bridge_curve.add_point(point)
+						bridge_curve.add_point(Vector3(point.x, 0.0, point.z))
 					
 					if bridge_curve.get_baked_length() < 0.5: # Skip small bridges so the terrain doesn't glitch
 						return
@@ -627,7 +627,6 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 					)
 					
 					var closest_offset := _find_closest_curve_offset(bridge_curve, global_cell)
-					
 					var progress := closest_offset / bridge_curve.get_baked_length()
 					
 					if ease_value != -1.0:
