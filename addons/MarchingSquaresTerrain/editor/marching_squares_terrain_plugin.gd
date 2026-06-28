@@ -80,6 +80,9 @@ var height : float = 0.0
 var flatten : bool = true
 var falloff : bool = true
 
+# Determines if the Bridge Tool calculations will use a Curve3D point based system or a shortest distance based system
+var curve3d_mode : bool = false
+
 var should_mask_grass : bool = false
 
 # Currently selected preset for vertex textures (DOES change the global terrain)
@@ -118,6 +121,9 @@ var terrain_hovered : bool
 var is_chunk_plane_hovered : bool
 var current_hovered_chunk : Vector2i
 
+var curve3d_bridge_points : PackedVector3Array
+var last_bridge_point : Vector3
+
 # True if the mouse is currently held down to draw
 var is_drawing : bool
 
@@ -132,6 +138,7 @@ var is_setting : bool
 
 var is_making_bridge : bool
 var bridge_start_pos : Vector3
+var bridge_start_chunk_coords : Vector2i
 
 # The point where the height drag started
 var base_position : Vector3
@@ -391,7 +398,11 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 				if mode in [TerrainToolMode.BRIDGE] and not is_making_bridge:
 					flatten = false
 					is_making_bridge = true
+					curve3d_bridge_points.clear()
 					bridge_start_pos = brush_position
+					bridge_start_chunk_coords = current_hovered_chunk
+					last_bridge_point = brush_position
+					curve3d_bridge_points.append(bridge_start_pos)
 				if mode in [TerrainToolMode.SMOOTH] and falloff == false:
 					falloff = true
 				if mode in [TerrainToolMode.GRASS_MASK, TerrainToolMode.DEBUG_BRUSH] and falloff == true:
@@ -428,6 +439,11 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 			gizmo_plugin.trigger_redraw(terrain)
 			if mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
 				return EditorPlugin.AFTER_GUI_INPUT_STOP
+		
+		# Collect Curve3D bridge points
+		if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and is_making_bridge:
+			if brush_position.distance_to(last_bridge_point) > terrain.cell_size.x:
+				curve3d_bridge_points.append(brush_position)
 		
 		# Adjust brush size
 		if event is InputEventMouseButton and Input.is_key_pressed(KEY_SHIFT) and mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
@@ -519,46 +535,6 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 
 #region draw-related functions
 
-# Calculates brush pattern and updates current_draw_pattern
-func update_draw_pattern(b_pos: Vector3):
-	var terrain_system : MarchingSquaresTerrain = current_terrain_node
-	
-	var bounds := BrushPatternCalculator.calculate_bounds(b_pos, brush_size, terrain_system)
-	var max_distance : float = BrushPatternCalculator.calculate_max_distance(brush_size, current_brush_index)
-	var brush_pos : Vector2 = Vector2(b_pos.x, b_pos.z)
-	
-	for chunk_z in range(bounds.chunk_tl.y, bounds.chunk_br.y + 1):
-		for chunk_x in range(bounds.chunk_tl.x, bounds.chunk_br.x + 1):
-			var cursor_chunk_coords : Vector2i = Vector2i(chunk_x, chunk_z)
-			if not terrain_system.chunks.has(cursor_chunk_coords):
-				continue
-			
-			var cell_range : Dictionary = BrushPatternCalculator.get_cell_range_for_chunk(cursor_chunk_coords, bounds, terrain_system)
-			
-			for z in range(cell_range.z_min, cell_range.z_max):
-				for x in range(cell_range.x_min, cell_range.x_max):
-					var cursor_cell_coords : Vector2i = Vector2i(x, z)
-					var world_pos : Vector2 = BrushPatternCalculator.cell_to_world_pos(cursor_chunk_coords, cursor_cell_coords, terrain_system)
-					
-					var sample : float = BrushPatternCalculator.calculate_falloff_sample(
-						world_pos, brush_pos, brush_size, current_brush_index,
-						max_distance, falloff, falloff_curve
-					)
-					
-					if sample < 0:
-						continue  # Outside brush
-					
-					# Store largest sample
-					if not current_draw_pattern.has(cursor_chunk_coords):
-						current_draw_pattern[cursor_chunk_coords] = {}
-					if current_draw_pattern[cursor_chunk_coords].has(cursor_cell_coords):
-						var prev_sample = current_draw_pattern[cursor_chunk_coords][cursor_cell_coords]
-						if sample > prev_sample:
-							current_draw_pattern[cursor_chunk_coords][cursor_cell_coords] = sample
-					else:
-						current_draw_pattern[cursor_chunk_coords][cursor_cell_coords] = sample
-
-
 func draw_pattern(terrain: MarchingSquaresTerrain):
 	var undo_redo := get_undo_redo()
 	
@@ -634,34 +610,62 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 					restore_pattern[current_chunk_coords][local_cell] = restore_value
 					pattern[current_chunk_coords][local_cell] = draw_value
 			elif mode == TerrainToolMode.BRIDGE:
-				var b_end := Vector2(brush_position.x, brush_position.z)
-				var b_start := Vector2(bridge_start_pos.x, bridge_start_pos.z)
-				var bridge_length := (b_end - b_start).length()
-				if bridge_length < 0.5 or draw_chunk_dict.size() < 3: # Skip small bridges so the terrain doesn't glitch
-					return
-				
-				# Convert cell to world-space
-				var global_cell := Vector2(
-					(draw_chunk_coords.x * terrain.dimensions.x + draw_cell_coords.x) * terrain.cell_size.x,
-					(draw_chunk_coords.y * terrain.dimensions.z + draw_cell_coords.y) * terrain.cell_size.y)
-				
-				if draw_chunk_coords != first_chunk:
-					global_cell.x += (first_chunk.x - draw_chunk_coords.x) * terrain.cell_size.x
-				if draw_chunk_coords != first_chunk:
-					global_cell.y += (first_chunk.y - draw_chunk_coords.y) * terrain.cell_size.y
-				
-				# Calculate the 2D bridge direction vector
-				var bridge_dir := (b_end - b_start) / bridge_length
-				var cell_vec := global_cell - b_start
-				var linear_offset := cell_vec.dot(bridge_dir)
-				var progress := clamp(linear_offset / bridge_length, 0.0, 1.0)
-				
-				if ease_value != -1.0:
-					progress = ease(progress, ease_value)
-				var bridge_height := lerpf(bridge_start_pos.y, brush_position.y, progress)
-				
-				restore_value = chunk.get_height(draw_cell_coords)
-				draw_value = bridge_height
+				if curve3d_mode:
+					var bridge_curve := Curve3D.new()
+					bridge_curve.bake_interval = terrain.cell_size.x
+					
+					for point in curve3d_bridge_points:
+						bridge_curve.add_point(Vector3(point.x, 0.0, point.z))
+					
+					if bridge_curve.get_baked_length() < 0.5: # Skip small bridges so the terrain doesn't glitch
+						return
+					
+					# Convert cell to world-space
+					var global_cell := Vector2(
+						(draw_chunk_coords.x * (terrain.dimensions.x - 1) + draw_cell_coords.x) * terrain.cell_size.x,
+						(draw_chunk_coords.y * (terrain.dimensions.z - 1) + draw_cell_coords.y) * terrain.cell_size.y
+					)
+					
+					var closest_offset := _find_closest_curve_offset(bridge_curve, global_cell)
+					var progress := closest_offset / bridge_curve.get_baked_length()
+					
+					if ease_value != -1.0:
+						progress = ease(progress, ease_value)
+					progress = min(progress / sample, 1)
+					var bridge_height := lerpf(bridge_start_pos.y, brush_position.y, progress)
+					
+					restore_value = chunk.get_height(draw_cell_coords)
+					draw_value = bridge_height
+				else:
+					var b_end := Vector2(brush_position.x, brush_position.z)
+					var b_start := Vector2(bridge_start_pos.x, bridge_start_pos.z)
+					var bridge_length := (b_end - b_start).length()
+					if bridge_length < 0.5 or draw_chunk_dict.size() < 3: # Skip small bridges so the terrain doesn't glitch
+						return
+					
+					# Convert cell to world-space
+					var global_cell := Vector2(
+						(draw_chunk_coords.x * terrain.dimensions.x + draw_cell_coords.x) * terrain.cell_size.x,
+						(draw_chunk_coords.y * terrain.dimensions.z + draw_cell_coords.y) * terrain.cell_size.y)
+					
+					if draw_chunk_coords != first_chunk:
+						global_cell.x += (first_chunk.x - draw_chunk_coords.x) * terrain.cell_size.x
+					if draw_chunk_coords != first_chunk:
+						global_cell.y += (first_chunk.y - draw_chunk_coords.y) * terrain.cell_size.y
+					
+					# Calculate the 2D bridge direction vector
+					var bridge_dir := (b_end - b_start) / bridge_length
+					var cell_vec := global_cell - b_start
+					var linear_offset := cell_vec.dot(bridge_dir)
+					var progress := clamp(linear_offset / bridge_length, 0.0, 1.0)
+					
+					if ease_value != -1.0:
+						progress = ease(progress, ease_value)
+					progress = min(progress / sample, 1)
+					var bridge_height := lerpf(bridge_start_pos.y, brush_position.y, progress)
+					
+					restore_value = chunk.get_height(draw_cell_coords)
+					draw_value = bridge_height
 			elif mode == TerrainToolMode.VERTEX_PAINTING:
 				if paint_walls_mode:
 					restore_value = chunk.get_wall_color_0(draw_cell_coords)
@@ -1358,3 +1362,22 @@ func get_cell_normal(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -> Vect
 	return normal
 
 #endregion
+
+func _find_closest_curve_offset(curve: Curve3D, pos: Vector2) -> float:
+	var curve_length := curve.get_baked_length()
+	var interval := curve.bake_interval * 0.25
+	
+	var final_offset := 0.0 # The optimal offset would be perfectly on the current curve point (0.0)
+	var optimal_dist_sq := INF
+	
+	var current_offset := 0.0
+	while current_offset <= curve_length:
+		var curve_pos := curve.sample_baked(current_offset)
+		var dist_sq := pos.distance_squared_to(Vector2(curve_pos.x, curve_pos.z))
+		
+		if dist_sq < optimal_dist_sq:
+			optimal_dist_sq = dist_sq
+			final_offset = current_offset
+	
+		current_offset += interval
+	return final_offset
