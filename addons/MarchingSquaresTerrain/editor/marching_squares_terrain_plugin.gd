@@ -617,10 +617,14 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 					for point in curve3d_bridge_points:
 						bridge_curve.add_point(point)
 					
+					if bridge_curve.get_baked_length() < 0.5: # Skip small bridges so the terrain doesn't glitch
+						return
+					
 					# Convert cell to world-space
 					var global_cell := Vector2(
-						(draw_chunk_coords.x * terrain.dimensions.x + draw_cell_coords.x) * terrain.cell_size.x,
-						(draw_chunk_coords.y * terrain.dimensions.z + draw_cell_coords.y) * terrain.cell_size.y)
+						(draw_chunk_coords.x * (terrain.dimensions.x - 1) + draw_cell_coords.x) * terrain.cell_size.x,
+						(draw_chunk_coords.y * (terrain.dimensions.z - 1) + draw_cell_coords.y) * terrain.cell_size.y
+					)
 					
 					var closest_offset := _find_closest_curve_offset(bridge_curve, global_cell)
 					
@@ -628,6 +632,7 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 					
 					if ease_value != -1.0:
 						progress = ease(progress, ease_value)
+					progress = min(progress / sample, 1)
 					var bridge_height := lerpf(bridge_start_pos.y, brush_position.y, progress)
 					
 					restore_value = chunk.get_height(draw_cell_coords)
@@ -657,6 +662,7 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 					
 					if ease_value != -1.0:
 						progress = ease(progress, ease_value)
+					progress = min(progress / sample, 1)
 					var bridge_height := lerpf(bridge_start_pos.y, brush_position.y, progress)
 					
 					restore_value = chunk.get_height(draw_cell_coords)
@@ -1360,7 +1366,7 @@ func get_cell_normal(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -> Vect
 
 func _find_closest_curve_offset(curve: Curve3D, pos: Vector2) -> float:
 	var curve_length := curve.get_baked_length()
-	var interval := curve.bake_interval
+	var interval := curve.bake_interval * 0.25
 	
 	var final_offset := 0.0 # The optimal offset would be perfectly on the current curve point (0.0)
 	var optimal_dist_sq := INF

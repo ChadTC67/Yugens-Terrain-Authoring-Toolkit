@@ -9,6 +9,7 @@ script = ExtResource("1_nb1fd")
 brush_type = true
 size = true
 ease_value = true
+falloff = true
 curve3d_mode = true
 quick_paint_selection = true
 metadata/_custom_type_script = "uid://b6jopat61dbd3"

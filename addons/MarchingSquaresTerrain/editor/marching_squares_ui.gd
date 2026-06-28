@@ -119,10 +119,6 @@ func _on_tool_changed(tool_index: int) -> void:
 	else:
 		texture_settings.hide()
 	
-	if tool_index == 3: # Bridge tool
-		plugin.falloff = false
-		plugin.BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", false)
-	
 	plugin.active_tool = tool_index
 	plugin.mode = tool_index
 	plugin.vertex_color_idx = 0 # Set to the first material on start # Working around a UI sync bug. #TODO: This is temp workaround - Possible refactor.
