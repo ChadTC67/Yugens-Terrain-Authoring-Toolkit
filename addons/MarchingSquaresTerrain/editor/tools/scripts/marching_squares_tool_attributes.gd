@@ -116,6 +116,8 @@ func show_tool_attributes(tool_index: MarchingSquaresTerrainPlugin.TerrainToolMo
 		new_attributes.append(attribute_list.flatten)
 	if tool_attributes.falloff:
 		new_attributes.append(attribute_list.falloff)
+	if tool_attributes.curve3d_mode:
+		new_attributes.append(attribute_list.curve3d_mode)
 	if tool_attributes.mask_mode:
 		new_attributes.append(attribute_list.mask_mode)
 	if tool_attributes.material:
@@ -608,6 +610,8 @@ func _get_setting_value(p_setting_name: String) -> Variant:
 			return plugin.flatten
 		"falloff":
 			return plugin.falloff
+		"curve3d_mode":
+			return plugin.curve3d_mode
 		"mask_mode":
 			return plugin.should_mask_grass
 		"material":
