@@ -119,16 +119,6 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 		# Default any missing 'active' to true (older saves won't have it).
 		if slots_var[i] != null and slots_var[i].get("active") == null:
 			slots_var[i].active = true
-		# Default slot->base-texture mapping for older slot resources.
-		if slots_var[i] != null and slots_var[i].get("terrain_texture_index") == null:
-			if i == 15:
-				slots_var[i].terrain_texture_index = 15
-			elif i < 15:
-				slots_var[i].terrain_texture_index = i
-			else:
-				slots_var[i].terrain_texture_index = 0
-		elif slots_var[i] != null:
-			slots_var[i].terrain_texture_index = clampi(int(slots_var[i].terrain_texture_index), 0, 15)
 		# Default grass fields for older slot resources.
 		if slots_var[i] != null and slots_var[i].get("has_grass") == null:
 			slots_var[i].has_grass = (i == 0)
@@ -237,6 +227,29 @@ func _save_resource_if_external(res: Resource) -> void:
 		ResourceSaver.save(res, res.resource_path)
 
 
+func _is_valid_texture2d(tex) -> bool:
+	if tex == null or not (tex is Texture2D):
+		return false
+	return tex.get_class() != "Texture2D"
+
+
+func _coerce_texture2d(tex) -> Texture2D:
+	return tex as Texture2D if _is_valid_texture2d(tex) else null
+
+
+func _get_slot_albedo_texture(terrain, slot_idx: int) -> Texture2D:
+	if terrain == null or slot_idx < 0 or slot_idx >= MAX_TEXTURE_SLOTS:
+		return null
+	if terrain.texture_slots.size() > slot_idx and terrain.texture_slots[slot_idx] != null:
+		var slot_tex := _coerce_texture2d(terrain.texture_slots[slot_idx].texture)
+		if slot_tex != null:
+			return slot_tex
+	var lib_res := _get_texture_library(terrain)
+	if lib_res != null and slot_idx < lib_res.albedo_textures.size():
+		return _coerce_texture2d(lib_res.albedo_textures[slot_idx])
+	return null
+
+
 func _sync_texture_library_from_slots(terrain, lib_res) -> void:
 	if terrain == null or lib_res == null or not _ensure_terrain_arrays(terrain):
 		return
@@ -247,9 +260,17 @@ func _sync_texture_library_from_slots(terrain, lib_res) -> void:
 		if slot == null:
 			continue
 		if i < lib_res.albedo_textures.size():
-			lib_res.albedo_textures[i] = slot.texture if slot.texture is Texture2D else null
+			var slot_tex := _coerce_texture2d(slot.texture)
+			if slot_tex != null:
+				lib_res.albedo_textures[i] = slot_tex
+			elif bool(slot.get("active")) == false:
+				lib_res.albedo_textures[i] = null
 		if i < lib_res.grass_textures.size():
-			lib_res.grass_textures[i] = slot.grass_texture if slot.grass_texture is Texture2D else null
+			var grass_tex := _coerce_texture2d(slot.grass_texture)
+			if grass_tex != null:
+				lib_res.grass_textures[i] = grass_tex
+			elif bool(slot.get("active")) == false:
+				lib_res.grass_textures[i] = null
 	_save_resource_if_external(lib_res)
 
 
@@ -257,7 +278,7 @@ func _sync_slot_legacy_fields(terrain, slot_idx: int) -> void:
 	if terrain == null or slot_idx < 0 or slot_idx >= 15:
 		return
 	var slot = terrain.texture_slots[slot_idx] if slot_idx < terrain.texture_slots.size() else null
-	var tex: Texture2D = slot.texture if slot != null and slot.texture is Texture2D else null
+	var tex: Texture2D = _coerce_texture2d(slot.texture) if slot != null else null
 	var scale = float(slot.scale) if slot != null and slot.get("scale") != null else 1.0
 	var was_batch = terrain.get("is_batch_updating") if terrain.has_method("get") else null
 	if was_batch != null:
@@ -282,6 +303,8 @@ func _refresh_slot_runtime(terrain, p_refresh_ui: bool = false) -> void:
 		terrain._push_tex_scales()
 	if terrain.has_method("_rebuild_palette_uniforms"):
 		terrain._rebuild_palette_uniforms()
+	if terrain.has_method("refresh_chunk_surface_materials"):
+		terrain.refresh_chunk_surface_materials()
 	if terrain.has_method("_request_grass_regen"):
 		terrain._request_grass_regen()
 	if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
@@ -295,15 +318,14 @@ func _refresh_slot_runtime(terrain, p_refresh_ui: bool = false) -> void:
 func _apply_slot_albedo(terrain, slot_idx: int, resource: Variant, p_refresh_ui: bool = false) -> void:
 	if terrain == null or slot_idx < 0 or slot_idx >= MAX_TEXTURE_SLOTS or slot_idx == 15:
 		return
-	var texture: Texture2D = resource if resource is Texture2D else null
+	var texture: Texture2D = _coerce_texture2d(resource)
 	if not _ensure_terrain_arrays(terrain):
 		return
 	if terrain.texture_slots[slot_idx] == null:
 		terrain.texture_slots[slot_idx] = _TEXTURE_SLOT_SCRIPT.new()
 	terrain.texture_slots[slot_idx].active = true
 	terrain.texture_slots[slot_idx].texture = texture
-	if slot_idx < 15:
-		terrain.texture_slots[slot_idx].terrain_texture_index = slot_idx
+	terrain.texture_slots[slot_idx].albedo = _compute_slot_albedo_color(terrain, texture)
 	_sync_slot_legacy_fields(terrain, slot_idx)
 	var lib_res := _get_texture_library(terrain)
 	if lib_res != null and slot_idx < lib_res.albedo_textures.size():
@@ -312,10 +334,44 @@ func _apply_slot_albedo(terrain, slot_idx: int, resource: Variant, p_refresh_ui:
 	_refresh_slot_runtime(terrain, p_refresh_ui)
 
 
+func _compute_slot_albedo_color(terrain, texture: Texture2D) -> Color:
+	if terrain == null or texture == null:
+		return Color(1, 1, 1, 0)
+	if not terrain.has_method("_get_decompressed_image"):
+		return Color(1, 1, 1, 0)
+	var img: Image = terrain._get_decompressed_image(texture)
+	if img == null or img.is_empty():
+		return Color(1, 1, 1, 0)
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	var sample_img: Image = img
+	var max_dim := maxi(sample_img.get_width(), sample_img.get_height())
+	if max_dim > 16:
+		var scale := 16.0 / float(max_dim)
+		var target_w := maxi(1, int(round(sample_img.get_width() * scale)))
+		var target_h := maxi(1, int(round(sample_img.get_height() * scale)))
+		sample_img = sample_img.duplicate()
+		sample_img.resize(target_w, target_h, Image.INTERPOLATE_BILINEAR)
+	var accum := Color(0, 0, 0, 0)
+	var count := 0.0
+	for y in range(sample_img.get_height()):
+		for x in range(sample_img.get_width()):
+			var px: Color = sample_img.get_pixel(x, y)
+			if px.a <= 0.001:
+				continue
+			accum.r += px.r
+			accum.g += px.g
+			accum.b += px.b
+			count += 1.0
+	if count <= 0.0:
+		return Color(1, 1, 1, 0)
+	return Color(accum.r / count, accum.g / count, accum.b / count, 1.0)
+
+
 func _apply_slot_normal(terrain, slot_idx: int, resource: Variant) -> void:
 	if terrain == null or slot_idx < 0 or slot_idx >= MAX_TEXTURE_SLOTS or slot_idx == 15:
 		return
-	var texture: Texture2D = resource if resource is Texture2D else null
+	var texture: Texture2D = _coerce_texture2d(resource)
 	if not _ensure_terrain_arrays(terrain):
 		return
 	var lib_res := _get_texture_library(terrain)
@@ -410,7 +466,6 @@ func _clear_slot(terrain, slot_idx: int, p_refresh_ui: bool = true) -> void:
 	terrain.texture_slots[slot_idx].active = false
 	terrain.texture_slots[slot_idx].texture = null
 	terrain.texture_slots[slot_idx].scale = 1.0
-	terrain.texture_slots[slot_idx].terrain_texture_index = (slot_idx if slot_idx < 15 else 0)
 	_reset_slot_palette_state(terrain, slot_idx)
 	_sync_slot_legacy_fields(terrain, slot_idx)
 	_shrink_visible_texture_slots(terrain)
@@ -480,15 +535,12 @@ func add_texture_settings() -> void:
 
 	var gn_picker := EditorResourcePicker.new()
 	gn_picker.set_base_type("Texture2D")
-	var gn_tex: Texture2D = terrain.get("global_noise_texture")
-	if gn_tex != null and not (gn_tex is Texture2D):
-		gn_tex = null
+	var gn_tex: Texture2D = _coerce_texture2d(terrain.get("global_noise_texture"))
 	gn_picker.edited_resource = gn_tex
 	gn_picker.set_custom_minimum_size(Vector2(150, 25))
 	gn_picker.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	gn_picker.resource_changed.connect(func(resource):
-		if resource != null and not (resource is Texture2D):
-			resource = null
+		resource = _coerce_texture2d(resource)
 		terrain.set("global_noise_texture", resource)
 	)
 	gn_picker.resource_selected.connect(func(resource: Resource, inspect: bool):
@@ -611,9 +663,7 @@ func add_texture_settings() -> void:
 		var tile := VBoxContainer.new()
 		tile.set_custom_minimum_size(Vector2(136, 156))
 		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var tex_var : Texture2D = slot_obj.texture if slot_obj != null else null
-		if tex_var != null and not (tex_var is Texture2D):
-			tex_var = null
+		var tex_var : Texture2D = _get_slot_albedo_texture(terrain, slot_idx)
 		var thumb := _make_slot_preview(tex_var, 96)
 		var thumb_center := CenterContainer.new()
 		thumb_center.add_child(thumb)
@@ -764,20 +814,14 @@ func _open_slot_modal(slot_idx: int) -> void:
 	var picker := EditorResourcePicker.new()
 	picker.name = "tex_picker"
 	picker.set_base_type("Texture2D")
-	var existing_tex: Texture2D = null
-	if terrain.texture_slots.size() > slot_idx and terrain.texture_slots[slot_idx] != null:
-		existing_tex = terrain.texture_slots[slot_idx].texture if terrain.texture_slots[slot_idx].texture is Texture2D else null
-	if existing_tex == null:
-		var lib_for_preview := _get_texture_library(terrain)
-		if lib_for_preview != null and lib_for_preview is MSTextureLibraryScript and slot_idx < lib_for_preview.albedo_textures.size():
-			existing_tex = lib_for_preview.albedo_textures[slot_idx] if lib_for_preview.albedo_textures[slot_idx] is Texture2D else null
+	var existing_tex: Texture2D = _get_slot_albedo_texture(terrain, slot_idx)
 	if existing_tex != null:
 		picker.edited_resource = existing_tex
 		_set_modal_preview_texture(preview, terrain, existing_tex, 256)
 	picker.resource_changed.connect(func(res):
-		var preview_tex: Texture2D = res if res is Texture2D else null
+		var preview_tex: Texture2D = _coerce_texture2d(res)
 		_set_modal_preview_texture(preview, terrain, preview_tex, 256)
-		_apply_slot_albedo(terrain, slot_idx, res, false)
+		_apply_slot_albedo(terrain, slot_idx, res, true)
 		# Reposition the inline swatch after the preview may have resized
 		call_deferred("_position_preview_swatch", preview, preview.get_node_or_null("preview_overlay/preview_overlay_h/color_preview_rect_0"))
 	)
@@ -791,14 +835,14 @@ func _open_slot_modal(slot_idx: int) -> void:
 	var initial_norm_modal: Texture2D = null
 	if lib_res_modal != null and lib_res_modal is MSTextureLibraryScript and slot_idx < lib_res_modal.normal_textures.size():
 		var maybe_nrm_modal = lib_res_modal.normal_textures[slot_idx]
-		if maybe_nrm_modal != null and maybe_nrm_modal is Texture2D:
-			initial_norm_modal = maybe_nrm_modal
+		initial_norm_modal = _coerce_texture2d(maybe_nrm_modal)
 	var nrm_picker_modal := EditorResourcePicker.new()
 	nrm_picker_modal.set_base_type("Texture2D")
 	nrm_picker_modal.edited_resource = initial_norm_modal
 	nrm_picker_modal.set_custom_minimum_size(Vector2(100, 25))
 	nrm_picker_modal.resource_changed.connect(func(resource):
 		_apply_slot_normal(terrain, slot_idx, resource)
+		call_deferred("add_texture_settings")
 	)
 	v.add_child(nrm_picker_modal)
 
@@ -953,7 +997,71 @@ func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 	emit_signal("texture_setting_changed", p_setting_name, p_value)
 
 
+func _ensure_palette_capacity(terrain) -> void:
+	if terrain == null:
+		return
+	if terrain.palette_colors.size() < 128:
+		terrain.palette_colors.resize(128)
+	if terrain.palette_weights.size() < 128:
+		terrain.palette_weights.resize(128)
+	for i in range(128):
+		if terrain.palette_colors[i] == null:
+			terrain.palette_colors[i] = Color("647851ff")
+		if terrain.palette_weights[i] == null:
+			terrain.palette_weights[i] = 100.0
+
+
+func _next_free_palette_index(terrain, used: Dictionary) -> int:
+	for idx in range(128):
+		if not used.has(idx):
+			return idx
+	return -1
+
+
+func _repair_slot_palette_indices(terrain, slot: int) -> void:
+	if terrain == null or slot < 0 or slot >= MAX_TEXTURE_SLOTS:
+		return
+	_ensure_palette_capacity(terrain)
+	var used_elsewhere := {}
+	for si in range(MAX_TEXTURE_SLOTS):
+		if si == slot:
+			continue
+		for idx in terrain.slot_color_indices[si]:
+			used_elsewhere[int(idx)] = true
+	var seen_in_slot := {}
+	var indices: Array = terrain.slot_color_indices[slot]
+	var changed := false
+	for i in range(indices.size()):
+		var pidx := int(indices[i])
+		if pidx < 0 or pidx >= 128:
+			pidx = -1
+		var needs_new := pidx < 0 or seen_in_slot.has(pidx) or used_elsewhere.has(pidx)
+		if needs_new:
+			var used_all := used_elsewhere.duplicate()
+			for seen_idx in seen_in_slot.keys():
+				used_all[int(seen_idx)] = true
+			var next_idx := _next_free_palette_index(terrain, used_all)
+			if next_idx < 0:
+				push_error("[MST] Palette is full (128 colors max)")
+				return
+			if pidx >= 0 and pidx < 128:
+				terrain.palette_colors[next_idx] = terrain.palette_colors[pidx]
+				terrain.palette_weights[next_idx] = terrain.palette_weights[pidx]
+			else:
+				terrain.palette_colors[next_idx] = Color("647851ff")
+				terrain.palette_weights[next_idx] = 100.0
+			indices[i] = next_idx
+			pidx = next_idx
+			changed = true
+		seen_in_slot[pidx] = true
+	if changed:
+		terrain.slot_color_indices[slot] = indices
+		terrain._rebuild_palette_uniforms()
+		terrain.save_to_preset()
+
+
 func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slot: int) -> void:
+	_repair_slot_palette_indices(terrain, slot)
 	# Blend mode dropdown
 	var blend_hbox := HBoxContainer.new()
 	var blend_label := Label.new()
@@ -978,6 +1086,22 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 	
 	# Color rows
 	var slot_indices : Array = terrain.slot_color_indices[slot]
+	var weight_labels := {}
+	var weight_sliders := {}
+
+	var update_weight_controls := func(indices: Array) -> void:
+		for idx in indices:
+			var pidx := int(idx)
+			var new_text := str(int(round(float(terrain.palette_weights[pidx])))) + "%"
+			var label := weight_labels.get(pidx) as Label
+			if label != null:
+				label.text = new_text
+			var slider := weight_sliders.get(pidx) as HSlider
+			if slider != null:
+				slider.set_block_signals(true)
+				slider.value = clampf(float(terrain.palette_weights[pidx]), 0.0, 100.0)
+				slider.set_block_signals(false)
+
 	for ci in range(slot_indices.size()):
 		var palette_idx : int = slot_indices[ci]
 		# Compact row: preview, picker, weight bar, percent, slider, remove
@@ -997,21 +1121,18 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 		c_btn.color = terrain.palette_colors[palette_idx]
 		c_btn.set_custom_minimum_size(Vector2(60, 24))
 		c_btn.focus_mode = Control.FOCUS_NONE
-		c_btn.color_changed.connect(func(new_color, s = slot, ci_local = ci):
+		c_btn.color_changed.connect(func(new_color, s = slot, pidx = palette_idx):
 			if not is_instance_valid(terrain) or not is_instance_valid(plugin.current_terrain_node) or plugin.current_terrain_node != terrain:
 				return
-			# Resolve palette index at current position (handles reindexing after removes)
-			var pidx: int = int(terrain.slot_color_indices[s][ci_local])
+			if pidx < 0 or pidx >= terrain.palette_colors.size():
+				return
 			terrain.palette_colors[pidx] = new_color
 			# Update shared modal color preview if present.
 			var dlg := get_tree().get_root().get_node_or_null("mst_slot_modal")
 			if dlg != null:
 				var preview_node := _find_modal_node(dlg, "preview")
 				if preview_node != null:
-					var sw_name := "preview_overlay/preview_overlay_h/color_preview_rect_%d" % ci_local
-					var gpreview: ColorRect = preview_node.get_node_or_null(sw_name) as ColorRect
-					if gpreview != null:
-						gpreview.color = new_color
+					_refresh_modal_preview_swatches(dlg, terrain, s)
 			terrain._rebuild_palette_uniforms()
 			terrain.save_to_preset()
 		)
@@ -1023,6 +1144,7 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 			var w_label := Label.new()
 			w_label.text = str(int(round(terrain.palette_weights[palette_idx]))) + "%"
 			w_label.set_custom_minimum_size(Vector2(36, 20))
+			weight_labels[palette_idx] = w_label
 			c_hbox.add_child(w_label)
 			
 			var w_slider := HSlider.new()
@@ -1033,18 +1155,18 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 			w_slider.set_custom_minimum_size(Vector2(90, 20))
 			w_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			w_slider.focus_mode = Control.FOCUS_NONE
-			w_slider.value_changed.connect(func(val, s = slot, ci_local = ci):
+			weight_sliders[palette_idx] = w_slider
+			w_slider.value_changed.connect(func(val, s = slot, pidx = palette_idx):
 				if not is_instance_valid(terrain) or not is_instance_valid(plugin.current_terrain_node) or plugin.current_terrain_node != terrain:
 					return
 				terrain._ensure_palette_weights()
 				var indices: Array = terrain.slot_color_indices[s]
 				if indices.size() <= 1:
 					return
-				# Resolve palette index for this row.
-				var pidx: int = int(indices[ci_local])
+				if pidx < 0 or pidx >= terrain.palette_weights.size():
+					return
 				var new_v := clampf(float(val), 0.0, 100.0)
 				terrain.palette_weights[pidx] = new_v
-				w_label.text = str(int(round(new_v))) + "%"
 				var remaining := 100.0 - new_v
 				var others: Array = []
 				var total_other := 0.0
@@ -1061,6 +1183,7 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 					else:
 						for idx in others:
 							terrain.palette_weights[idx] = float(terrain.palette_weights[idx]) / total_other * remaining
+				update_weight_controls.call(indices)
 				terrain._rebuild_palette_uniforms()
 			)
 			w_slider.drag_ended.connect(func(_ended):
@@ -1074,10 +1197,13 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 		var remove_btn := Button.new()
 		remove_btn.text = "X"
 		remove_btn.set_custom_minimum_size(Vector2(22, 22))
-		remove_btn.pressed.connect(func(s = slot, ci_idx = ci):
+		remove_btn.pressed.connect(func(s = slot, pidx = palette_idx):
 			if not is_instance_valid(terrain) or not is_instance_valid(plugin.current_terrain_node) or plugin.current_terrain_node != terrain:
 				return
-			terrain.slot_color_indices[s].remove_at(ci_idx)
+			var remove_at: int = terrain.slot_color_indices[s].find(pidx)
+			if remove_at < 0:
+				return
+			terrain.slot_color_indices[s].remove_at(remove_at)
 			terrain._ensure_palette_weights()
 			var indices: Array = terrain.slot_color_indices[s]
 			if indices.size() > 0:
@@ -1103,14 +1229,13 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 		if not is_instance_valid(terrain) or not is_instance_valid(plugin.current_terrain_node) or plugin.current_terrain_node != terrain:
 			return
 		# Find first unused palette index
-		var used : Array = []
-		for si in range(15):
+		_ensure_palette_capacity(terrain)
+		var used := {}
+		for si in range(MAX_TEXTURE_SLOTS):
 			for idx in terrain.slot_color_indices[si]:
-				used.append(idx)
-		var next_idx := 0
-		while next_idx < 128 and next_idx in used:
-			next_idx += 1
-		if next_idx >= 128:
+				used[int(idx)] = true
+		var next_idx := _next_free_palette_index(terrain, used)
+		if next_idx < 0:
 			push_error("[MST] Palette is full (128 colors max)")
 			return
 		terrain.palette_colors[next_idx] = Color("647851ff")
@@ -1161,9 +1286,7 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 
 	var grass_picker := EditorResourcePicker.new()
 	grass_picker.set_base_type("Texture2D")
-	var grass_tex_var : Texture2D = slot_res.grass_texture if slot_res != null else null
-	if grass_tex_var != null and not (grass_tex_var is Texture2D):
-		grass_tex_var = null
+	var grass_tex_var : Texture2D = _coerce_texture2d(slot_res.grass_texture) if slot_res != null else null
 	grass_picker.edited_resource = grass_tex_var
 	grass_picker.visible = grass_cb.button_pressed
 	grass_picker.set_custom_minimum_size(Vector2(100, 25))
@@ -1192,8 +1315,7 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 
 	var __s_grass2 = slot
 	grass_picker.resource_changed.connect(func(resource):
-		if resource != null and not (resource is Texture2D):
-			resource = null
+		resource = _coerce_texture2d(resource)
 		if not _ensure_terrain_arrays(terrain):
 			return
 		if terrain.texture_slots[__s_grass2] == null:

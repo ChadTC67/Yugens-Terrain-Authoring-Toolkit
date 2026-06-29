@@ -5,7 +5,6 @@ class_name MarchingSquaresTerrainVertexColorHelper
 # < 1.0 = more aggressive wall detection 
 # > 1.0 = less aggressive / more slope blend
 const BLEND_EDGE_SENSITIVITY : float = 1.25
-
 # Cell height range for boundary detection (height-based color sampling)
 var cell_min_height : float
 var cell_max_height : float
@@ -326,10 +325,10 @@ func calculate_cell_material_pair(source_map_0: PackedColorArray, source_map_1: 
 			_safe_color(source_map_1, idx_base + chunk.dimensions.x + 1))
 	
 		var tex_counts : Dictionary = {}
-		tex_counts[tex_a] = tex_counts.get(tex_a, 0) + 1
-		tex_counts[tex_b] = tex_counts.get(tex_b, 0) + 1
-		tex_counts[tex_c] = tex_counts.get(tex_c, 0) + 1
-		tex_counts[tex_d] = tex_counts.get(tex_d, 0) + 1
+		tex_counts[tex_a] = tex_counts.get(tex_a, 0.0) + 1.0
+		tex_counts[tex_b] = tex_counts.get(tex_b, 0.0) + 1.0
+		tex_counts[tex_c] = tex_counts.get(tex_c, 0.0) + 1.0
+		tex_counts[tex_d] = tex_counts.get(tex_d, 0.0) + 1.0
 	
 		var sorted_textures : Array = tex_counts.keys()
 		# Sort descending by count
@@ -344,6 +343,7 @@ func calculate_cell_material_pair(source_map_0: PackedColorArray, source_map_1: 
 		cell_mat_a = sorted_textures[0]
 		cell_mat_b = sorted_textures[1] if sorted_textures.size() > 1 else sorted_textures[0]
 		cell_mat_c = sorted_textures[2] if sorted_textures.size() > 2 else cell_mat_b
+
 
 func _safe_color(src, idx):
 	if src is PackedColorArray and idx >= 0 and idx < src.size():
@@ -462,8 +462,7 @@ static func rebuild_palette_uniforms(terrain) -> void:
 	var img_surface_settings := Image.create_empty(1, max_slots, false, Image.FORMAT_RGBAF)
 	var img_floor_noise := Image.create_empty(1, max_slots, false, Image.FORMAT_RGBAF)
 	var img_wall_noise := Image.create_empty(1, max_slots, false, Image.FORMAT_RGBAF)
-	var img_slot_tex_index := Image.create_empty(1, max_slots, false, Image.FORMAT_R8)
-
+	var img_slot_albedo := Image.create_empty(1, max_slots, false, Image.FORMAT_RGBAF)
 	# Palette colors are edited/stored as sRGB-style values.
 	# Shaders operate in linear space, so convert to linear before uploading.
 	var fallback := Color(0.392, 0.471, 0.318, 1.0).srgb_to_linear()
@@ -483,18 +482,12 @@ static func rebuild_palette_uniforms(terrain) -> void:
 		var wall_noise_on: float = 1.0 if bool(terrain.slot_wall_noise_enabled[slot]) else 0.0
 		img_floor_noise.set_pixel(0, slot, Color(float(terrain.slot_floor_noise_strengths[slot]), float(terrain.slot_floor_noise_scales[slot]), floor_noise_on, 1.0))
 		img_wall_noise.set_pixel(0, slot, Color(float(terrain.slot_wall_noise_strengths[slot]), float(terrain.slot_wall_noise_scales[slot]), wall_noise_on, 1.0))
-
-		# Slot->base texture mapping (0..15 stored as 0..255)
-		var base_idx := 0
-		if slot == void_slot:
-			base_idx = void_slot
-		else:
-			var s = terrain.texture_slots[slot] if slot < terrain.texture_slots.size() else null
-			if s !=  null and s.get("terrain_texture_index") != null:
-				base_idx = clampi(int(s.terrain_texture_index), 0, 15)
-			else:
-				base_idx = slot if slot < 15 else 0
-		img_slot_tex_index.set_pixel(0, slot, Color(float(base_idx) / 255.0, 0.0, 0.0, 1.0))
+		var slot_albedo := Color(1.0, 1.0, 1.0, 0.0)
+		if slot < terrain.texture_slots.size() and terrain.texture_slots[slot] != null:
+			var raw_slot_albedo: Variant = terrain.texture_slots[slot].get("albedo")
+			if raw_slot_albedo is Color:
+				slot_albedo = raw_slot_albedo
+		img_slot_albedo.set_pixel(0, slot, slot_albedo.srgb_to_linear())
 
 		for i in range(8):
 			var c := Color(1.0, 1.0, 1.0, 1.0)
@@ -515,20 +508,19 @@ static func rebuild_palette_uniforms(terrain) -> void:
 	var tex_surface_settings := ImageTexture.create_from_image(img_surface_settings)
 	var tex_floor_noise := ImageTexture.create_from_image(img_floor_noise)
 	var tex_wall_noise := ImageTexture.create_from_image(img_wall_noise)
-	var tex_slot_tex_index := ImageTexture.create_from_image(img_slot_tex_index)
-
+	var tex_slot_albedo := ImageTexture.create_from_image(img_slot_albedo)
 	terrain.terrain_material.set_shader_parameter("palette_colors_tex", tex_colors)
 	terrain.terrain_material.set_shader_parameter("palette_weights_tex", tex_weights)
 	terrain.terrain_material.set_shader_parameter("palette_meta_tex", tex_meta)
 	terrain.terrain_material.set_shader_parameter("palette_surface_settings_tex", tex_surface_settings)
 	terrain.terrain_material.set_shader_parameter("palette_floor_noise_tex", tex_floor_noise)
 	terrain.terrain_material.set_shader_parameter("palette_wall_noise_tex", tex_wall_noise)
-	terrain.terrain_material.set_shader_parameter("slot_tex_index_tex", tex_slot_tex_index)
 
 	var grass_mat := terrain.grass_mesh.material as ShaderMaterial
 	grass_mat.set_shader_parameter("palette_colors_tex", tex_colors)
 	grass_mat.set_shader_parameter("palette_weights_tex", tex_weights)
 	grass_mat.set_shader_parameter("palette_meta_tex", tex_meta)
 	grass_mat.set_shader_parameter("palette_floor_noise_tex", tex_floor_noise)
+	grass_mat.set_shader_parameter("slot_albedo_tex", tex_slot_albedo)
 
 #endregion

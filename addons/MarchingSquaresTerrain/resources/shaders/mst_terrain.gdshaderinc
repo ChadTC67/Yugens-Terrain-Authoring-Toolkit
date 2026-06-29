@@ -12,11 +12,9 @@ group_uniforms Visuals.Palette;
 // - palette_weights_tex: 8 x 256, R in [0..1].    x=color idx (0..7), y=slot (0..255)
 // - palette_meta_tex:    1 x 256, RGBA8 encoded:  r=count(0..8), g=blend_mode(0..3),
 //                          b/a reserved, each stored as 0..255
-// - slot_tex_index_tex:  1 x 256, R8 encoded:    r=base_texture_index(0..15) stored as 0..255
 uniform sampler2D palette_colors_tex : filter_nearest;
 uniform sampler2D palette_weights_tex : filter_nearest;
 uniform sampler2D palette_meta_tex : filter_nearest;
-uniform sampler2D slot_tex_index_tex : filter_nearest;
 // Per-slot surface settings: roughness=.r, wetness_enabled=.g, wetness_mode=.b.
 uniform sampler2D palette_surface_settings_tex : filter_nearest;
 // Per-slot shared global-noise settings: strength=.r, scale=.g, enabled=.b.
@@ -42,6 +40,8 @@ uniform int blend_mode = 0;
 uniform float blend_sharpness : hint_range(0.0, 10.0, 0.1) = 5.0;
 uniform float blend_noise_scale : hint_range(0.0, 50.0, 1.0) = 10.0;
 uniform float blend_noise_strength : hint_range(0.0, 1.0, 0.05) = 0.0;
+uniform bool use_stylized_texture_edges = true;
+uniform float texture_edge_width : hint_range(0.01, 0.45, 0.01) = 0.18;
 group_uniforms;
 
 group_uniforms Effects.WallPaint;
@@ -110,12 +110,8 @@ varying vec4 ridge_blend_factor;
 varying vec4 ledge_blend_factor;
 
 varying flat int material_index;
-varying vec4 vc_color_0;
-varying vec4 vc_color_1;
-
 varying flat vec3 mat_indices;
 varying vec2 mat_weights;
-varying float use_vertex_colors;
 
 
 float hash(vec2 p) {
@@ -520,12 +516,6 @@ vec4 get_palette_color(int tex_idx, vec2 world_xz) {
 	}
 }
 
-int _slot_base_texture_index(int slot) {
-	slot = clamp(slot, 0, 255);
-	float v = (float(slot) + 0.5) / 256.0;
-	return int(round(texture(slot_tex_index_tex, vec2(0.5, v)).r * 255.0));
-}
-
 vec4 sample_texture_layer(int slot, vec2 uv) {
 	slot = clamp(slot, 0, 255);
 	uv = fract(uv);
@@ -572,6 +562,43 @@ vec3 sample_normal_by_index(int index, vec2 base_uv) {
 	return normalize(n);
 }
 
+vec3 _weight_onehot(int idx, float amount) {
+	if (idx == 0) return vec3(amount, 0.0, 0.0);
+	if (idx == 1) return vec3(0.0, amount, 0.0);
+	return vec3(0.0, 0.0, amount);
+}
+
+vec3 stylized_texture_weights(vec3 weights) {
+	float total = weights.x + weights.y + weights.z;
+	if (total <= 0.001) return vec3(1.0, 0.0, 0.0);
+	weights /= total;
+
+	int top_idx = 0;
+	float top_w = weights.x;
+	if (weights.y > top_w) {
+		top_idx = 1;
+		top_w = weights.y;
+	}
+	if (weights.z > top_w) {
+		top_idx = 2;
+		top_w = weights.z;
+	}
+
+	float width = clamp(texture_edge_width, 0.01, 0.45);
+	float low = 0.5 - width;
+	float high = 0.5 + width;
+	vec3 shaped = vec3(
+		smoothstep(low, high, weights.x),
+		smoothstep(low, high, weights.y),
+		smoothstep(low, high, weights.z)
+	);
+	float shaped_total = shaped.x + shaped.y + shaped.z;
+	if (shaped_total <= 0.001) {
+		return _weight_onehot(top_idx, 1.0);
+	}
+	return shaped / shaped_total;
+}
+
 vec3 blend_slot_normals(vec2 base_uv) {
 	if (use_hard_textures) {
 		int hard_idx = (blend_mode == 2) ? material_index : int(round(mat_indices.x));
@@ -591,6 +618,12 @@ vec3 blend_slot_normals(vec2 base_uv) {
 		weight_b /= weight_sum;
 		weight_c /= weight_sum;
 	}
+	if (use_stylized_texture_edges) {
+		vec3 styled_weights = stylized_texture_weights(vec3(weight_a, weight_b, weight_c));
+		weight_a = styled_weights.x;
+		weight_b = styled_weights.y;
+		weight_c = styled_weights.z;
+	}
 
 	vec3 n = sample_normal_by_index(mat_a, base_uv) * weight_a
 		+ sample_normal_by_index(mat_b, base_uv) * weight_b
@@ -599,72 +632,6 @@ vec3 blend_slot_normals(vec2 base_uv) {
 		return vec3(0.0, 0.0, 1.0);
 	}
 	return normalize(n);
-}
-
-void calculate_blend_weights(vec4 vc0, vec4 vc1, float sharpness, out float weights[16]) {
-	float raw_weights[16];
-	raw_weights[0]  = vc0.r * vc1.r;
-	raw_weights[1]  = vc0.r * vc1.g;
-	raw_weights[2]  = vc0.r * vc1.b;
-	raw_weights[3]  = vc0.r * vc1.a;
-	raw_weights[4]  = vc0.g * vc1.r;
-	raw_weights[5]  = vc0.g * vc1.g;
-	raw_weights[6]  = vc0.g * vc1.b;
-	raw_weights[7]  = vc0.g * vc1.a;
-	raw_weights[8]  = vc0.b * vc1.r;
-	raw_weights[9]  = vc0.b * vc1.g;
-	raw_weights[10] = vc0.b * vc1.b;
-	raw_weights[11] = vc0.b * vc1.a;
-	raw_weights[12] = vc0.a * vc1.r;
-	raw_weights[13] = vc0.a * vc1.g;
-	raw_weights[14] = vc0.a * vc1.b;
-	raw_weights[15] = vc0.a * vc1.a;
-
-	// Use linear weights (no exponentiation) to avoid biasing towards large contributors.
-	float total = 0.0;
-	for (int i = 0; i < 16; i++) {
-		weights[i] = max(raw_weights[i], 0.0);
-		total += weights[i];
-	}
-	if (total > 0.000001) {
-		for (int i = 0; i < 16; i++) weights[i] /= total;
-	} else {
-		// Fallback: pick the dominant index if all weights are near-zero.
-		float max_raw = 0.0;
-		int max_idx = 0;
-		for (int i = 0; i < 16; i++) {
-			if (raw_weights[i] > max_raw) { max_raw = raw_weights[i]; max_idx = i; }
-		}
-		for (int i = 0; i < 16; i++) weights[i] = (i == max_idx) ? 1.0 : 0.0;
-	}
-}
-
-vec4 snap_to_dominant(vec4 c) {
-	float max_val = max(max(c.r, c.g), max(c.b, c.a));
-	if (max_val < 0.001) return vec4(1.0, 0.0, 0.0, 0.0);
-	vec4 result = vec4(0.0);
-	if (c.r >= max_val - 0.001) result.r = 1.0;
-	else if (c.g >= max_val - 0.001) result.g = 1.0;
-	else if (c.b >= max_val - 0.001) result.b = 1.0;
-	else result.a = 1.0;
-	return result;
-}
-
-vec4 blend_wall_materials(vec2 uv, vec4 vc0, vec4 vc1, float sharpness) {
-	vec4 snapped_vc0 = snap_to_dominant(vc0);
-	vec4 snapped_vc1 = snap_to_dominant(vc1);
-	float weights[16];
-	calculate_blend_weights(snapped_vc0, snapped_vc1, sharpness, weights);
-	vec4 wall_color = vec4(0.0);
-	float total_weight = 0.0;
-	for (int i = 0; i < 16; i++) {
-		if (weights[i] > 0.01) {
-			wall_color += sample_material_by_index(i, uv) * weights[i];
-			total_weight += weights[i];
-		}
-	}
-	if (total_weight > 0.001) wall_color /= total_weight;
-	return wall_color;
 }
 
 float get_world_noise(vec3 world_position, float tile_size) {
@@ -689,12 +656,8 @@ void vertex() {
 	ridge_blend_factor = vec4(step(ridge_threshold, rl_factor), 0.0, 0.0, 0.0);
 	ledge_blend_factor = vec4(step(ledge_threshold, rl_factor), 0.0, 0.0, 0.0);
 
-	vc_color_0 = COLOR;
-	vc_color_1 = CUSTOM0;
-
 	mat_indices = CUSTOM2.rgb;
 	mat_weights = vec2(CUSTOM2.a, CUSTOM0.r);
-	use_vertex_colors = 0.0;
 	material_index = int(round(mat_indices.x));
 
 	// Treat wall vertices explicitly via UV sentinel (walls use UV=(2,2)).
@@ -801,6 +764,12 @@ void fragment() {
 				float total = weight_a + weight_b + weight_c;
 				if (total > 0.001) { weight_a /= total; weight_b /= total; weight_c /= total; }
 			
+			}
+			if (use_stylized_texture_edges) {
+				vec3 styled_weights = stylized_texture_weights(vec3(weight_a, weight_b, weight_c));
+				weight_a = styled_weights.x;
+				weight_b = styled_weights.y;
+				weight_c = styled_weights.z;
 			}
 
 			// Top materials for blending/alpha (uses possibly-jittered weights).

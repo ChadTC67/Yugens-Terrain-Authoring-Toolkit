@@ -26,7 +26,6 @@ var terrain_settings_data : Dictionary[String, String] = {
 	"dimensions": "Vector3i",
 	"cell_size": "Vector2",
 	"blend_mode": "OptionButton",
-	"blend_noise_enabled": "CheckBox",
 	"noise_hmap": "EditorResourcePicker",
 	"default_wall_texture": "OptionButton",
 	"extra_collision_layer": "OptionButton",

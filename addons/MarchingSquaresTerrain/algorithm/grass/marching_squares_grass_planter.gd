@@ -3,10 +3,6 @@ extends MultiMeshInstance3D
 class_name MarchingSquaresGrassPlanter
 
 
-# Alpha values for grass sprites by texture ID (1-6)
-const GRASS_ALPHA_VALUES := [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-
-
 var _chunk : MarchingSquaresTerrainChunk
 var terrain_system : MarchingSquaresTerrain
 var _image_cache : Dictionary[String, Image]
@@ -248,7 +244,7 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 				var p := a * (1 - u - v) + b * u + c * v
 				
 				# Detect ledge/ridge tags (UV encodes terrace proximity for edge logic)
-				var uv := uvs[i] * u + uvs[i + 1] * v + uvs[i + 2] * (1 - u - v)
+				var uv := uvs[i] * wa + uvs[i + 1] * wb + uvs[i + 2] * wc
 				var on_ledge_or_ridge : bool = uv.y > 0.0 or uv.x > 0.5
 				
 				# If we're near a steep wall drop, nudge grass points inward so blades don't clip the wall.
@@ -257,11 +253,11 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 				var allow_ledge_grass := push.length() > 0.0001
 				
 				# Interpolated material blend payload (CUSTOM2) + extra weight (CUSTOM0.r)
-				var raw_blend := mat_blend[i] * u + mat_blend[i + 1] * v + mat_blend[i + 2] * (1 - u - v)
-				var raw_custom0 := custom_0_values[i] * u + custom_0_values[i + 1] * v + custom_0_values[i + 2] * (1 - u - v)
+				var raw_blend := mat_blend[i] * wa + mat_blend[i + 1] * wb + mat_blend[i + 2] * wc
+				var raw_custom0 := custom_0_values[i] * wa + custom_0_values[i + 1] * wb + custom_0_values[i + 2] * wc
 				
 				# Check grass mask first - green channel forces grass ON, red channel masks grass OFF
-				var mask := custom_1_values[i] * u + custom_1_values[i + 1] * v + custom_1_values[i + 2] * (1 - u - v)
+				var mask := custom_1_values[i] * wa + custom_1_values[i + 1] * wb + custom_1_values[i + 2] * wc
 				var is_masked : bool = mask.r < 0.9999
 				var force_grass_on : bool = mask.g >= 0.9999
 				
@@ -282,7 +278,7 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 					dominant_mat = mat_c
 					confidence = w_c
 				
-				if not force_grass_on and confidence < 0.98:
+				if not force_grass_on and confidence < 0.65:
 					_hide_grass_instance(index)
 					index += 1
 					continue
@@ -315,14 +311,42 @@ func _get_terrain_image(texture_id: int) -> Image:
 	
 	if terrain_system and terrain_system.texture_slots.size() > slot_idx and terrain_system.texture_slots[slot_idx] !=  null:
 		terrain_texture = terrain_system.texture_slots[slot_idx].texture
+	if not _is_valid_texture2d(terrain_texture):
+		terrain_texture = _get_library_albedo_texture(slot_idx)
 	
-	if terrain_texture == null:
+	if not _is_valid_texture2d(terrain_texture):
 		return null
 	
 	var img : Image = terrain_texture.get_image()
 	if img:
 		img.decompress()
 	return img
+
+
+func _is_valid_texture2d(tex) -> bool:
+	if tex == null or not (tex is Texture2D):
+		return false
+	return tex.get_class() != "Texture2D"
+
+
+func _get_library_albedo_texture(slot_idx: int) -> Texture2D:
+	if terrain_system == null or not terrain_system.has_method("get"):
+		return null
+	var lib = terrain_system.get("texture_library")
+	if lib == null:
+		return null
+	if lib is Resource and lib.resource_path != null and not str(lib.resource_path).is_empty():
+		var loaded = ResourceLoader.load(str(lib.resource_path))
+		if loaded != null:
+			lib = loaded
+	if not (lib is MSTextureLibrary):
+		return null
+	if lib.has_method("ensure_length"):
+		lib.ensure_length()
+	if slot_idx < 0 or slot_idx >= lib.albedo_textures.size():
+		return null
+	var tex = lib.albedo_textures[slot_idx]
+	return tex as Texture2D if _is_valid_texture2d(tex) else null
 
 
 func _get_texture_id(vc_col_0: Color, vc_col_1: Color) -> int:
@@ -398,6 +422,14 @@ func _has_grass_for_texture(texture_id: int, force_grass_on: bool) -> bool:
 
 ## Gets the texture scale for the given texture ID.
 func _get_texture_scale(texture_id: int) -> float:
+	if terrain_system == null:
+		return 1.0
+	var slot_idx := clampi(texture_id - 1, 0, 255)
+	if slot_idx >= 0 and slot_idx < terrain_system.texture_slots.size():
+		var slot = terrain_system.texture_slots[slot_idx]
+		if slot != null and slot.get("scale") != null:
+			return maxf(float(slot.scale), 0.001)
+
 	var scales := [
 		terrain_system.texture_scale_1,
 		terrain_system.texture_scale_2,
@@ -406,14 +438,13 @@ func _get_texture_scale(texture_id: int) -> float:
 		terrain_system.texture_scale_5,
 		terrain_system.texture_scale_6
 	]
-	var idx := clampi(texture_id - 1, 0, 5)
-	return scales[idx]
+	var legacy_idx := clampi(texture_id - 1, 0, 5)
+	return scales[legacy_idx]
 
 
-## Gets the grass sprite alpha value for the given texture ID.
-func _get_grass_alpha(texture_id: int) -> float:
-	var idx := clampi(texture_id - 1, 0, 5)
-	return GRASS_ALPHA_VALUES[idx]
+func _encode_grass_slot_id(texture_id: int) -> float:
+	var slot_idx := clampi(texture_id - 1, 0, 255)
+	return float(slot_idx) / 255.0
 
 
 func _sample_image(terrain_image: Image, uv_x: float, uv_y: float) -> Color:
@@ -505,11 +536,11 @@ func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vecto
 
 	var tex_scale := _get_texture_scale(texture_id)
 	var instance_color := _sample_terrain_texture_color(world_pos, texture_id, tex_scale)
-	instance_color.a = _get_grass_alpha(texture_id)
 	
 	var prefab_color := _sample_prefab_texture_color(albedo_uv)
 	instance_color *= prefab_color
 	
+	instance_color.a = _encode_grass_slot_id(texture_id)
 	multimesh.set_instance_custom_data(index, instance_color)
 
 

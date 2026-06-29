@@ -128,7 +128,7 @@ func _on_tool_changed(tool_index: MarchingSquaresTerrainPlugin.TerrainToolMode) 
 	plugin.mode = tool_index
 	# Keep the user's selected material; only clamp to a valid range.
 	if tool_index == 5:
-		plugin.vertex_color_idx = clampi(plugin.vertex_color_idx, 0, 15)
+		plugin.vertex_color_idx = clampi(plugin.vertex_color_idx, 0, plugin.MAX_TEXTURE_SLOTS - 1)
 	tool_attributes.show_tool_attributes(active_tool)
 
 
@@ -260,9 +260,6 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 		"blend_mode":
 			if p_value is int:
 				terrain.blend_mode = p_value
-		"blend_noise_enabled":
-			if p_value is bool:
-				terrain.blend_noise_enabled = p_value
 		"wall_threshold":
 			if p_value is float:
 				terrain.wall_threshold = p_value

@@ -281,17 +281,10 @@ func _get_current_texture_data() -> MarchingSquaresTextureList:
 	if current_terrain_node.get("texture_slots") is Array and current_terrain_node.texture_slots.size() >= MarchingSquaresTextureList.MAX_TEXTURE_SLOTS:
 		new_texture_list.grass_sprites.resize(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS)
 		new_texture_list.has_grass.resize(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS)
-		new_texture_list.terrain_texture_indices.resize(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS)
 		for i in range(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS):
 			var slot = current_terrain_node.texture_slots[i]
 			new_texture_list.grass_sprites[i] = slot.grass_texture if slot != null else null
 			new_texture_list.has_grass[i] = bool(slot.has_grass) if slot != null else (i < 6)
-			if i == 15:
-				new_texture_list.terrain_texture_indices[i] = 15
-			elif slot != null and slot.get("terrain_texture_index") != null:
-				new_texture_list.terrain_texture_indices[i] = clampi(int(slot.terrain_texture_index), 0, 15)
-			else:
-				new_texture_list.terrain_texture_indices[i] = i if i < 15 else 0
 	else:
 		# Legacy fallback (first 6 only); keep arrays at MAX_TEXTURE_SLOTS.
 		new_texture_list.grass_sprites[0] = current_terrain_node.grass_sprite_tex_1
