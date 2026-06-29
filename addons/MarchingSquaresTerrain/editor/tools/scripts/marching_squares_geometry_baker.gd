@@ -6,10 +6,7 @@ class_name MarchingSquaresGeometryBaker
 signal finished(mesh: Mesh, original: MeshInstance3D, img: Image)
 
 @export var polygon_texture_resolution : int = 32
-static var MAX_TEXTURE_SIZE := 4096
-
-var terrain_system : MarchingSquaresTerrain
-
+const MAX_TEXTURE_SIZE_DEFAULT := 16384
 
 func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 	if not inst or not scene_tree or not inst.mesh is ArrayMesh:
@@ -50,32 +47,41 @@ func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 	var tri_id := 0
 	
 	@warning_ignore_start("integer_division")
-	var atlas_res := int(pow(2, ceil(log(polygon_texture_resolution) / log(2)))) # Next power of two
-	var tris_per_row := (atlas_res / polygon_texture_resolution) * 2
+	var polygon_px: int = max(1, polygon_texture_resolution)
+	var atlas_res := int(pow(2, ceil(log(polygon_px) / log(2)))) # Next power of two
+	var tris_per_row: int = (atlas_res / polygon_px) * 2
 	
 	var num_of_triangles := indices.size()/3
 	var rd := RenderingServer.get_rendering_device()
 	var max_texture_size : int
 	if rd:
-		max_texture_size = rd.limit_get(RenderingDevice.LIMIT_MAX_TEXTURE_SIZE_2D)
+		max_texture_size = min(
+			rd.limit_get(RenderingDevice.LIMIT_MAX_TEXTURE_SIZE_2D),
+			MAX_TEXTURE_SIZE_DEFAULT
+		)
 	else:
-		max_texture_size = MAX_TEXTURE_SIZE
+		max_texture_size = MAX_TEXTURE_SIZE_DEFAULT
 	
-	while tris_per_row * tris_per_row/2 < num_of_triangles:
+	while tris_per_row * tris_per_row / 2 < num_of_triangles:
 		atlas_res *= 2
-		tris_per_row = atlas_res / polygon_texture_resolution * 2
+		tris_per_row = atlas_res / polygon_px * 2
+	
 	if atlas_res > max_texture_size:
-		push_error("Unable to bake into atlas with polygon size of ", polygon_texture_resolution, "px: exceeds GPU texture size limits")
+		push_error(
+			"Unable to bake into atlas with polygon size of ",
+			polygon_texture_resolution,
+			"px: exceeds GPU texture size limits"
+		)
 		return
-	var quads_per_row := tris_per_row / 2
+	var quads_per_row: int = tris_per_row / 2
 	
 	for i in range(0, indices.size(), 3):
 		var idx0 = indices[i]
 		var idx1 = indices[i + 1]
 		var idx2 = indices[i + 2]
 		
-		var row := tri_id / tris_per_row
-		var col := (tri_id / 2) % (tris_per_row / 2)
+		var row : int = tri_id / tris_per_row
+		var col : int = (tri_id / 2) % (tris_per_row / 2)
 		
 		var base_vert := Vector2(col, row)
 		
@@ -98,11 +104,11 @@ func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 		new_verts.append(verts[idx2])
 		
 		# Calculate inset triangle to prevent texture bleeding
-		var scale := (polygon_texture_resolution - 4.0) / polygon_texture_resolution
+		var scale: float = (polygon_px - 4.0) / float(polygon_px)
 		var center := Vector2( (v0.x + v1.x + v2.x)/3.0, (v0.y + v1.y + v2.y)/3.0 )
-		var vi0 := center + scale*(v0-center)
-		var vi1 := center + scale*(v1-center)
-		var vi2 := center + scale*(v2-center)
+		var vi0 : Vector2 = center + scale * (v0 - center)
+		var vi1 : Vector2 = center + scale * (v1 - center)
+		var vi2 : Vector2 = center + scale * (v2 - center)
 		
 		new_uvs.append(vi0)
 		new_uvs.append(vi1)
@@ -162,10 +168,20 @@ func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 	new_arrays[Mesh.ARRAY_TEX_UV] = new_uvs
 	new_arrays[Mesh.ARRAY_NORMAL] = bake_normals
 	
-	new_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, new_arrays, [], {}, Mesh.ARRAY_FORMAT_NORMAL | Mesh.ARRAY_FORMAT_VERTEX | Mesh.ARRAY_FORMAT_TEX_UV | Mesh.ARRAY_FORMAT_COLOR)
+	new_mesh.add_surface_from_arrays(
+		Mesh.PRIMITIVE_TRIANGLES,
+		new_arrays,
+		[],
+		{},
+		Mesh.ARRAY_FORMAT_NORMAL
+		| Mesh.ARRAY_FORMAT_VERTEX
+		| Mesh.ARRAY_FORMAT_TEX_UV
+		| Mesh.ARRAY_FORMAT_COLOR
+	)
 	
 	# At this point we have the inset triangles, they will contain the actual color data.
-	# To prevent texture bleeding when we bake the texture we add a quad on each of their sides to serve as a border.
+	# To prevent texture bleeding when we bake the texture, add border quads
+	# on each side of every inset triangle.
 	# The colors and UVs will therefore match those of the rims of the triangle.
 	var s := bake_indices.size()
 	for i in range(0,s,3):
@@ -237,7 +253,7 @@ func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 		| (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM3_SHIFT))
 	var mat := ShaderMaterial.new()
 	mat.shader = load("uid://b32t80p1iesdd") as Shader
-	transfer_shader_props(mesh.surface_get_material(0), mat)
+	_transfer_shader_props(mesh.surface_get_material(0), mat)
 	bake_mesh.surface_set_material(0, mat)
 	
 	bake_inst.position = Vector3(-0.5, 0.5, -1)
@@ -245,13 +261,38 @@ func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 	
 	cam.add_child(bake_inst)
 	
-	RenderingServer.frame_post_draw.connect(func():
-		var img := viewport.get_texture().get_image()
-		
-		finished.emit(new_mesh, inst, img)
-		viewport.queue_free()
-	, CONNECT_ONE_SHOT)
+	_capture_viewport_image_deferred(viewport, new_mesh, inst, scene_tree)
 	@warning_ignore_restore("integer_division")
+
+
+func _capture_viewport_image_deferred(
+		viewport : SubViewport,
+		new_mesh : ArrayMesh,
+		inst : MeshInstance3D,
+		scene_tree : SceneTree
+	) -> void:
+	# On Metal, immediate readback can stall waiting on a GPU fence.
+	# Defer readback to let the render pass fully complete.
+	if scene_tree == null:
+		if is_instance_valid(viewport):
+			viewport.queue_free()
+		return
+	
+	await scene_tree.process_frame
+	await scene_tree.process_frame
+	await scene_tree.process_frame
+	
+	if not is_instance_valid(viewport):
+		return
+	
+	var tex := viewport.get_texture()
+	if tex == null:
+		viewport.queue_free()
+		return
+	
+	var img := tex.get_image()
+	finished.emit(new_mesh, inst, img)
+	viewport.queue_free()
 
 
 func _to_color_array(arr: PackedFloat32Array) -> PackedColorArray:
@@ -290,7 +331,7 @@ func _vector2_to_float_array(arr: PackedVector2Array) -> PackedFloat32Array:
 	return ret
 
 
-func transfer_shader_props(from: ShaderMaterial, to: ShaderMaterial) -> void:
+func _transfer_shader_props(from: ShaderMaterial, to: ShaderMaterial) -> void:
 	# Get uniform list from source shader
 	var uniforms := from.shader.get_shader_uniform_list()
 	
@@ -303,7 +344,6 @@ func transfer_shader_props(from: ShaderMaterial, to: ShaderMaterial) -> void:
 		
 		# Check if target shader has the same parameter
 		if to_uniforms.has(prop_name):
-			print(prop_name)
 			var value = from.get_shader_parameter(prop_name)
 			to.set_shader_parameter(prop_name, value)
 

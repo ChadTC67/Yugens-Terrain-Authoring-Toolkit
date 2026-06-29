@@ -110,10 +110,9 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 			grass_planter = get_node_or_null("GrassPlanter")
 		grass_planter.terrain_system = terrain_system
 		grass_planter._chunk = self
-		
+	
 	if _temp_grass_multimesh:
 		grass_planter.multimesh = _temp_grass_multimesh
-	grass_planter.ensure_multimesh_count()
 	if not grass_planter.multimesh:
 		grass_planter.setup(self)
 		grass_planter.regenerate_all_cells()
@@ -149,9 +148,12 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 						if _child is CollisionShape3D:
 							_child.set_visible(false)
 	
-	if not EngineWrapper.instance.is_editor() and terrain_system.enable_runtime_texture_baking:
+	if (
+		not EngineWrapper.instance.is_editor()
+		and terrain_system.enable_runtime_texture_baking
+		and OS.get_name() != "macOS"
+	):
 		var baker := MarchingSquaresGeometryBaker.new()
-		baker.terrain_system = terrain_system
 		baker.polygon_texture_resolution = terrain_system.polygon_texture_resolution
 		baker.finished.connect(func(mesh_: Mesh, _original: MeshInstance3D, img: Image):
 			mesh = mesh_
@@ -160,7 +162,6 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 				mat = terrain_system.bake_material_override.duplicate()
 			else:
 				mat = bake_material.duplicate()
-				baker.transfer_shader_props(terrain_system.terrain_material, mat)
 			
 			if mat is StandardMaterial3D:
 				mat.albedo_texture = ImageTexture.create_from_image(img)
