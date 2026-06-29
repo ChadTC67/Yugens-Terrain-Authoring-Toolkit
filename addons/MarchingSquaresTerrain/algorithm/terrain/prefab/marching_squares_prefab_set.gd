@@ -25,5 +25,7 @@ func get_random_filler() -> MarchingSquaresPrefab:
 	return _random(fillers)
 	
 func _random(array: Array) -> MarchingSquaresPrefab:
+	if array.size() == 0:
+		return null
 	var i := randi_range(0, array.size()-1)
 	return array[i]

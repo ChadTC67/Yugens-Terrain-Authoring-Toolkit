@@ -132,6 +132,8 @@ func add_c17() -> void:
 	if not chunk.terrain_system.prefab_set:
 		return
 	var obj := chunk.terrain_system.prefab_set.get_random_orthogonal()
+	if not obj:
+		return
 	add_wall(obj.get_data("wall_top"), obj.get_data("wall"), Vector2(0.5, 0), 0, {"a": aby, "c": abdy, "b": by, "d": bdy, "c2": bcdy, "d2": bdy, "a2": bcdy, "b2": by}, true, false)
 	add_chunk(obj.get_data("top_floor"), Vector2(0.5, 0), 0, {"a": aby, "c": abdy, "b": by, "d": bdy, "a2": aby - merge_threshold, "c2": abdy - merge_threshold, "b2": by, "d2": bdy})
 	add_chunk(obj.get_data("bottom_floor"), Vector2(0.5, 0), 0, {"a": bcdy + merge_threshold, "b": by + merge_threshold, "c": bcdy + merge_threshold, "d": bdy + merge_threshold, "c2": bcdy, "d2": bdy, "a2": bcdy, "b2": by})
@@ -143,6 +145,8 @@ func add_c18() -> void:
 	if not chunk.terrain_system.prefab_set:
 		return
 	var obj := chunk.terrain_system.prefab_set.get_random_orthogonal()
+	if not obj:
+		return
 	add_wall(obj.get_data("wall_top"), obj.get_data("wall"), Vector2(0, 0), 0, {"a": ay, "c": acy, "b": aby, "d": abcy, "c2": acy, "d2": acdy, "a2": ay, "b2": acdy}, false, true)
 	add_chunk(obj.get_data("top_floor"), Vector2(0, 0), 0, {"a": ay, "c": acy, "b": aby, "d": abcy, "a2": ay, "c2": acy, "b2": aby - merge_threshold, "d2": abcy - merge_threshold})
 	add_chunk(obj.get_data("bottom_floor"), Vector2(0, 0), 0, {"c": acy + merge_threshold, "d": acdy + merge_threshold, "a": ay + merge_threshold, "b": acdy + merge_threshold, "c2": acy, "d2": acdy, "a2": ay, "b2": acdy})	

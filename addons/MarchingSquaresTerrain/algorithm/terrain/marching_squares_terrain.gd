@@ -76,12 +76,14 @@ enum StorageMode {
 			chunk.mark_dirty()
 		if not is_batch_updating:
 			var has_map := true if prefab_set and prefab_set.color_map else false
-			terrain_material.set_shader_parameter("tex_prefab_colormap", prefab_set.color_map)
+			var cmap = prefab_set.color_map if prefab_set else null
+			terrain_material.set_shader_parameter("tex_prefab_colormap", cmap)
 			terrain_material.set_shader_parameter("has_prefab_colormap", has_map)
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				var mat := chunk.mesh.surface_get_material(0) as ShaderMaterial
-				mat.set_shader_parameter("tex_prefab_colormap", prefab_set.color_map)
-				mat.set_shader_parameter("has_prefab_colormap", has_map)
+				if mat:
+					mat.set_shader_parameter("tex_prefab_colormap", cmap)
+					mat.set_shader_parameter("has_prefab_colormap", has_map)
 				chunk.grass_planter.fetch_texture_data()
 				chunk.grass_planter.regenerate_all_cells()
 				chunk.mark_dirty()
