@@ -1,15 +1,14 @@
 [gd_resource type="Resource" script_class="MarchingSquaresPrefabSet" format=3 uid="uid://ljcr0d4mbbuo"]
 
 [ext_resource type="Script" uid="uid://ct55aw6xlcmu" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_flat.gd" id="1_h70ih"]
-[ext_resource type="Script" uid="uid://ca7353uloodm3" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_diagonal.gd" id="2_h70ih"]
-[ext_resource type="Script" uid="uid://jetwfp0muy5b" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_filler.gd" id="3_h70ih"]
-[ext_resource type="Script" uid="uid://c0uwqtd5aejyp" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_orthogonal.gd" id="4_h70ih"]
-
 [ext_resource type="Texture2D" uid="uid://da06vhls0hw17" path="res://scenes/prefabs/kenney/grass.png" id="1_lhkgn"]
 [ext_resource type="PackedScene" uid="uid://drktxhigrdo36" path="res://scenes/prefabs/kenney/glb_grass/Diagonal_BottomFloor.glb" id="2_3l25d"]
+[ext_resource type="Script" uid="uid://ca7353uloodm3" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_diagonal.gd" id="2_h70ih"]
 [ext_resource type="Script" uid="uid://cx6mjly0heii5" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_squares_prefab_set.gd" id="2_oy10v"]
 [ext_resource type="PackedScene" uid="uid://dufisnmsc2ve5" path="res://scenes/prefabs/kenney/glb_grass/Diagonal_TopFloor.glb" id="3_1jcjl"]
+[ext_resource type="Script" uid="uid://jetwfp0muy5b" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_filler.gd" id="3_h70ih"]
 [ext_resource type="PackedScene" uid="uid://8swsox2sa0fi" path="res://scenes/prefabs/kenney/glb_grass/Diagonal_Wall.glb" id="4_5qpxm"]
+[ext_resource type="Script" uid="uid://c0uwqtd5aejyp" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_orthogonal.gd" id="4_h70ih"]
 [ext_resource type="PackedScene" uid="uid://chg4884243w7l" path="res://scenes/prefabs/kenney/glb_grass/Diagonal_TopWall.glb" id="5_11wsx"]
 [ext_resource type="PackedScene" uid="uid://d1yx7bl5sqyfd" path="res://scenes/prefabs/kenney/glb_grass/Diagonal_TopFloor_001.glb" id="6_lehde"]
 [ext_resource type="PackedScene" uid="uid://d28h5offlbxvf" path="res://scenes/prefabs/kenney/glb_grass/Filler_BottomFloor.glb" id="6_qfqo8"]

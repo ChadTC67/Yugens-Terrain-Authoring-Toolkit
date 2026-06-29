@@ -1,15 +1,14 @@
 [gd_resource type="Resource" script_class="MarchingSquaresPrefabSet" format=3 uid="uid://bt87wj56j4uj2"]
 
 [ext_resource type="Script" uid="uid://ct55aw6xlcmu" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_flat.gd" id="1_h70ih"]
-[ext_resource type="Script" uid="uid://ca7353uloodm3" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_diagonal.gd" id="2_h70ih"]
-[ext_resource type="Script" uid="uid://jetwfp0muy5b" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_filler.gd" id="3_h70ih"]
-[ext_resource type="Script" uid="uid://c0uwqtd5aejyp" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_orthogonal.gd" id="4_h70ih"]
-
 [ext_resource type="Texture2D" uid="uid://qt35e2pi6rnm" path="res://scenes/prefabs/kenney/castle.png" id="1_wuypu"]
+[ext_resource type="Script" uid="uid://ca7353uloodm3" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_diagonal.gd" id="2_h70ih"]
 [ext_resource type="PackedScene" uid="uid://cw6xo05bv8gcl" path="res://scenes/prefabs/kenney/glb_castle/Diagonal_BottomFloor.glb" id="2_u34m8"]
 [ext_resource type="Script" uid="uid://cx6mjly0heii5" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_squares_prefab_set.gd" id="2_x2jb2"]
+[ext_resource type="Script" uid="uid://jetwfp0muy5b" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_filler.gd" id="3_h70ih"]
 [ext_resource type="PackedScene" uid="uid://h08y1tjkwhel" path="res://scenes/prefabs/kenney/glb_castle/Diagonal_TopFloor.glb" id="3_hhs3h"]
 [ext_resource type="PackedScene" uid="uid://blh66j7amy4c7" path="res://scenes/prefabs/kenney/glb_castle/Flat_TopFloor.glb" id="3_huaqt"]
+[ext_resource type="Script" uid="uid://c0uwqtd5aejyp" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_square_prefab_orthogonal.gd" id="4_h70ih"]
 [ext_resource type="PackedScene" uid="uid://b8inosve11tp8" path="res://scenes/prefabs/kenney/glb_castle/Diagonal_Wall.glb" id="4_jwnvl"]
 [ext_resource type="PackedScene" uid="uid://cq0duk2gsoskn" path="res://scenes/prefabs/kenney/glb_castle/Diagonal_TopWall.glb" id="5_k7lgm"]
 [ext_resource type="PackedScene" uid="uid://cyupcurbw21pm" path="res://scenes/prefabs/kenney/glb_castle/Filler_BottomFloor.glb" id="6_0f34l"]
