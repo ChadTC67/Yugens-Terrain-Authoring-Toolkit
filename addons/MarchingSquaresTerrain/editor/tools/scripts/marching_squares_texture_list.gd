@@ -19,10 +19,6 @@ const GRASS_SPRITE : Texture2D = preload("res://addons/MarchingSquaresTerrain/re
 	1.0, 1.0, 1.0, 1.0, 1.0,
 ]
 
-# Slot->base-texture mapping (0..15) for each slot index 0..255.
-# This keeps the terrain texture array at 16 layers while allowing 256 slots.
-@export var terrain_texture_indices: Array[int] = []
-
 # Slot-based grass sprites (0..255). Older presets may have only 6 entries.
 @export var grass_sprites : Array[Texture2D] = []
 
@@ -41,22 +37,7 @@ const GRASS_SPRITE : Texture2D = preload("res://addons/MarchingSquaresTerrain/re
 
 
 func _init() -> void:
-	_ensure_terrain_texture_indices()
 	_ensure_grass_arrays()
-
-
-func _ensure_terrain_texture_indices() -> void:
-	if terrain_texture_indices.size() !=  MAX_TEXTURE_SLOTS:
-		var prev := terrain_texture_indices.duplicate()
-		terrain_texture_indices.resize(MAX_TEXTURE_SLOTS)
-		for i in range(MAX_TEXTURE_SLOTS):
-			if i < prev.size() and prev[i] !=  null:
-				terrain_texture_indices[i] = clampi(int(prev[i]), 0, 15)
-			else:
-				# Default: identity for base slots, 0 for the rest.
-				terrain_texture_indices[i] = i if i < 15 else 0
-		# Keep legacy VOID slot reserved.
-		terrain_texture_indices[15] = 15
 
 
 func _ensure_grass_arrays() -> void:

@@ -790,6 +790,10 @@ func _apply_chunk_surface_material() -> void:
 	mesh.surface_set_material(0, mat)
 
 
+func refresh_surface_material() -> void:
+	_apply_chunk_surface_material()
+
+
 func _sync_wall_paint_shader_params(mat: ShaderMaterial) -> void:
 	var positions: Array[Vector4] = []
 	var data_b: Array[Vector4] = []

@@ -7,6 +7,7 @@ uniform sampler2D palette_colors_tex : filter_nearest;
 uniform sampler2D palette_weights_tex : filter_nearest;
 uniform sampler2D palette_meta_tex : filter_nearest;
 uniform sampler2D palette_floor_noise_tex : filter_nearest;
+uniform sampler2D slot_albedo_tex : filter_nearest;
 group_uniforms;
 
 group_uniforms Visuals.Textures;
@@ -74,7 +75,7 @@ varying float v_brightness;
 varying vec3 v_grass_color;
 varying vec3 model_origin;
 varying vec3 instance_color;
-varying float instance_sprite_id;
+varying float instance_slot_id;
 varying flat int instance_id;
 
 // ------------- Wind Choices --------------
@@ -142,11 +143,11 @@ float sample_palette_weight(int slot, int color_idx) {
 	return max(texture(palette_weights_tex, vec2(u, v)).r, 0.0);
 }
 
-vec3 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
+vec4 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 	slot = clamp(slot, 0, 255);
 	int color_count = _palette_count(slot);
-	if (color_count <= 0) return vec3(0.392, 0.471, 0.318);
-	if (color_count == 1) return sample_palette_entry(slot, 0).rgb;
+	if (color_count <= 0) return vec4(0.392, 0.471, 0.318, 1.0);
+	if (color_count == 1) return sample_palette_entry(slot, 0);
 
 	int mode = _palette_blend_mode(slot);
 	bool gradient_mode = mode != 1 && mode != 2 && mode != 3;
@@ -205,7 +206,7 @@ vec3 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 
 	if (mode == 1) {
 		// Retro: hard snap by weighted ownership.
-		return sample_palette_entry(slot, i0).rgb;
+		return sample_palette_entry(slot, i0);
 	} else if (mode == 2) {
 		// Dithered: weights own area; only non-zero color boundaries dither.
 		vec4 result = sample_palette_entry(slot, i0);
@@ -221,7 +222,7 @@ vec3 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 			float sel = step(dither, blend_t);
 			result = mix(result, sample_palette_entry(slot, i + 1), sel);
 		}
-		return result.rgb;
+		return result;
 	} else if (mode == 3) {
 		// Stipple: weights own area; only non-zero color boundaries checker/stipple.
 		vec4 result = sample_palette_entry(slot, i0);
@@ -242,7 +243,7 @@ vec3 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 				result = checker > 0.5 ? next_color : result;
 			}
 		}
-		return result.rgb;
+		return result;
 	} else {
 		// Gradient: weighted soft color bands. Slider weights define coverage; edges feather into neighbors.
 		vec4 accum_color = vec4(0.0);
@@ -263,9 +264,15 @@ vec3 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 			}
 			band_start = band_end;
 		}
-		if (accum_weight > 0.0001) return (accum_color / accum_weight).rgb;
-		return sample_palette_entry(slot, i0).rgb;
+		if (accum_weight > 0.0001) return accum_color / accum_weight;
+		return sample_palette_entry(slot, i0);
 	}
+}
+
+vec4 get_slot_albedo_color(int slot) {
+	slot = clamp(slot, 0, 255);
+	float v = (float(slot) + 0.5) / 256.0;
+	return texture(slot_albedo_tex, vec2(0.5, v));
 }
 
 void vertex() {
@@ -300,22 +307,26 @@ void vertex() {
 	model_origin = (MODELVIEW_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	world_origin = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	instance_color = INSTANCE_CUSTOM.rgb;
-	instance_sprite_id = INSTANCE_CUSTOM.a;
+	instance_slot_id = floor(clamp(INSTANCE_CUSTOM.a, 0.0, 1.0) * 255.0 + 0.5);
 	instance_id = INSTANCE_ID;
 	
+	int slot = int(instance_slot_id);
 	vec3 _gc;
-	if (instance_sprite_id > 0.9)
-		_gc = use_base_color_6 ? get_grass_palette_color(5, world_origin.xz, world_origin.y) : instance_color * get_grass_palette_color(5, world_origin.xz, world_origin.y);
-	else if (instance_sprite_id > 0.7)
-		_gc = use_base_color_5 ? get_grass_palette_color(4, world_origin.xz, world_origin.y) : instance_color * get_grass_palette_color(4, world_origin.xz, world_origin.y);
-	else if (instance_sprite_id > 0.5)
-		_gc = use_base_color_4 ? get_grass_palette_color(3, world_origin.xz, world_origin.y) : instance_color * get_grass_palette_color(3, world_origin.xz, world_origin.y);
-	else if (instance_sprite_id > 0.3)
-		_gc = use_base_color_3 ? get_grass_palette_color(2, world_origin.xz, world_origin.y) : instance_color * get_grass_palette_color(2, world_origin.xz, world_origin.y);
-	else if (instance_sprite_id > 0.1)
-		_gc = use_base_color_2 ? get_grass_palette_color(1, world_origin.xz, world_origin.y) : instance_color * get_grass_palette_color(1, world_origin.xz, world_origin.y);
-	else
-		_gc = use_base_color_1 ? get_grass_palette_color(0, world_origin.xz, world_origin.y) : instance_color * get_grass_palette_color(0, world_origin.xz, world_origin.y);
+	bool use_base = false;
+	if (slot == 0) use_base = use_base_color_1;
+	else if (slot == 1) use_base = use_base_color_2;
+	else if (slot == 2) use_base = use_base_color_3;
+	else if (slot == 3) use_base = use_base_color_4;
+	else if (slot == 4) use_base = use_base_color_5;
+	else if (slot == 5) use_base = use_base_color_6;
+	vec4 palette = get_grass_palette_color(slot, world_origin.xz, world_origin.y);
+	vec3 palette_col = palette.rgb;
+	vec4 slot_albedo = get_slot_albedo_color(slot);
+	vec3 slot_col = slot_albedo.rgb;
+	vec3 base_col = slot_albedo.a > 0.5 ? slot_col : palette_col;
+	float pal_alpha = clamp(palette.a, 0.0, 1.0);
+	vec3 sampled_floor_col = mix(instance_color, instance_color * palette_col, pal_alpha);
+	_gc = use_base ? base_col : sampled_floor_col;
 	v_grass_color = _gc;
 	
 	v_brightness = 1.0;
@@ -328,30 +339,26 @@ void fragment() {
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 
 	vec3 grass_color = v_grass_color;
-	int tex_id = 1;
-	if (instance_sprite_id > 0.9) tex_id = 6;
-	else if (instance_sprite_id > 0.7) tex_id = 5;
-	else if (instance_sprite_id > 0.5) tex_id = 4;
-	else if (instance_sprite_id > 0.3) tex_id = 3;
-	else if (instance_sprite_id > 0.1) tex_id = 2;
+	int slot = clamp(int(instance_slot_id), 0, 255);
+	int legacy_tex_id = clamp(slot + 1, 1, 6);
 
 	// Sample the appropriate grass texture. Prefer Texture2DArray if available.
 	vec4 grass_tex = vec4(0.0);
 	if (use_grass_tex_array) {
-		float layer = float(clamp(tex_id - 1, 0, 5));
+		float layer = float(slot);
 		grass_tex = texture(vc_grass_tex_array, vec3(UV, layer));
 	} else {
-		if (tex_id == 1) grass_tex = texture(grass_texture_1, UV);
-		else if (tex_id == 2) grass_tex = texture(grass_texture_2, UV);
-		else if (tex_id == 3) grass_tex = texture(grass_texture_3, UV);
-		else if (tex_id == 4) grass_tex = texture(grass_texture_4, UV);
-		else if (tex_id == 5) grass_tex = texture(grass_texture_5, UV);
-		else if (tex_id == 6) grass_tex = texture(grass_texture_6, UV);
+		if (legacy_tex_id == 1) grass_tex = texture(grass_texture_1, UV);
+		else if (legacy_tex_id == 2) grass_tex = texture(grass_texture_2, UV);
+		else if (legacy_tex_id == 3) grass_tex = texture(grass_texture_3, UV);
+		else if (legacy_tex_id == 4) grass_tex = texture(grass_texture_4, UV);
+		else if (legacy_tex_id == 5) grass_tex = texture(grass_texture_5, UV);
+		else if (legacy_tex_id == 6) grass_tex = texture(grass_texture_6, UV);
 	}
 
 	ALBEDO = grass_color;
 
-	vec3 floor_noise = _palette_floor_noise_settings(tex_id - 1);
+	vec3 floor_noise = _palette_floor_noise_settings(slot);
 	float floor_noise_strength = clamp(floor_noise.r, 0.0, 1.0) * step(0.5, floor_noise.b);
 	float floor_noise_scale = clamp(floor_noise.g, 0.001, 1.0);
 	if (floor_noise_strength > 0.0) {
@@ -375,15 +382,15 @@ void fragment() {
 		if (use_grass_tex_array) {
 			ALPHA = grass_tex.a;
 		} else {
-			if (tex_id == 2) {
+			if (legacy_tex_id == 2) {
 				ALPHA = use_grass_tex_2 ? texture(grass_texture_2, UV).a : 0.0;
-			} else if (tex_id == 3) {
+			} else if (legacy_tex_id == 3) {
 				ALPHA = use_grass_tex_3 ? texture(grass_texture_3, UV).a : 0.0;
-			} else if (tex_id == 4) {
+			} else if (legacy_tex_id == 4) {
 				ALPHA = use_grass_tex_4 ? texture(grass_texture_4, UV).a : 0.0;
-			} else if (tex_id == 5) {
+			} else if (legacy_tex_id == 5) {
 				ALPHA = use_grass_tex_5 ? texture(grass_texture_5, UV).a : 0.0;
-			} else if (tex_id == 6) {
+			} else if (legacy_tex_id == 6) {
 				ALPHA = use_grass_tex_6 ? texture(grass_texture_6, UV).a : 0.0;
 			} else {
 				ALPHA = grass_tex.a;

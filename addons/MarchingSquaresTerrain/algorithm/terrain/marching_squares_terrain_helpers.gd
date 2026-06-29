@@ -26,17 +26,6 @@ static func ensure_texture_slots(terrain) -> void:
 		if terrain.texture_slots[i] !=  null and terrain.texture_slots[i].get("active") == null:
 			terrain.texture_slots[i].active = true
 		
-		# Slot->base texture mapping (older saves won't have it).
-		if terrain.texture_slots[i] !=  null and terrain.texture_slots[i].get("terrain_texture_index") == null:
-			if i == VOID_TEXTURE_SLOT:
-				terrain.texture_slots[i].terrain_texture_index = VOID_TEXTURE_SLOT
-			elif i < 15:
-				terrain.texture_slots[i].terrain_texture_index = i
-			else:
-				terrain.texture_slots[i].terrain_texture_index = 0
-		elif terrain.texture_slots[i] !=  null:
-			terrain.texture_slots[i].terrain_texture_index = clampi(int(terrain.texture_slots[i].terrain_texture_index), 0, 15)
-		
 		# Default any missing grass fields (older saves / older slot resources).
 		# Slot 0 (Texture 1) defaults to having grass enabled.
 		if terrain.texture_slots[i] !=  null and terrain.texture_slots[i].get("has_grass") == null:
@@ -55,7 +44,7 @@ static func maybe_migrate_legacy_textures(terrain) -> void:
 	var any_slot_set := false
 	for i in range(mini(15, terrain.texture_slots.size())):
 		var s = terrain.texture_slots[i]
-		if s !=  null and s.texture != null:
+		if s !=  null and is_valid_texture2d(s.texture):
 			any_slot_set = true
 			break
 
@@ -66,7 +55,7 @@ static func maybe_migrate_legacy_textures(terrain) -> void:
 	]
 	var any_legacy_set := false
 	for t in legacy_textures:
-		if t !=  null:
+		if is_valid_texture2d(t):
 			any_legacy_set = true
 			break
 
@@ -76,7 +65,7 @@ static func maybe_migrate_legacy_textures(terrain) -> void:
 	for i in range(15):
 		if terrain.texture_slots[i] == null:
 			terrain.texture_slots[i] = _TEXTURE_SLOT_SCRIPT.new()
-		terrain.texture_slots[i].texture = legacy_textures[i]
+		terrain.texture_slots[i].texture = legacy_textures[i] if is_valid_texture2d(legacy_textures[i]) else null
 
 	# Legacy scales -> slot scales
 	var legacy_scales: Array[float] = [
@@ -183,9 +172,17 @@ static func _try_load_baked(terrain, path_var_name: String) -> Texture2DArray:
 static func _highest_texture_slot(textures: Array) -> int:
 	var highest := -1
 	for i in range(textures.size()):
-		if textures[i] != null and textures[i] is Texture2D:
+		if is_valid_texture2d(textures[i]):
 			highest = i
 	return highest
+
+
+static func is_valid_texture2d(tex) -> bool:
+	if tex == null or not (tex is Texture2D):
+		return false
+	# A bare Texture2D resource has no width/height implementation. Godot can
+	# serialize it, but assigning or sampling it triggers _get_width/_get_height errors.
+	return tex.get_class() != "Texture2D"
 
 
 static func _required_texture_layer_count(albedo_textures: Array, normal_textures: Array, grass_textures: Array) -> int:
@@ -201,7 +198,7 @@ static func _build_texture_array_from_textures(textures: Array, target_size: int
 	for i in range(layer_count):
 		var tex = textures[i] if i < textures.size() else null
 		var img: Image = null
-		if tex != null and tex is Texture2D:
+		if is_valid_texture2d(tex):
 			img = MSTVertexColorHelper.get_decompressed_image(tex)
 			img = MSTVertexColorHelper.normalize_image_for_texture_array(img, target_size, target_size)
 		if img == null:
@@ -217,7 +214,7 @@ static func _build_texture_array_from_textures(textures: Array, target_size: int
 
 static func _has_texture2d(textures: Array) -> bool:
 	for tex in textures:
-		if tex != null and tex is Texture2D:
+		if is_valid_texture2d(tex):
 			return true
 	return false
 
@@ -282,7 +279,7 @@ static func rebuild_texture_array(terrain) -> void:
 	var canonical_h := 1
 	for i in range(15):
 		var tex = terrain.texture_slots[i].texture if terrain.texture_slots[i] != null else null
-		if tex == null:
+		if not is_valid_texture2d(tex):
 			continue
 		var img := MSTVertexColorHelper.get_decompressed_image(tex)
 		if img == null:
@@ -306,7 +303,7 @@ static func rebuild_texture_array(terrain) -> void:
 		if is_void:
 			images[i] = void_placeholder.duplicate()
 			continue
-		if tex == null:
+		if not is_valid_texture2d(tex):
 			images[i] = slot_placeholder.duplicate()
 			continue
 
@@ -340,10 +337,8 @@ static func rebuild_texture_array(terrain) -> void:
 
 
 static func rebuild_grass_texture_array(terrain) -> void:
-	# PR1: The current grass shader historically expected 6 individual sprite textures
-	# (grass_texture_1..6). Build a small Texture2DArray for grass sprites so the grass
-	# shader can use the same runtime Texture2DArray pipeline as terrain. Keep legacy
-	# individual uniforms as a fallback.
+	# Build a grass Texture2DArray that follows the same slot indexing as terrain paint.
+	# Legacy grass_texture_1..6 uniforms remain as a fallback for older content/shader paths.
 	ensure_texture_slots(terrain)
 	maybe_migrate_legacy_grass(terrain)
 	if terrain.grass_mesh == null or terrain.grass_mesh.material == null:
@@ -364,43 +359,25 @@ static func rebuild_grass_texture_array(terrain) -> void:
 		grass_mat.set_shader_parameter("use_grass_tex_array", true)
 		return
 
-	# Gather up to 6 grass images from slots or legacy exports
 	var targetsz := int(terrain.get("baked_grass_texture_size")) if terrain.get("baked_grass_texture_size") != null else 64
-	var images := []
-	images.resize(6)
-	for i in range(6):
-		var tex: Texture2D = null
-		if i < terrain.texture_slots.size() and terrain.texture_slots[i] != null and terrain.texture_slots[i].get("grass_texture") != null and terrain.texture_slots[i].grass_texture != null:
-			tex = terrain.texture_slots[i].grass_texture
-		else:
-			# Fallback to legacy exported vars
-			match i:
-				0:
-					tex = terrain.grass_sprite_tex_1
-				1:
-					tex = terrain.grass_sprite_tex_2
-				2:
-					tex = terrain.grass_sprite_tex_3
-				3:
-					tex = terrain.grass_sprite_tex_4
-				4:
-					tex = terrain.grass_sprite_tex_5
-				_:
-					tex = terrain.grass_sprite_tex_6
-		
-		var img: Image = null
-		if tex != null and tex is Texture2D:
-			img = MSTVertexColorHelper.get_decompressed_image(tex)
-			img = MSTVertexColorHelper.normalize_image_for_texture_array(img, targetsz, targetsz)
-		if img == null:
-			img = Image.create(targetsz, targetsz, false, Image.FORMAT_RGBA8)
-			img.fill(Color(0,0,0,0))
-		images[i] = img
+	var grass_textures := []
+	grass_textures.resize(MAX_TEXTURE_SLOTS)
+	for i in range(mini(terrain.texture_slots.size(), MAX_TEXTURE_SLOTS)):
+		if terrain.texture_slots[i] != null and terrain.texture_slots[i].get("grass_texture") != null and is_valid_texture2d(terrain.texture_slots[i].grass_texture):
+			grass_textures[i] = terrain.texture_slots[i].grass_texture
 
-	# Attempt to build Texture2DArray for grass
-	var arr := Texture2DArray.new()
-	var err := arr.create_from_images(images)
-	if err == OK:
+	# Keep legacy sprite exports wired into the first 6 slots if slot data is missing.
+	if grass_textures[0] == null: grass_textures[0] = terrain.grass_sprite_tex_1
+	if grass_textures[1] == null: grass_textures[1] = terrain.grass_sprite_tex_2
+	if grass_textures[2] == null: grass_textures[2] = terrain.grass_sprite_tex_3
+	if grass_textures[3] == null: grass_textures[3] = terrain.grass_sprite_tex_4
+	if grass_textures[4] == null: grass_textures[4] = terrain.grass_sprite_tex_5
+	if grass_textures[5] == null: grass_textures[5] = terrain.grass_sprite_tex_6
+
+	var highest_grass_slot := _highest_texture_slot(grass_textures)
+	var layer_count := clampi(max(highest_grass_slot + 1, 6), 1, MAX_TEXTURE_SLOTS)
+	var arr := _build_texture_array_from_textures(grass_textures, targetsz, Color(0, 0, 0, 0), layer_count)
+	if arr != null:
 		terrain._runtime_grass_texture_array = arr
 		# Expose to grass shader and enable array usage
 		grass_mat.set_shader_parameter("vc_grass_tex_array", terrain._runtime_grass_texture_array)
@@ -420,22 +397,22 @@ static func rebuild_grass_texture_array(terrain) -> void:
 	var t6: Texture2D = terrain.grass_sprite_tex_6
 	if terrain.texture_slots.size() >=  6:
 		var s0 = terrain.texture_slots[0]
-		if s0 !=  null and s0.get("grass_texture") != null and s0.grass_texture != null:
+		if s0 !=  null and s0.get("grass_texture") != null and is_valid_texture2d(s0.grass_texture):
 			t1 = s0.grass_texture
 		var s1 = terrain.texture_slots[1]
-		if s1 !=  null and s1.get("grass_texture") != null and s1.grass_texture != null:
+		if s1 !=  null and s1.get("grass_texture") != null and is_valid_texture2d(s1.grass_texture):
 			t2 = s1.grass_texture
 		var s2 = terrain.texture_slots[2]
-		if s2 !=  null and s2.get("grass_texture") != null and s2.grass_texture != null:
+		if s2 !=  null and s2.get("grass_texture") != null and is_valid_texture2d(s2.grass_texture):
 			t3 = s2.grass_texture
 		var s3 = terrain.texture_slots[3]
-		if s3 !=  null and s3.get("grass_texture") != null and s3.grass_texture != null:
+		if s3 !=  null and s3.get("grass_texture") != null and is_valid_texture2d(s3.grass_texture):
 			t4 = s3.grass_texture
 		var s4 = terrain.texture_slots[4]
-		if s4 !=  null and s4.get("grass_texture") != null and s4.grass_texture != null:
+		if s4 !=  null and s4.get("grass_texture") != null and is_valid_texture2d(s4.grass_texture):
 			t5 = s4.grass_texture
 		var s5 = terrain.texture_slots[5]
-		if s5 !=  null and s5.get("grass_texture") != null and s5.grass_texture != null:
+		if s5 !=  null and s5.get("grass_texture") != null and is_valid_texture2d(s5.grass_texture):
 			t6 = s5.grass_texture
 	grass_mat.set_shader_parameter("grass_texture_1", t1)
 	grass_mat.set_shader_parameter("grass_texture_2", t2)

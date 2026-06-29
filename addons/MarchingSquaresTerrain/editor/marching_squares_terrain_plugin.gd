@@ -7,6 +7,7 @@ static var instance : MarchingSquaresTerrainPlugin
 
 
 const MAX_TEXTURE_SLOTS := 256
+const MSTVertexColorHelper = preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_vertex_color_helper.gd")
 
 # Vertex Paint dither: solid core + dithered outer ring.
 const VP_DITHER_CORE_SAMPLE := 0.8
@@ -188,6 +189,11 @@ var draw_height_set : bool
 
 # Height of the current pattern that is being drawn at for the brush tool
 var draw_height : float
+var _wall_paint_stroke_active : bool = false
+var _wall_paint_stroke_undo_states : Dictionary = {}
+var _wall_paint_stroke_do_states : Dictionary = {}
+var _wall_paint_last_stamp_position : Vector3 = Vector3.ZERO
+var _wall_paint_has_last_stamp_position : bool = false
 
 # Is set to true when the user clicks on a tile that is part of the current draw pattern, will enter heightdrag setting mode
 var is_setting : bool
@@ -526,6 +532,10 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 		if event is InputEventMouseButton and event.button_index == MouseButton.MOUSE_BUTTON_LEFT:
 			if event.is_pressed() and draw_area_hovered:
 				draw_height_set = false
+				if mode == TerrainToolMode.VERTEX_PAINTING and paint_walls_mode:
+					brush_position = draw_position
+					_begin_wall_paint_stroke()
+					_sample_wall_paint_stroke(terrain)
 				if mode in [TerrainToolMode.BRIDGE] and not is_making_bridge:
 					flatten = false
 					is_making_bridge = true
@@ -551,18 +561,26 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 					is_making_bridge = false
 				if is_drawing:
 					is_drawing = false
-					if mode in [TerrainToolMode.GRASS_MASK, TerrainToolMode.LEVEL, TerrainToolMode.BRIDGE, TerrainToolMode.DEBUG_BRUSH, TerrainToolMode.VERTEX_PAINTING]:
-						draw_pattern(terrain)
+					if mode == TerrainToolMode.VERTEX_PAINTING and paint_walls_mode:
+						_commit_wall_paint_stroke(terrain)
 						current_draw_pattern.clear()
+					if mode in [TerrainToolMode.GRASS_MASK, TerrainToolMode.LEVEL, TerrainToolMode.BRIDGE, TerrainToolMode.DEBUG_BRUSH, TerrainToolMode.VERTEX_PAINTING]:
+						if not (mode == TerrainToolMode.VERTEX_PAINTING and paint_walls_mode):
+							draw_pattern(terrain)
+							current_draw_pattern.clear()
 					if mode in [TerrainToolMode.SMOOTH]:
 						current_draw_pattern.clear()
 				if is_setting:
 					is_setting = false
-					draw_pattern(terrain)
-					if Input.is_key_pressed(KEY_SHIFT):
-						draw_height = brush_position.y
-					else:
+					if mode == TerrainToolMode.VERTEX_PAINTING and paint_walls_mode:
+						_commit_wall_paint_stroke(terrain)
 						current_draw_pattern.clear()
+					else:
+						draw_pattern(terrain)
+						if Input.is_key_pressed(KEY_SHIFT):
+							draw_height = brush_position.y
+						else:
+							current_draw_pattern.clear()
 			gizmo_plugin.trigger_redraw(terrain)
 			if mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
 				return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -588,7 +606,10 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 		
 		if draw_area_hovered and event is InputEventMouseMotion:
 			brush_position = draw_position
-			if is_drawing and mode in [TerrainToolMode.SMOOTH, TerrainToolMode.GRASS_MASK]:
+			if mode == TerrainToolMode.VERTEX_PAINTING and paint_walls_mode and (is_drawing or is_setting):
+				if _should_sample_wall_paint_stroke(brush_position):
+					_sample_wall_paint_stroke(terrain)
+			elif is_drawing and mode in [TerrainToolMode.SMOOTH, TerrainToolMode.GRASS_MASK]:
 				draw_pattern(terrain)
 				current_draw_pattern.clear()
 		
@@ -719,6 +740,56 @@ func update_draw_pattern(b_pos: Vector3):
 							current_draw_pattern[cursor_chunk_coords][cursor_cell_coords] = sample
 					else:
 						current_draw_pattern[cursor_chunk_coords][cursor_cell_coords] = sample
+
+
+func _reset_wall_paint_stroke() -> void:
+	_wall_paint_stroke_active = false
+	_wall_paint_stroke_undo_states.clear()
+	_wall_paint_stroke_do_states.clear()
+	_wall_paint_has_last_stamp_position = false
+
+
+func _begin_wall_paint_stroke() -> void:
+	_wall_paint_stroke_active = true
+	_wall_paint_stroke_undo_states.clear()
+	_wall_paint_stroke_do_states.clear()
+	_wall_paint_has_last_stamp_position = false
+
+
+func _wall_paint_step_distance() -> float:
+	return maxf(brush_size * 0.2, 0.08)
+
+
+func _should_sample_wall_paint_stroke(pos: Vector3) -> bool:
+	if not _wall_paint_stroke_active or not _wall_paint_has_last_stamp_position:
+		return true
+	return _wall_paint_last_stamp_position.distance_to(pos) >= _wall_paint_step_distance()
+
+
+func _sample_wall_paint_stroke(terrain: MarchingSquaresTerrain) -> void:
+	if terrain == null or not _wall_paint_stroke_active:
+		return
+	current_draw_pattern.clear()
+	update_draw_pattern(brush_position)
+	if current_draw_pattern.is_empty():
+		return
+	draw_pattern(terrain)
+	current_draw_pattern.clear()
+	_wall_paint_last_stamp_position = brush_position
+	_wall_paint_has_last_stamp_position = true
+
+
+func _commit_wall_paint_stroke(terrain: MarchingSquaresTerrain) -> void:
+	if terrain == null:
+		_reset_wall_paint_stroke()
+		return
+	if not _wall_paint_stroke_do_states.is_empty():
+		var undo_redo := get_undo_redo()
+		undo_redo.create_action("terrain wall paint")
+		undo_redo.add_do_method(self, "apply_wall_paint_stamp_states_action", terrain, _wall_paint_stroke_do_states.duplicate(true))
+		undo_redo.add_undo_method(self, "apply_wall_paint_stamp_states_action", terrain, _wall_paint_stroke_undo_states.duplicate(true))
+		undo_redo.commit_action()
+	_reset_wall_paint_stroke()
 
 
 static func _fract(p_x: float) -> float:
@@ -981,24 +1052,39 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 	
 	if mode == TerrainToolMode.VERTEX_PAINTING:
 		if paint_walls_mode:
-			var do_states := {}
-			var undo_states := {}
 			for draw_chunk_coords: Vector2i in current_draw_pattern.keys():
 				var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(draw_chunk_coords)
 				if chunk == null:
 					continue
-				undo_states[draw_chunk_coords] = chunk.get_wall_paint_stamp_state()
-				do_states[draw_chunk_coords] = chunk.append_wall_paint_stamp(
+				if _wall_paint_stroke_active and not _wall_paint_stroke_undo_states.has(draw_chunk_coords):
+					_wall_paint_stroke_undo_states[draw_chunk_coords] = chunk.get_wall_paint_stamp_state()
+				var next_state := chunk.append_wall_paint_stamp(
 					brush_position,
 					(terrain.global_transform.basis * brush_surface_normal).normalized(),
 					brush_size,
 					vertex_color_idx
 				)
-			if not do_states.is_empty():
-				undo_redo.create_action("terrain wall paint")
-				undo_redo.add_do_method(self, "apply_wall_paint_stamp_states_action", terrain, do_states)
-				undo_redo.add_undo_method(self, "apply_wall_paint_stamp_states_action", terrain, undo_states)
-				undo_redo.commit_action()
+				if _wall_paint_stroke_active:
+					_wall_paint_stroke_do_states[draw_chunk_coords] = next_state
+			if not _wall_paint_stroke_active:
+				var do_states := {}
+				var undo_states := {}
+				for draw_chunk_coords: Vector2i in current_draw_pattern.keys():
+					var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(draw_chunk_coords)
+					if chunk == null:
+						continue
+					undo_states[draw_chunk_coords] = chunk.get_wall_paint_stamp_state()
+					do_states[draw_chunk_coords] = chunk.append_wall_paint_stamp(
+						brush_position,
+						(terrain.global_transform.basis * brush_surface_normal).normalized(),
+						brush_size,
+						vertex_color_idx
+					)
+				if not do_states.is_empty():
+					undo_redo.create_action("terrain wall paint")
+					undo_redo.add_do_method(self, "apply_wall_paint_stamp_states_action", terrain, do_states)
+					undo_redo.add_undo_method(self, "apply_wall_paint_stamp_states_action", terrain, undo_states)
+					undo_redo.commit_action()
 		else:
 			# Standard 2D ground painting
 			var do_patterns := {
@@ -1375,55 +1461,9 @@ func apply_composite_pattern_action(terrain: MarchingSquaresTerrain, patterns: D
 #region vertex/texture setters and getters
 
 func _set_vertex_colors(vc_idx: int) -> void:
-	match vc_idx:
-		0: #rr
-			vertex_color_0 = Color(1.0, 0.0, 0.0, 0.0)
-			vertex_color_1 = Color(1.0, 0.0, 0.0, 0.0)
-		1: #rg
-			vertex_color_0 = Color(1.0, 0.0, 0.0, 0.0)
-			vertex_color_1 = Color(0.0, 1.0, 0.0, 0.0)
-		2: #rb
-			vertex_color_0 = Color(1.0, 0.0, 0.0, 0.0)
-			vertex_color_1 = Color(0.0, 0.0, 1.0, 0.0)
-		3: #ra
-			vertex_color_0 = Color(1.0, 0.0, 0.0, 0.0)
-			vertex_color_1 = Color(0.0, 0.0, 0.0, 1.0)
-		4: #gr
-			vertex_color_0 = Color(0.0, 1.0, 0.0, 0.0)
-			vertex_color_1 = Color(1.0, 0.0, 0.0, 0.0)
-		5: #gg
-			vertex_color_0 = Color(0.0, 1.0, 0.0, 0.0)
-			vertex_color_1 = Color(0.0, 1.0, 0.0, 0.0)
-		6: #gb
-			vertex_color_0 = Color(0.0, 1.0, 0.0, 0.0)
-			vertex_color_1 = Color(0.0, 0.0, 1.0, 0.0)
-		7: #ga
-			vertex_color_0 = Color(0.0, 1.0, 0.0, 0.0)
-			vertex_color_1 = Color(0.0, 0.0, 0.0, 1.0)
-		8: #br
-			vertex_color_0 = Color(0.0, 0.0, 1.0, 0.0)
-			vertex_color_1 = Color(1.0, 0.0, 0.0, 0.0)
-		9: #bg
-			vertex_color_0 = Color(0.0, 0.0, 1.0, 0.0)
-			vertex_color_1 = Color(0.0, 1.0, 0.0, 0.0)
-		10: #bb
-			vertex_color_0 = Color(0.0, 0.0, 1.0, 0.0)
-			vertex_color_1 = Color(0.0, 0.0, 1.0, 0.0)
-		11: #ba
-			vertex_color_0 = Color(0.0, 0.0, 1.0, 0.0)
-			vertex_color_1 = Color(0.0, 0.0, 0.0, 1.0)
-		12: #ar
-			vertex_color_0 = Color(0.0, 0.0, 0.0, 1.0)
-			vertex_color_1 = Color(1.0, 0.0, 0.0, 0.0)
-		13: #ag
-			vertex_color_0 = Color(0.0, 0.0, 0.0, 1.0)
-			vertex_color_1 = Color(0.0, 1.0, 0.0, 0.0)
-		14: #ab
-			vertex_color_0 = Color(0.0, 0.0, 0.0, 1.0)
-			vertex_color_1 = Color(0.0, 0.0, 1.0, 0.0)
-		15: #aa
-			vertex_color_0 = Color(0.0, 0.0, 0.0, 1.0)
-			vertex_color_1 = Color(0.0, 0.0, 0.0, 1.0)
+	var encoded_colors : Array = MSTVertexColorHelper.texture_index_to_colors(vc_idx)
+	vertex_color_0 = encoded_colors[0]
+	vertex_color_1 = encoded_colors[1]
 
 
 func _set_new_textures(_preset: MarchingSquaresTexturePreset) -> void:

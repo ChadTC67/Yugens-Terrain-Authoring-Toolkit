@@ -22,19 +22,25 @@ enum StorageMode {
 
 @export_category("Storage Options")
 ## The storage mode for terrain data. 
-@export var _storage_mode_internal : StorageMode = StorageMode.BAKED
+@export var _storage_mode_internal : StorageMode = StorageMode.BAKED:
+	get():
+		return _storage_mode_internal
+	set(value):
+		_set_storage_mode_internal(value)
 var storage_mode : StorageMode:
 	get():
 		return _storage_mode_internal
 	set(value):
-		if _storage_mode_internal != value:
-			_storage_mode_internal = value
-			# Mark all chunks dirty to force re-save of data/meshes
-			if chunks:
-				for chunk in chunks.values():
-					chunk.mark_dirty()
-			print_verbose("[MST] Storage mode changed. All chunks marked for save.")
-		notify_property_list_changed()
+		_set_storage_mode_internal(value)
+
+func _set_storage_mode_internal(value: StorageMode) -> void:
+	if _storage_mode_internal != value:
+		_storage_mode_internal = value
+		if chunks:
+			for chunk in chunks.values():
+				chunk.mark_dirty()
+		print_verbose("[MST] Storage mode changed. All chunks marked for save.")
+	notify_property_list_changed()
 
 ## If true, storage will include grass data, ignored if storage_mode = RUNTIME
 var _bake_grass : bool = true
@@ -57,10 +63,6 @@ var _bake_collision : bool = true
 		_bake_collision = value
 		for chunk in chunks.values():
 			chunk.mark_dirty()
-
-
-@export_tool_button("Recover Missing Chunks") var recover_missing_chunks = func():
-	recover_missing_chunk_meshes()
 
 
 ## The folder where this terrain's data is saved. 
@@ -160,9 +162,9 @@ var _data_directory : String = ""
 
 # Texture boundary waviness (blend noise). This controls ONLY the blend jitter/waves.
 # Palette color distribution stays stable regardless.
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var blend_noise_enabled: bool = false:
+@export_storage var blend_noise_enabled: bool = false:
 	set(value):
-		blend_noise_enabled = bool(value)
+		blend_noise_enabled = false
 		if is_batch_updating:
 			return
 		_apply_blend_noise_settings()
@@ -173,18 +175,12 @@ var _data_directory : String = ""
 func _apply_blend_noise_settings() -> void:
 	if terrain_material == null:
 		return
-	if blend_noise_enabled:
-		var s := float(_blend_noise_strength_saved)
-		if s <= 0.0:
-			s = 0.2
-		terrain_material.set_shader_parameter("blend_noise_strength", s)
-	else:
-		var current := terrain_material.get_shader_parameter("blend_noise_strength")
-		if current != null:
-			var cs := float(current)
-			if cs > 0.0:
-				_blend_noise_strength_saved = cs
-		terrain_material.set_shader_parameter("blend_noise_strength", 0.0)
+	var current := terrain_material.get_shader_parameter("blend_noise_strength")
+	if current != null:
+		var cs := float(current)
+		if cs > 0.0:
+			_blend_noise_strength_saved = cs
+	terrain_material.set_shader_parameter("blend_noise_strength", 0.0)
 
 @export_custom(PROPERTY_HINT_RANGE, "9, 32", PROPERTY_USAGE_STORAGE) var extra_collision_layer : int = 9:
 	set(value):
@@ -755,6 +751,8 @@ func _validate_property(property: Dictionary) -> void:
 	if property.name in ["bake_grass", "bake_collision"]:
 		if storage_mode != StorageMode.BAKED:
 			property.usage = PROPERTY_USAGE_NO_EDITOR
+	if property.name == "blend_noise_enabled":
+		property.usage = PROPERTY_USAGE_NO_EDITOR
 
 
 func _init() -> void:
@@ -785,6 +783,12 @@ func _init() -> void:
 
 func get_chunk_surface_material() -> Material:
 	return terrain_material
+
+
+func refresh_chunk_surface_materials() -> void:
+	for chunk: MarchingSquaresTerrainChunk in chunks.values():
+		if is_instance_valid(chunk):
+			chunk.refresh_surface_material()
 
 
 var _grass_regen_timer: Timer = null
@@ -855,10 +859,10 @@ func _build_texture_library_from_slots() -> MSTextureLibrary:
 		if texture_slots[i] == null:
 			continue
 		var tex = texture_slots[i].texture
-		if tex != null and tex is Texture2D:
+		if MarchingSquaresTerrainHelpers.is_valid_texture2d(tex):
 			lib.albedo_textures[i] = tex
 		var grass_tex = texture_slots[i].grass_texture
-		if grass_tex != null and grass_tex is Texture2D:
+		if MarchingSquaresTerrainHelpers.is_valid_texture2d(grass_tex):
 			lib.grass_textures[i] = grass_tex
 	return lib
 
@@ -988,12 +992,12 @@ func _deferred_enter_tree() -> void:
 			if texture_slots is Array:
 				for i in range(lib.max_slots):
 					var slot = texture_slots[i] if i < texture_slots.size() else null
-					if slot != null and slot.texture != null and slot.texture is Texture2D:
+					if slot != null and MarchingSquaresTerrainHelpers.is_valid_texture2d(slot.texture):
 						lib.albedo_textures[i] = slot.texture
 						# If slot provides a normal field, prefer that.
 						if slot.has_method("get") and slot.get("normal_texture") != null:
 							var nt = slot.get("normal_texture")
-							if nt is Texture2D:
+							if MarchingSquaresTerrainHelpers.is_valid_texture2d(nt):
 								lib.normal_textures[i] = nt
 				var out_dir := data_directory
 				if out_dir == null or out_dir == "":
@@ -1247,7 +1251,6 @@ func _ensure_textures() -> void:
 		or terrain_material.get_shader_parameter("palette_weights_tex") == null
 		or terrain_material.get_shader_parameter("palette_meta_tex") == null
 		or terrain_material.get_shader_parameter("palette_surface_settings_tex") == null
-		or terrain_material.get_shader_parameter("slot_tex_index_tex") == null
 	)
 	if need_palette:
 		_ensure_texture_slots()
@@ -1271,6 +1274,7 @@ func _ensure_palette_weights() -> void:
 
 func _rebuild_palette_uniforms() -> void:
 	MarchingSquaresTerrainHelpers.rebuild_palette_uniforms(self)
+	refresh_chunk_surface_materials()
 
 
 func _push_slot_blend_modes() -> void:
@@ -1395,21 +1399,6 @@ func save_to_preset() -> void:
 	for i in range(MAX_TEXTURE_SLOTS):
 		current_texture_preset.new_textures.has_grass[i] = bool(texture_slots[i].has_grass) if texture_slots[i] != null else false
 
-	# Slot->base texture mapping (slot-based)
-	if current_texture_preset.new_textures.get("terrain_texture_indices") is Array:
-		if current_texture_preset.new_textures.terrain_texture_indices.size() != MAX_TEXTURE_SLOTS:
-			current_texture_preset.new_textures.terrain_texture_indices.resize(MAX_TEXTURE_SLOTS)
-		for i in range(MAX_TEXTURE_SLOTS):
-			var s = texture_slots[i]
-			var idx := 0
-			if i == VOID_TEXTURE_SLOT:
-				idx = VOID_TEXTURE_SLOT
-			elif s != null and s.get("terrain_texture_index") != null:
-				idx = clampi(int(s.terrain_texture_index), 0, 15)
-			else:
-				idx = i if i < 15 else 0
-			current_texture_preset.new_textures.terrain_texture_indices[i] = idx
-
 	if preset_owns_texture_resources and current_texture_preset.get("texture_library") != null:
 		current_texture_preset.texture_library = texture_library
 	if preset_owns_texture_resources and current_texture_preset.get("baked_albedo_array_path") != null:
@@ -1519,7 +1508,7 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 	var preset_has_legacy_textures := false
 	if preset.new_textures != null and preset.new_textures.terrain_textures.size() >= 15:
 		for legacy_tex in preset.new_textures.terrain_textures:
-			if legacy_tex != null and legacy_tex is Texture2D:
+			if MarchingSquaresTerrainHelpers.is_valid_texture2d(legacy_tex):
 				preset_has_legacy_textures = true
 				break
 	var apply_legacy_texture_resources := preset_has_legacy_textures and not preset_has_texture_library and texture_library == null
@@ -1547,7 +1536,7 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 			if texture_slots[i] == null:
 				texture_slots[i] = _TEXTURE_SLOT_SCRIPT.new()
 			var tex = lib_res.albedo_textures[i] if i < lib_res.albedo_textures.size() else null
-			if tex != null and tex is Texture2D:
+			if MarchingSquaresTerrainHelpers.is_valid_texture2d(tex):
 				texture_slots[i].texture = tex
 				texture_slots[i].active = true
 				highest_library_slot = i
@@ -1555,7 +1544,7 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 				texture_slots[i].texture = null
 				texture_slots[i].active = false
 			var gtex = lib_res.grass_textures[i] if i < lib_res.grass_textures.size() else null
-			if gtex != null and gtex is Texture2D:
+			if MarchingSquaresTerrainHelpers.is_valid_texture2d(gtex):
 				texture_slots[i].grass_texture = gtex
 			if i < preset_slot_scales.size() and preset_slot_scales[i] != null:
 				texture_slots[i].scale = float(preset_slot_scales[i])
@@ -1564,26 +1553,27 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 
 	# Terrain textures (first 15)
 	if apply_legacy_texture_resources:
-		texture_1 = preset.new_textures.terrain_textures[0]
-		texture_2 = preset.new_textures.terrain_textures[1]
-		texture_3 = preset.new_textures.terrain_textures[2]
-		texture_4 = preset.new_textures.terrain_textures[3]
-		texture_5 = preset.new_textures.terrain_textures[4]
-		texture_6 = preset.new_textures.terrain_textures[5]
-		texture_7 = preset.new_textures.terrain_textures[6]
-		texture_8 = preset.new_textures.terrain_textures[7]
-		texture_9 = preset.new_textures.terrain_textures[8]
-		texture_10 = preset.new_textures.terrain_textures[9]
-		texture_11 = preset.new_textures.terrain_textures[10]
-		texture_12 = preset.new_textures.terrain_textures[11]
-		texture_13 = preset.new_textures.terrain_textures[12]
-		texture_14 = preset.new_textures.terrain_textures[13]
-		texture_15 = preset.new_textures.terrain_textures[14]
+		texture_1 = preset.new_textures.terrain_textures[0] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[0]) else null
+		texture_2 = preset.new_textures.terrain_textures[1] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[1]) else null
+		texture_3 = preset.new_textures.terrain_textures[2] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[2]) else null
+		texture_4 = preset.new_textures.terrain_textures[3] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[3]) else null
+		texture_5 = preset.new_textures.terrain_textures[4] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[4]) else null
+		texture_6 = preset.new_textures.terrain_textures[5] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[5]) else null
+		texture_7 = preset.new_textures.terrain_textures[6] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[6]) else null
+		texture_8 = preset.new_textures.terrain_textures[7] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[7]) else null
+		texture_9 = preset.new_textures.terrain_textures[8] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[8]) else null
+		texture_10 = preset.new_textures.terrain_textures[9] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[9]) else null
+		texture_11 = preset.new_textures.terrain_textures[10] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[10]) else null
+		texture_12 = preset.new_textures.terrain_textures[11] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[11]) else null
+		texture_13 = preset.new_textures.terrain_textures[12] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[12]) else null
+		texture_14 = preset.new_textures.terrain_textures[13] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[13]) else null
+		texture_15 = preset.new_textures.terrain_textures[14] if MarchingSquaresTerrainHelpers.is_valid_texture2d(preset.new_textures.terrain_textures[14]) else null
 
 		for i in range(15):
 			if texture_slots[i] == null:
 				texture_slots[i] = _TEXTURE_SLOT_SCRIPT.new()
-			texture_slots[i].texture = preset.new_textures.terrain_textures[i]
+			var legacy_slot_tex = preset.new_textures.terrain_textures[i]
+			texture_slots[i].texture = legacy_slot_tex if MarchingSquaresTerrainHelpers.is_valid_texture2d(legacy_slot_tex) else null
 
 	# Texture scales (first 15)
 	if preset.new_textures != null and preset.new_textures.texture_scales.size() >= 15:
@@ -1619,7 +1609,7 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 
 	var has_sprite_data := false
 	for sprite_tex in p_sprites:
-		if sprite_tex != null and sprite_tex is Texture2D:
+		if MarchingSquaresTerrainHelpers.is_valid_texture2d(sprite_tex):
 			has_sprite_data = true
 			break
 	var has_flag_data := p_has.size() > 0
@@ -1627,26 +1617,12 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 		if texture_slots[i] == null:
 			texture_slots[i] = _TEXTURE_SLOT_SCRIPT.new()
 		if has_sprite_data and i < p_sprites.size():
-			texture_slots[i].grass_texture = p_sprites[i]
+			texture_slots[i].grass_texture = p_sprites[i] if MarchingSquaresTerrainHelpers.is_valid_texture2d(p_sprites[i]) else null
 		if has_flag_data and i < p_has.size():
 			texture_slots[i].has_grass = bool(p_has[i])
 		elif not has_flag_data:
 			# Default only when the preset provides no flags at all.
 			texture_slots[i].has_grass = (i < 6)
-
-	# Slot->base texture mapping (0..15 per slot)
-	var p_map: Array = []
-	if preset.new_textures != null and preset.new_textures.get("terrain_texture_indices") is Array:
-		p_map = preset.new_textures.terrain_texture_indices
-	for i in range(MAX_TEXTURE_SLOTS):
-		if texture_slots[i] == null:
-			texture_slots[i] = _TEXTURE_SLOT_SCRIPT.new()
-		var idx := i if i < 15 else 0
-		if i == VOID_TEXTURE_SLOT:
-			idx = VOID_TEXTURE_SLOT
-		if i < p_map.size() and p_map[i] != null:
-			idx = clampi(int(p_map[i]), 0, 15)
-		texture_slots[i].terrain_texture_index = idx
 
 	# Keep legacy inspector fields in sync (first 6)
 	if has_sprite_data:
