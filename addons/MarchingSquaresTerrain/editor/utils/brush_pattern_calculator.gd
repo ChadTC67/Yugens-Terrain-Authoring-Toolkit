@@ -199,7 +199,3 @@ static func get_cell_range_for_chunk(chunk_coords: Vector2i, bounds: BrushBounds
 	var z_min : int = bounds.cell_tl.y if chunk_coords.y == bounds.chunk_tl.y else 0
 	var z_max : int = bounds.cell_br.y if chunk_coords.y == bounds.chunk_br.y else terrain.dimensions.z
 	return {"x_min": x_min, "x_max": x_max, "z_min": z_min, "z_max": z_max}
-
-
-
-
