@@ -132,6 +132,8 @@ func _save_preset(path: String) -> void:
 	
 	# Copy palette and surface settings from the current terrain so the exported preset is a true "look" preset.
 	if current_terrain_node != null:
+		if current_terrain_node.get("visible_texture_slot_count") != null:
+			new_tex_preset.visible_texture_slot_count = clampi(int(current_terrain_node.visible_texture_slot_count), 6, MarchingSquaresTextureList.MAX_TEXTURE_SLOTS)
 		if current_terrain_node.get("slot_color_indices") is Array:
 			new_tex_preset.slot_color_indices = current_terrain_node.slot_color_indices.duplicate(true)
 		if current_terrain_node.get("slot_blend_modes") is Array:
@@ -193,80 +195,78 @@ func _save_preset(path: String) -> void:
 		push_error("Failed to save texture preset: ", save_error)
 
 
+func _coerce_texture2d(tex) -> Texture2D:
+	return tex as Texture2D if tex is Texture2D else null
+
+
+func _get_slot_albedo_texture(slot_idx: int) -> Texture2D:
+	if current_terrain_node == null or slot_idx < 0 or slot_idx >= MarchingSquaresTextureList.MAX_TEXTURE_SLOTS:
+		return null
+	if current_terrain_node.get("texture_slots") is Array and current_terrain_node.texture_slots.size() > slot_idx:
+		var slot = current_terrain_node.texture_slots[slot_idx]
+		if slot != null:
+			var slot_tex := _coerce_texture2d(slot.get("texture"))
+			if slot_tex != null:
+				return slot_tex
+	var lib_res = current_terrain_node.get("texture_library")
+	if lib_res != null and lib_res is MSTextureLibrary:
+		lib_res.ensure_length()
+		if slot_idx < lib_res.albedo_textures.size():
+			return _coerce_texture2d(lib_res.albedo_textures[slot_idx])
+	if slot_idx < 15:
+		return _coerce_texture2d(current_terrain_node.get("texture_%d" % (slot_idx + 1)))
+	return null
+
+
+func _get_slot_scale(slot_idx: int) -> float:
+	if current_terrain_node == null or slot_idx < 0 or slot_idx >= MarchingSquaresTextureList.MAX_TEXTURE_SLOTS:
+		return 1.0
+	if current_terrain_node.get("texture_slots") is Array and current_terrain_node.texture_slots.size() > slot_idx:
+		var slot = current_terrain_node.texture_slots[slot_idx]
+		if slot != null and slot.get("scale") != null:
+			return float(slot.scale)
+	if slot_idx < 15 and current_terrain_node.get("texture_scale_%d" % (slot_idx + 1)) != null:
+		return float(current_terrain_node.get("texture_scale_%d" % (slot_idx + 1)))
+	return 1.0
+
+
+func _build_export_texture_library_snapshot() -> Resource:
+	if current_terrain_node == null or not current_terrain_node.has_method("get"):
+		return null
+	var lib_copy: MSTextureLibrary = null
+	if current_terrain_node.has_method("_build_texture_library_from_slots"):
+		lib_copy = current_terrain_node._build_texture_library_from_slots()
+	else:
+		lib_copy = MSTextureLibrary.new()
+	if lib_copy == null:
+		return null
+	lib_copy.max_slots = MarchingSquaresTextureList.MAX_TEXTURE_SLOTS
+	lib_copy.ensure_length()
+	if current_terrain_node.has_method("_ensure_texture_slots"):
+		current_terrain_node._ensure_texture_slots()
+	if current_terrain_node.get("texture_slots") is Array:
+		for i in range(min(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS, current_terrain_node.texture_slots.size())):
+			var slot = current_terrain_node.texture_slots[i]
+			if slot == null:
+				continue
+			lib_copy.albedo_textures[i] = _coerce_texture2d(slot.get("texture"))
+			lib_copy.grass_textures[i] = _coerce_texture2d(slot.get("grass_texture"))
+	return lib_copy
+
+
 func _get_current_texture_data() -> MarchingSquaresTextureList:
 	var new_texture_list := MarchingSquaresTextureList.new()
 	
-	# Terrain textures (first 15)
+	if current_terrain_node.has_method("_ensure_texture_slots"):
+		current_terrain_node._ensure_texture_slots()
+
+	# Terrain textures (first 15 legacy compatibility payload)
 	for i_tex in range(new_texture_list.terrain_textures.size()):
-		var tex : Texture2D = null
-		match i_tex:
-			0:
-				tex = current_terrain_node.texture_1
-			1:
-				tex = current_terrain_node.texture_2
-			2:
-				tex = current_terrain_node.texture_3
-			3:
-				tex = current_terrain_node.texture_4
-			4:
-				tex = current_terrain_node.texture_5
-			5:
-				tex = current_terrain_node.texture_6
-			6:
-				tex = current_terrain_node.texture_7
-			7:
-				tex = current_terrain_node.texture_8
-			8:
-				tex = current_terrain_node.texture_9
-			9:
-				tex = current_terrain_node.texture_10
-			10:
-				tex = current_terrain_node.texture_11
-			11:
-				tex = current_terrain_node.texture_12
-			12:
-				tex = current_terrain_node.texture_13
-			13:
-				tex = current_terrain_node.texture_14
-			14:
-				tex = current_terrain_node.texture_15
-		new_texture_list.terrain_textures[i_tex] = tex
+		new_texture_list.terrain_textures[i_tex] = _get_slot_albedo_texture(i_tex)
 	
-	# Texture scales (first 15)
+	# Texture scales (first 15 legacy compatibility payload)
 	for i_tex_scale in range(new_texture_list.texture_scales.size()):
-		var scale : float = 1.0
-		match i_tex_scale:
-			0:
-				scale = current_terrain_node.texture_scale_1
-			1:
-				scale = current_terrain_node.texture_scale_2
-			2:
-				scale = current_terrain_node.texture_scale_3
-			3:
-				scale = current_terrain_node.texture_scale_4
-			4:
-				scale = current_terrain_node.texture_scale_5
-			5:
-				scale = current_terrain_node.texture_scale_6
-			6:
-				scale = current_terrain_node.texture_scale_7
-			7:
-				scale = current_terrain_node.texture_scale_8
-			8:
-				scale = current_terrain_node.texture_scale_9
-			9:
-				scale = current_terrain_node.texture_scale_10
-			10:
-				scale = current_terrain_node.texture_scale_11
-			11:
-				scale = current_terrain_node.texture_scale_12
-			12:
-				scale = current_terrain_node.texture_scale_13
-			13:
-				scale = current_terrain_node.texture_scale_14
-			14:
-				scale = current_terrain_node.texture_scale_15
-		new_texture_list.texture_scales[i_tex_scale] = scale
+		new_texture_list.texture_scales[i_tex_scale] = _get_slot_scale(i_tex_scale)
 	
 	# Palette colors (0..127) are stored in new_textures.grass_colors for historical reasons.
 	if current_terrain_node.get("palette_colors") is Array:
@@ -276,8 +276,6 @@ func _get_current_texture_data() -> MarchingSquaresTextureList:
 			new_texture_list.grass_colors[i] = current_terrain_node.palette_colors[i] if i < pal_size else Color.WHITE
 	
 	# Slot-based grass sprites + has-grass flags (0..255)
-	if current_terrain_node.has_method("_ensure_texture_slots"):
-		current_terrain_node._ensure_texture_slots()
 	if current_terrain_node.get("texture_slots") is Array and current_terrain_node.texture_slots.size() >= MarchingSquaresTextureList.MAX_TEXTURE_SLOTS:
 		new_texture_list.grass_sprites.resize(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS)
 		new_texture_list.has_grass.resize(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS)
@@ -371,12 +369,9 @@ func _copy_baked_arrays_to_preset(preset: MarchingSquaresTexturePreset, preset_p
 
 
 func _save_texture_library_snapshot(preset: MarchingSquaresTexturePreset, preset_path: String) -> void:
-	if current_terrain_node == null or not current_terrain_node.has_method("get"):
+	var lib_copy := _build_export_texture_library_snapshot()
+	if lib_copy == null:
 		return
-	var lib_res = current_terrain_node.get("texture_library")
-	if lib_res == null or not (lib_res is Resource):
-		return
-	var lib_copy: Resource = lib_res.duplicate(true)
 	var lib_path := preset_path.get_base_dir().path_join("texture_library.tres")
 	var save_error := ResourceSaver.save(lib_copy, lib_path)
 	if save_error == OK:

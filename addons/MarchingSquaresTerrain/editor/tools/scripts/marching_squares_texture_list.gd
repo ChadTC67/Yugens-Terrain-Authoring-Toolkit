@@ -42,17 +42,16 @@ func _init() -> void:
 
 func _ensure_grass_arrays() -> void:
 	# Grass sprites
-	if grass_sprites.size() == 6:
-		# legacy OK
-		pass
-	elif grass_sprites.size() !=  MAX_TEXTURE_SLOTS:
-		var prev := grass_sprites.duplicate()
+	var prev := grass_sprites.duplicate()
+	if grass_sprites.size() !=  MAX_TEXTURE_SLOTS:
 		grass_sprites.resize(MAX_TEXTURE_SLOTS)
 		for i in range(MAX_TEXTURE_SLOTS):
 			if i < prev.size() and prev[i] is Texture2D:
 				grass_sprites[i] = prev[i]
-			else:
+			elif prev.is_empty() and i < 6:
 				grass_sprites[i] = GRASS_SPRITE
+			else:
+				grass_sprites[i] = null
 
 	# Has grass
 	if has_grass.size() == 5:
@@ -77,6 +76,12 @@ func _ensure_grass_arrays() -> void:
 		# default: keep legacy behavior for first 6
 		for i in range(MAX_TEXTURE_SLOTS):
 			has_grass[i] = (i < 6)
+
+	# Older placeholder presets expanded every slot to the default grass sprite.
+	# Treat disabled slots as empty so they do not masquerade as 256 meaningful slots.
+	for i in range(6, MAX_TEXTURE_SLOTS):
+		if not bool(has_grass[i]) and grass_sprites[i] == GRASS_SPRITE:
+			grass_sprites[i] = null
 
 
 

@@ -19,12 +19,15 @@ static func ensure_texture_slots(terrain) -> void:
 		terrain.texture_slots = []
 	if terrain.texture_slots.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.texture_slots.resize(MAX_TEXTURE_SLOTS)
+	var default_visible_count := 6
+	if terrain.get("visible_texture_slot_count") != null:
+		default_visible_count = clampi(int(terrain.get("visible_texture_slot_count")), 6, MAX_TEXTURE_SLOTS)
 	for i in range(MAX_TEXTURE_SLOTS):
 		if terrain.texture_slots[i] == null:
 			terrain.texture_slots[i] = _TEXTURE_SLOT_SCRIPT.new()
-		# Default any missing 'active' to true (older saves won't have it).
+		# Default missing 'active' from the current visible range instead of enabling all 256 slots.
 		if terrain.texture_slots[i] !=  null and terrain.texture_slots[i].get("active") == null:
-			terrain.texture_slots[i].active = true
+			terrain.texture_slots[i].active = (i < default_visible_count and i != VOID_TEXTURE_SLOT)
 		
 		# Default any missing grass fields (older saves / older slot resources).
 		# Slot 0 (Texture 1) defaults to having grass enabled.
@@ -82,8 +85,36 @@ static func maybe_migrate_legacy_grass(terrain) -> void:
 	# Legacy behavior: Texture 1 grass always on; textures 2-6 are toggleable.
 	if terrain._grass_slots_migrated:
 		return
-	terrain._grass_slots_migrated = true
 	ensure_texture_slots(terrain)
+
+	var has_slot_grass_data := false
+	for i in range(6):
+		var slot = terrain.texture_slots[i]
+		if slot == null:
+			continue
+		if is_valid_texture2d(slot.grass_texture):
+			has_slot_grass_data = true
+			break
+		var default_has_grass := (i == 0)
+		if slot.get("has_grass") != null and bool(slot.has_grass) != default_has_grass:
+			has_slot_grass_data = true
+			break
+
+	var legacy_grass_textures: Array = [
+		terrain.grass_sprite_tex_1, terrain.grass_sprite_tex_2, terrain.grass_sprite_tex_3,
+		terrain.grass_sprite_tex_4, terrain.grass_sprite_tex_5, terrain.grass_sprite_tex_6,
+	]
+	var any_legacy_grass_set := false
+	for tex in legacy_grass_textures:
+		if is_valid_texture2d(tex):
+			any_legacy_grass_set = true
+			break
+
+	if has_slot_grass_data or not any_legacy_grass_set:
+		terrain._grass_slots_migrated = true
+		return
+
+	terrain._grass_slots_migrated = true
 
 	# Ensure slots exist.
 	for i in range(6):
@@ -514,6 +545,12 @@ static func migrate_colors_to_palette(terrain) -> void:
 		terrain.palette_weights[i] = 100.0
 
 	terrain.slot_color_indices = [[0], [1], [2], [3], [4], [5], [], [], [], [], [], [], [], [], []]
+
+
+static func default_palette_color_for_slot(slot_idx: int) -> Color:
+	if slot_idx == 5:
+		return Color("c4a57aff")
+	return Color("647851ff")
 
 
 static func rebuild_palette_uniforms(terrain) -> void:

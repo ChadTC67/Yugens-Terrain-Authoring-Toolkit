@@ -113,12 +113,15 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 		return false
 	if slots_var.size() != MAX_TEXTURE_SLOTS:
 		slots_var.resize(MAX_TEXTURE_SLOTS)
+	var default_visible_count := 6
+	if terrain.get("visible_texture_slot_count") != null:
+		default_visible_count = clampi(int(terrain.get("visible_texture_slot_count")), 6, MAX_TEXTURE_SLOTS)
 	for i in range(MAX_TEXTURE_SLOTS):
 		if slots_var[i] == null:
 			slots_var[i] = _TEXTURE_SLOT_SCRIPT.new()
-		# Default any missing 'active' to true (older saves won't have it).
+		# Default missing 'active' from the current visible range instead of enabling all 256 slots.
 		if slots_var[i] != null and slots_var[i].get("active") == null:
-			slots_var[i].active = true
+			slots_var[i].active = (i < default_visible_count and i != 15)
 		# Default grass fields for older slot resources.
 		if slots_var[i] != null and slots_var[i].get("has_grass") == null:
 			slots_var[i].has_grass = (i == 0)
@@ -263,13 +266,13 @@ func _sync_texture_library_from_slots(terrain, lib_res) -> void:
 			var slot_tex := _coerce_texture2d(slot.texture)
 			if slot_tex != null:
 				lib_res.albedo_textures[i] = slot_tex
-			elif bool(slot.get("active")) == false:
+			else:
 				lib_res.albedo_textures[i] = null
 		if i < lib_res.grass_textures.size():
 			var grass_tex := _coerce_texture2d(slot.grass_texture)
 			if grass_tex != null:
 				lib_res.grass_textures[i] = grass_tex
-			elif bool(slot.get("active")) == false:
+			else:
 				lib_res.grass_textures[i] = null
 	_save_resource_if_external(lib_res)
 
@@ -383,6 +386,19 @@ func _apply_slot_normal(terrain, slot_idx: int, resource: Variant) -> void:
 
 func _is_slot_inactive(slot_obj) -> bool:
 	return slot_obj == null or bool(slot_obj.get("active")) == false
+
+
+func _get_effective_visible_slot_count(terrain) -> int:
+	if terrain == null or not _ensure_terrain_arrays(terrain):
+		return 1
+	var highest_active_slot := 0
+	for idx in range(min(MAX_TEXTURE_SLOTS, terrain.texture_slots.size())):
+		if idx == 15:
+			continue
+		var slot_obj = terrain.texture_slots[idx]
+		if idx == 0 or not _is_slot_inactive(slot_obj):
+			highest_active_slot = idx
+	return clampi(max(highest_active_slot + 1, 6), 1, MAX_TEXTURE_SLOTS)
 
 
 func _reset_slot_palette_state(terrain, slot_idx: int) -> void:
@@ -618,7 +634,7 @@ func add_texture_settings() -> void:
 
 	vbox.add_child(HSeparator.new())
 
-	var visible_count := clampi(int(terrain.visible_texture_slot_count), 1, 256)
+	var visible_count := _get_effective_visible_slot_count(terrain)
 	
 	# Compact slot list. Per-slot editing lives in _open_slot_modal().
 	var actions_v := VBoxContainer.new()
@@ -631,7 +647,7 @@ func add_texture_settings() -> void:
 		if not _ensure_terrain_arrays(terrain):
 			return
 		var made_active := false
-		for idx in range(clampi(int(terrain.visible_texture_slot_count), 1, 256)):
+		for idx in range(_get_effective_visible_slot_count(terrain)):
 			if idx == 0 or idx == 15:
 				continue
 			var s = terrain.texture_slots[idx]
@@ -655,9 +671,11 @@ func add_texture_settings() -> void:
 	grid.set_h_size_flags(Control.SIZE_EXPAND_FILL)
 	for i in range(visible_count):
 		var slot_idx := i
+		if slot_idx == 15:
+			continue
 		var slot_obj = terrain.texture_slots[slot_idx] if slot_idx < terrain.texture_slots.size() else null
-		# Hide inactive slots (except reserved ones).
-		if slot_idx != 0 and slot_idx != 15 and _is_slot_inactive(slot_obj):
+		# Hide inactive slots; slot 0 remains always visible.
+		if slot_idx != 0 and _is_slot_inactive(slot_obj):
 			continue
 		var __si := slot_idx
 		var tile := VBoxContainer.new()
@@ -692,7 +710,7 @@ func add_texture_settings() -> void:
 		var rem_btn := Button.new()
 		rem_btn.text = "X"
 		rem_btn.set_custom_minimum_size(Vector2(28, 24))
-		rem_btn.disabled = slot_idx == 0 or slot_idx == 15
+		rem_btn.disabled = slot_idx == 0
 		rem_btn.pressed.connect(func(): _clear_slot(terrain, __si, true))
 		btn_h.add_child(rem_btn)
 		var btn_center := CenterContainer.new()
@@ -719,6 +737,7 @@ func _open_slot_modal(slot_idx: int) -> void:
 	dialog.name = "mst_slot_modal"
 	dialog.title = "Edit Texture %d" % (slot_idx + 1)
 	dialog.min_size = Vector2i(780, 520)
+	dialog.exclusive = false
 	var body := HBoxContainer.new()
 	body.name = "modal_body"
 	body.set_custom_minimum_size(Vector2(840, 0))
@@ -1006,9 +1025,13 @@ func _ensure_palette_capacity(terrain) -> void:
 		terrain.palette_weights.resize(128)
 	for i in range(128):
 		if terrain.palette_colors[i] == null:
-			terrain.palette_colors[i] = Color("647851ff")
+			terrain.palette_colors[i] = _default_palette_color_for_slot(i)
 		if terrain.palette_weights[i] == null:
 			terrain.palette_weights[i] = 100.0
+
+
+func _default_palette_color_for_slot(slot: int) -> Color:
+	return MarchingSquaresTerrainHelpers.default_palette_color_for_slot(slot)
 
 
 func _next_free_palette_index(terrain, used: Dictionary) -> int:
@@ -1048,7 +1071,7 @@ func _repair_slot_palette_indices(terrain, slot: int) -> void:
 				terrain.palette_colors[next_idx] = terrain.palette_colors[pidx]
 				terrain.palette_weights[next_idx] = terrain.palette_weights[pidx]
 			else:
-				terrain.palette_colors[next_idx] = Color("647851ff")
+				terrain.palette_colors[next_idx] = _default_palette_color_for_slot(slot)
 				terrain.palette_weights[next_idx] = 100.0
 			indices[i] = next_idx
 			pidx = next_idx
@@ -1238,7 +1261,7 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 		if next_idx < 0:
 			push_error("[MST] Palette is full (128 colors max)")
 			return
-		terrain.palette_colors[next_idx] = Color("647851ff")
+		terrain.palette_colors[next_idx] = _default_palette_color_for_slot(s)
 		terrain.slot_color_indices[s].append(next_idx)
 		terrain._ensure_palette_weights()
 		var indices: Array = terrain.slot_color_indices[s]
@@ -1261,8 +1284,8 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 				if gpreview != null:
 					gpreview.color = terrain.palette_colors[next_idx]
 		if dlg != null:
-			# Prefer in-place refresh of the modal's advanced vbox so multi-adds work without closing.
-			call_deferred("_refresh_slot_modal", s)
+			# Refresh immediately so the first Add Color appears without needing a close/reopen cycle.
+			_refresh_slot_modal(s)
 			# Also refresh main UI after current frame so compact list updates if needed.
 			call_deferred("add_texture_settings")
 		else:
@@ -1287,6 +1310,8 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 	var grass_picker := EditorResourcePicker.new()
 	grass_picker.set_base_type("Texture2D")
 	var grass_tex_var : Texture2D = _coerce_texture2d(slot_res.grass_texture) if slot_res != null else null
+	if grass_tex_var == null and slot >= 0 and slot < 6:
+		grass_tex_var = _coerce_texture2d(terrain.get("grass_sprite_tex_%d" % (slot + 1)))
 	grass_picker.edited_resource = grass_tex_var
 	grass_picker.visible = grass_cb.button_pressed
 	grass_picker.set_custom_minimum_size(Vector2(100, 25))
@@ -1519,8 +1544,11 @@ func _on_bake_pressed() -> void:
 		return
 	var lib = terrain.get("texture_library") if terrain.has_method("get") else null
 	if lib == null:
-		push_error("[MST] Terrain has no texture_library assigned. Assign an MSTextureLibrary resource first.")
-		return
+		if terrain.has_method("ensure_texture_library_resource"):
+			lib = terrain.ensure_texture_library_resource()
+		if lib == null:
+			push_error("[MST] Terrain has no texture_library assigned, and Codex could not create one from the current texture slots.")
+			return
 	_sync_texture_library_from_slots(terrain, lib)
 	var out_dir := "res://scenes/baked_texture_arrays"
 	# If the terrain has a data_directory, prefer saving alongside it (convert Windows paths to resource-style).
