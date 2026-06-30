@@ -550,7 +550,7 @@ func generate_height_map(base_height: float = 0.0):
 				var noise_x = (chunk_coords.x * (dimensions.x - 1)) + x
 				var noise_z = (chunk_coords.y * (dimensions.z -1)) + z
 				var noise_sample = noise.get_noise_2d(noise_x, noise_z)
-				height_map[z][x] = p_base_height + (noise_sample * dimensions.y)
+				height_map[z][x] = base_height + (noise_sample * dimensions.y)
 
 
 func generate_color_maps():
