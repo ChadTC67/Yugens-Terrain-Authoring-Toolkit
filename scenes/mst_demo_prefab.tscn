@@ -1,0 +1,75 @@
+[gd_scene format=3 uid="uid://qgckk218ln4t"]
+
+[ext_resource type="Script" uid="uid://cddg1xr5hye1d" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain.gd" id="1_7isul"]
+[ext_resource type="Resource" uid="uid://bks8psh5iff0d" path="res://scenes/prefabs/template/template_set.tres" id="2_nm1jt"]
+[ext_resource type="Script" uid="uid://cql4d8s5t5xcx" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_chunk.gd" id="3_pdhvo"]
+[ext_resource type="Script" uid="uid://22l7ysgniux3" path="res://addons/MarchingSquaresTerrain/algorithm/grass/marching_squares_grass_planter.gd" id="4_ve6lf"]
+[ext_resource type="Resource" uid="uid://ljcr0d4mbbuo" path="res://scenes/prefabs/kenney/grass.tres" id="5_tyrw5"]
+[ext_resource type="Texture2D" uid="uid://da06vhls0hw17" path="res://scenes/prefabs/kenney/grass.png" id="6_ep4uo"]
+[ext_resource type="Resource" uid="uid://bt87wj56j4uj2" path="res://scenes/prefabs/kenney/castle.tres" id="7_37w48"]
+[ext_resource type="Texture2D" uid="uid://qt35e2pi6rnm" path="res://scenes/prefabs/kenney/castle.png" id="8_c1w6x"]
+
+[node name="Node3D" type="Node3D" unique_id=1787602393]
+
+[node name="Template" type="Node3D" parent="." unique_id=352788694]
+script = ExtResource("1_7isul")
+bake_collision = false
+data_directory = "res://scenes/mst_demo_prefab_TerrainData/Template_bad2e6ac"
+prefab_set = ExtResource("2_nm1jt")
+_storage_initialized = true
+use_ridge_texture = false
+use_ledge_texture = false
+metadata/_custom_type_script = "uid://cddg1xr5hye1d"
+
+[node name="Chunk (-1, 0)" type="MeshInstance3D" parent="Template" unique_id=1799987468 node_paths=PackedStringArray("terrain_system")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -64, 0, 0)
+script = ExtResource("3_pdhvo")
+terrain_system = NodePath("..")
+chunk_coords = Vector2i(-1, 0)
+
+[node name="GrassPlanter" type="MultiMeshInstance3D" parent="Template/Chunk (-1, 0)" unique_id=1414551555]
+cast_shadow = 0
+script = ExtResource("4_ve6lf")
+
+[node name="GrassyBlocks" type="Node3D" parent="." unique_id=1047272908]
+script = ExtResource("1_7isul")
+bake_collision = false
+data_directory = "res://scenes/mst_demo_prefab_TerrainData/GrassyBlocks_d1806485"
+prefab_set = ExtResource("5_tyrw5")
+_storage_initialized = true
+texture_prefab_colormap = ExtResource("6_ep4uo")
+texture_albedo_1 = Color(1, 1, 1, 1)
+texture_albedo_6 = Color(1, 1, 1, 1)
+metadata/_custom_type_script = "uid://cddg1xr5hye1d"
+
+[node name="Chunk (0, 0)" type="MeshInstance3D" parent="GrassyBlocks" unique_id=1427209554 node_paths=PackedStringArray("terrain_system")]
+script = ExtResource("3_pdhvo")
+terrain_system = NodePath("..")
+
+[node name="GrassPlanter" type="MultiMeshInstance3D" parent="GrassyBlocks/Chunk (0, 0)" unique_id=1878404520]
+cast_shadow = 0
+script = ExtResource("4_ve6lf")
+
+[node name="Castle" type="Node3D" parent="." unique_id=80276916]
+script = ExtResource("1_7isul")
+bake_collision = false
+data_directory = "res://scenes/mst_demo_prefab_TerrainData/Castle_505cc85d"
+prefab_set = ExtResource("7_37w48")
+_storage_initialized = true
+texture_1 = null
+texture_6 = null
+texture_prefab_colormap = ExtResource("8_c1w6x")
+texture_albedo_1 = Color(1, 1, 1, 1)
+texture_albedo_6 = Color(1, 1, 1, 1)
+metadata/_custom_type_script = "uid://cddg1xr5hye1d"
+
+[node name="Chunk (1, 0)" type="MeshInstance3D" parent="Castle" unique_id=602514889 node_paths=PackedStringArray("terrain_system")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 64, 0, 0)
+script = ExtResource("3_pdhvo")
+terrain_system = NodePath("..")
+chunk_coords = Vector2i(1, 0)
+
+[node name="GrassPlanter" type="MultiMeshInstance3D" parent="Castle/Chunk (1, 0)" unique_id=362389044]
+visible = false
+cast_shadow = 0
+script = ExtResource("4_ve6lf")

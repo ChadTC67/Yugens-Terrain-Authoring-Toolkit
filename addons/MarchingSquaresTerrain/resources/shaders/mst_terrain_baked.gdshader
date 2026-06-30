@@ -1,7 +1,9 @@
 shader_type spatial;
-render_mode diffuse_toon, depth_draw_opaque, cull_disabled;
+render_mode blend_mix, diffuse_toon, depth_draw_opaque;
 
 uniform sampler2D texture_albedo : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D tex_prefab_colormap : source_color;
+uniform bool has_prefab_colormap = false;
 
 group_uniforms Visuals.Normals;
 uniform bool use_flat_normals = false;
@@ -25,8 +27,14 @@ void vertex() {
 }
 
 void fragment() {
-	vec4 albedo_tex = texture(texture_albedo, UV);
-	ALBEDO = albedo_tex.rgb;
+	vec4 color = texture(texture_albedo,UV2);
+	ALBEDO = color.rgb;
+	if (has_prefab_colormap) {
+		vec4 col = texture(tex_prefab_colormap, UV);
+		ALBEDO.rgb *= col.rgb;
+		ALPHA *= col.a;
+		ALPHA_SCISSOR_THRESHOLD = 0.5;
+	}
 }
 
 void light() {

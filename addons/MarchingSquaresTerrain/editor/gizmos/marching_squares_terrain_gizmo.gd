@@ -17,7 +17,6 @@ var terrain_plugin : MarchingSquaresTerrainPlugin
 func _redraw():
 	lines.clear()
 	clear()
-	
 	addchunk_material = get_plugin().get_material("addchunk", self)
 	removechunk_material = get_plugin().get_material("removechunk", self)
 	highlightchunk_material = get_plugin().get_material("highlightchunk", self)

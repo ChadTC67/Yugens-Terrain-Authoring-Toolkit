@@ -26,6 +26,19 @@ var by : float
 var dy : float
 var cy : float
 
+var aby : float
+var acy : float
+var bdy : float
+var bcy : float
+var ady : float
+var cdy : float
+var abcdy : float
+
+var ay1 : float
+var by1 : float
+var cy1 : float
+var dy1 : float
+
 var _ay : float
 var _by : float
 var _cy : float
@@ -66,6 +79,18 @@ var rotation : CellRotation:
 		bd = abs(by-dy) < merge_threshold # right edge
 		cd = abs(cy-dy) < merge_threshold # bottom edge
 		ac = abs(ay-cy) < merge_threshold # left edge
+		
+		aby = (ay+by)/2
+		acy = (ay+cy)/2
+		bdy = (by+dy)/2
+		cdy = (cy+dy)/2
+		bcy = (by+cy)/2
+		ady = (ay+dy)/2
+		abcdy = (ay+by+cy+dy)/4
+		ay1 = ay - 1
+		by1 = by - 1
+		cy1 = cy - 1
+		dy1 = dy - 1
 		
 		rotation = x
 
@@ -246,35 +271,31 @@ func start_wall() -> void:
 	floor_mode = false
 
 
-func add_point(x: float, y: float, z: float, u: float, v: float):
+func add_point_uv2(x: float, y: float, z: float, u2: float, v2: float):
+	var uv = Vector2(x, z) / chunk.cell_size	
+	add_point(x, y, z, uv.x, uv.y, u2, v2)
+
+func add_point(x: float, y: float, z: float, u: float, v: float, u2: float, v2: float):
 	for i in range(rotation as int):
 		var temp := x
 		x = 1 - z
 		z = temp
 	
-	# UV - used for ledge detection. X = closeness to top terrace, Y = closeness to bottom of terrace
-	# Walls will always have UV of 1, 1
-	var uv := Vector2(u, v) if floor_mode else Vector2(1, 1)
+	var uv := Vector2(u, v)
+	var uv2 := Vector2(u2, v2)
 	
 	# Same calculations from here
 	var vert := Vector3((cell_coords.x+x) * chunk.cell_size.x, y, (cell_coords.y+z) * chunk.cell_size.y)
-	var uv2 : Vector2
-	if floor_mode:
-		uv2 = Vector2(vert.x, vert.z) / chunk.cell_size
-	else:
-		# This avoids is_inside_tree() errors when inactive scene tabs are loaded
-		var chunk_pos : Vector3 = chunk.global_position_cached
-		var global_pos := vert + chunk_pos
-		uv2 = (Vector2(global_pos.x, global_pos.y) + Vector2(global_pos.z, global_pos.y))
 	
 	pts.append(vert)
 	uvs.append(uv)
 	uv2s.append(uv2)
-	var colors := color_helper.blend_colors(Vector3(x,y,z), uv)
+	var colors := color_helper.blend_colors(Vector3(x,y,z), uv2)
 	custom_1_values.append(colors["custom_1_value"])
 	color_0s.append(colors["color_0"])
 	color_1s.append(colors["color_1"])
 	mat_blends.append(colors["mat_blend"])
+	
 	floors.append(floor_mode)
 
 
@@ -337,39 +358,39 @@ func add_c9() -> void:
 	start_floor()
 	
 	# D corner. B edge is connected, so use halfway point bewteen B and D
-	add_point(1, dy, 1, 0, 0)
-	add_point(0.5, dy, 1, 1, 0)
-	add_point(1, (by+dy)/2, 0.5, 0, 0)
+	add_point_uv2(1, dy, 1, 0, 0)
+	add_point_uv2(0.5, dy, 1, 1, 0)
+	add_point_uv2(1, (by+dy)/2, 0.5, 0, 0)
 	
 	# B corner
-	add_point(1, by, 0, 0, 0)
-	add_point(1, (by+dy)/2, 0.5, 0, 0)
-	add_point(0.5, by, 0, 0, 1)
+	add_point_uv2(1, by, 0, 0, 0)
+	add_point_uv2(1, (by+dy)/2, 0.5, 0, 0)
+	add_point_uv2(0.5, by, 0, 0, 1)
 	
 	# Center floors
-	add_point(0.5, by, 0, 0, 1)
-	add_point(1, (by+dy)/2, 0.5, 0, 0)
-	add_point(0, by, 0.5, 1, 1)
+	add_point_uv2(0.5, by, 0, 0, 1)
+	add_point_uv2(1, (by+dy)/2, 0.5, 0, 0)
+	add_point_uv2(0, by, 0.5, 1, 1)
 	
-	add_point(0.5, dy, 1, 1, 0)
-	add_point(0, by, 0.5, 1, 1)
-	add_point(1, (by+dy)/2, 0.5, 0, 0)
+	add_point_uv2(0.5, dy, 1, 1, 0)
+	add_point_uv2(0, by, 0.5, 1, 1)
+	add_point_uv2(1, (by+dy)/2, 0.5, 0, 0)
 	
 	# Walls to upper corner
 	start_wall()
-	add_point(0, by, 0.5, 0, 0)
-	add_point(0.5, dy, 1, 0, 0)
-	add_point(0, cy, 0.5, 0, 0)
+	add_point_uv2(0, by, 0.5, 0, 0)
+	add_point_uv2(0.5, dy, 1, 0, 0)
+	add_point_uv2(0, cy, 0.5, 0, 0)
 	
-	add_point(0.5, cy, 1, 0, 0)
-	add_point(0, cy, 0.5, 0, 0)
-	add_point(0.5, dy, 1, 0, 0)
+	add_point_uv2(0.5, cy, 1, 0, 0)
+	add_point_uv2(0, cy, 0.5, 0, 0)
+	add_point_uv2(0.5, dy, 1, 0, 0)
 	
 	# C upper floor
 	start_floor()
-	add_point(0, cy, 1, 0, 0)
-	add_point(0, cy, 0.5, 0, 1)
-	add_point(0.5, cy, 1, 0, 1)
+	add_point_uv2(0, cy, 1, 0, 0)
+	add_point_uv2(0, cy, 0.5, 0, 1)
+	add_point_uv2(0.5, cy, 1, 0, 1)
 
 
 func add_c10() -> void:
@@ -377,39 +398,39 @@ func add_c10() -> void:
 	
 	# D corner. C edge is connected, so use halfway point bewteen C and D
 	start_floor()
-	add_point(1, dy, 1, 0, 0)
-	add_point(0.5, (dy + cy) / 2, 1, 0, 0)
-	add_point(1, dy, 0.5, 0, 0)
+	add_point_uv2(1, dy, 1, 0, 0)
+	add_point_uv2(0.5, (dy + cy) / 2, 1, 0, 0)
+	add_point_uv2(1, dy, 0.5, 0, 0)
 	
 	# C corner
-	add_point(0, cy, 1, 0, 0)
-	add_point(0, cy, 0.5, 0, 0)
-	add_point(0.5, (dy + cy) / 2, 1, 0, 0)
+	add_point_uv2(0, cy, 1, 0, 0)
+	add_point_uv2(0, cy, 0.5, 0, 0)
+	add_point_uv2(0.5, (dy + cy) / 2, 1, 0, 0)
 	
 	# Center floors
-	add_point(0, cy, 0.5, 0, 0)
-	add_point(0.5, cy, 0, 0, 0)
-	add_point(0.5, (dy + cy) / 2, 1, 0, 0)
+	add_point_uv2(0, cy, 0.5, 0, 0)
+	add_point_uv2(0.5, cy, 0, 0, 0)
+	add_point_uv2(0.5, (dy + cy) / 2, 1, 0, 0)
 	
-	add_point(1, dy, 0.5, 0, 0)
-	add_point(0.5, (dy + cy) / 2, 1, 0, 0)
-	add_point(0.5, cy, 0, 0, 0)
+	add_point_uv2(1, dy, 0.5, 0, 0)
+	add_point_uv2(0.5, (dy + cy) / 2, 1, 0, 0)
+	add_point_uv2(0.5, cy, 0, 0, 0)
 	
 	# Walls to upper corner
 	start_wall()
-	add_point(0.5, cy, 0, 0, 0)
-	add_point(0.5, by, 0, 0, 0)
-	add_point(1, dy, 0.5, 0, 0)
+	add_point_uv2(0.5, cy, 0, 0, 0)
+	add_point_uv2(0.5, by, 0, 0, 0)
+	add_point_uv2(1, dy, 0.5, 0, 0)
 
-	add_point(1, by, 0.5, 0, 0)
-	add_point(1, dy, 0.5, 0, 0)
-	add_point(0.5, by, 0, 0, 0)
+	add_point_uv2(1, by, 0.5, 0, 0)
+	add_point_uv2(1, dy, 0.5, 0, 0)
+	add_point_uv2(0.5, by, 0, 0, 0)
 	
 	# B upper floor
 	start_floor()
-	add_point(1, by, 0, 0, 0)
-	add_point(1, by, 0.5, 0, 0)
-	add_point(0.5, by, 0, 0, 0)
+	add_point_uv2(1, by, 0, 0, 0)
+	add_point_uv2(1, by, 0.5, 0, 0)
+	add_point_uv2(0.5, by, 0, 0, 0)
 
 
 func add_c11() -> void:
@@ -460,29 +481,29 @@ func add_c17() -> void:
 	
 	# Upper floor
 	start_floor()
-	add_point(0, ay, 0, 0, 0)
-	add_point(1, by, 0, 0, 0)
-	add_point(1, edge_by, 0.5, 0, 0)
+	add_point_uv2(0, ay, 0, 0, 0)
+	add_point_uv2(1, by, 0, 0, 0)
+	add_point_uv2(1, edge_by, 0.5, 0, 0)
 	
-	add_point(1, edge_by, 0.5, 0, 1)
-	add_point(0, ay, 0.5, 0, 1)
-	add_point(0, ay, 0, 0, 0)
+	add_point_uv2(1, edge_by, 0.5, 0, 1)
+	add_point_uv2(0, ay, 0.5, 0, 1)
+	add_point_uv2(0, ay, 0, 0, 0)
 	
 	# Wall
 	start_wall()
-	add_point(0, cy, 0.5, 0, 0)
-	add_point(0, ay, 0.5, 0, 1)
-	add_point(1, edge_dy, 0.5, 1, 0)
+	add_point_uv2(0, cy, 0.5, 0, 0)
+	add_point_uv2(0, ay, 0.5, 0, 1)
+	add_point_uv2(1, edge_dy, 0.5, 1, 0)
 	
 	# Lower floor
 	start_floor()
-	add_point(0, cy, 0.5, 1, 0)
-	add_point(1, edge_dy, 0.5, 1, 0)
-	add_point(0, cy, 1, 0, 0)
+	add_point_uv2(0, cy, 0.5, 1, 0)
+	add_point_uv2(1, edge_dy, 0.5, 1, 0)
+	add_point_uv2(0, cy, 1, 0, 0)
 	
-	add_point(1, dy, 1, 0, 0)
-	add_point(0, cy, 1, 0, 0)
-	add_point(1, edge_dy, 0.5, 0, 0)
+	add_point_uv2(1, dy, 1, 0, 0)
+	add_point_uv2(0, cy, 1, 0, 0)
+	add_point_uv2(1, edge_dy, 0.5, 0, 0)
 
 
 func add_c18() -> void:
@@ -492,29 +513,29 @@ func add_c18() -> void:
 	
 	# Upper floor - use A and B edge for heights
 	start_floor()
-	add_point(0, ay, 0, 0, 0)
-	add_point(1, by, 0, 0, 0)
-	add_point(0, edge_ay, 0.5, 0, 0)
+	add_point_uv2(0, ay, 0, 0, 0)
+	add_point_uv2(1, by, 0, 0, 0)
+	add_point_uv2(0, edge_ay, 0.5, 0, 0)
 	
-	add_point(1, by, 0.5, 0, 1)
-	add_point(0, edge_ay, 0.5, 0, 1)
-	add_point(1, by, 0, 0, 0)
+	add_point_uv2(1, by, 0.5, 0, 1)
+	add_point_uv2(0, edge_ay, 0.5, 0, 1)
+	add_point_uv2(1, by, 0, 0, 0)
 	
 	# Wall from left to right edge
 	start_wall()
-	add_point(1, by, 0.5, 1, 1)
-	add_point(1, dy, 0.5, 1, 0)
-	add_point(0, edge_ay, 0.5, 0, 0)
+	add_point_uv2(1, by, 0.5, 1, 1)
+	add_point_uv2(1, dy, 0.5, 1, 0)
+	add_point_uv2(0, edge_ay, 0.5, 0, 0)
 	
 	# Lower floor - use C and D edge
 	start_floor()
-	add_point(0, edge_cy, 0.5, 1, 0)
-	add_point(1, dy, 0.5, 1, 0)
-	add_point(1, dy, 1, 0, 0)
+	add_point_uv2(0, edge_cy, 0.5, 1, 0)
+	add_point_uv2(1, dy, 0.5, 1, 0)
+	add_point_uv2(1, dy, 1, 0, 0)
 	
-	add_point(0, cy, 1, 0, 0)
-	add_point(0, edge_cy, 0.5, 0, 0)
-	add_point(1, dy, 1, 0, 0)
+	add_point_uv2(0, cy, 1, 0, 0)
+	add_point_uv2(0, edge_cy, 0.5, 0, 0)
+	add_point_uv2(1, dy, 1, 0, 0)
 
 
 func add_full_floor():
@@ -522,29 +543,29 @@ func add_full_floor():
 	if higher_poly_floors:
 		var ey := (ay+by+cy+dy)/4
 	
-		add_point(0, ay, 0, 0, 0)
-		add_point(1, by, 0, 0, 0)
-		add_point(0.5, ey, 0.5, 0, 0)
+		add_point_uv2(0, ay, 0, 0, 0)
+		add_point_uv2(1, by, 0, 0, 0)
+		add_point_uv2(0.5, ey, 0.5, 0, 0)
 		
-		add_point(1, by, 0, 0, 0)
-		add_point(1, dy, 1, 0, 0)
-		add_point(0.5, ey, 0.5, 0, 0)
+		add_point_uv2(1, by, 0, 0, 0)
+		add_point_uv2(1, dy, 1, 0, 0)
+		add_point_uv2(0.5, ey, 0.5, 0, 0)
 		
-		add_point(1, dy, 1, 0, 0)
-		add_point(0, cy, 1, 0, 0)
-		add_point(0.5, ey, 0.5, 0, 0)
+		add_point_uv2(1, dy, 1, 0, 0)
+		add_point_uv2(0, cy, 1, 0, 0)
+		add_point_uv2(0.5, ey, 0.5, 0, 0)
 		
-		add_point(0, cy, 1, 0, 0)
-		add_point(0, ay, 0, 0, 0)
-		add_point(0.5, ey, 0.5, 0, 0)
+		add_point_uv2(0, cy, 1, 0, 0)
+		add_point_uv2(0, ay, 0, 0, 0)
+		add_point_uv2(0.5, ey, 0.5, 0, 0)
 	else:
-		add_point(0, ay, 0, 0, 0)
-		add_point(1, by, 0, 0, 0)
-		add_point(0, cy, 1, 0, 0)
+		add_point_uv2(0, ay, 0, 0, 0)
+		add_point_uv2(1, by, 0, 0, 0)
+		add_point_uv2(0, cy, 1, 0, 0)
 		
-		add_point(1, dy, 1, 0, 0)
-		add_point(0, cy, 1, 0, 0)
-		add_point(1, by, 0, 0, 0)
+		add_point_uv2(1, dy, 1, 0, 0)
+		add_point_uv2(0, cy, 1, 0, 0)
+		add_point_uv2(1, by, 0, 0, 0)
 
 
 # Add an outer corner, where A is the raised corner.
@@ -555,33 +576,33 @@ func add_outer_corner(floor_below: bool = true, floor_above: bool = true, flatte
 	
 	if floor_above:
 		start_floor()
-		add_point(0, ay, 0, 0, 0)
-		add_point(0.5, ay, 0, 0, 1)
-		add_point(0, ay, 0.5, 0, 1)
+		add_point_uv2(0, ay, 0, 0, 0)
+		add_point_uv2(0.5, ay, 0, 0, 1)
+		add_point_uv2(0, ay, 0.5, 0, 1)
 	
 	# Walls - bases will use B and C height, while cliff top will use A height.
 	start_wall()
-	add_point(0, edge_cy, 0.5, 0, 0)
-	add_point(0, ay, 0.5, 0, 1)
-	add_point(0.5, edge_by, 0, 1, 0)
+	add_point_uv2(0, edge_cy, 0.5, 0, 0)
+	add_point_uv2(0, ay, 0.5, 0, 1)
+	add_point_uv2(0.5, edge_by, 0, 1, 0)
 	
-	add_point(0.5, ay, 0, 1, 1)
-	add_point(0.5, edge_by, 0, 1, 0)
-	add_point(0, ay, 0.5, 0, 1)
+	add_point_uv2(0.5, ay, 0, 1, 1)
+	add_point_uv2(0.5, edge_by, 0, 1, 0)
+	add_point_uv2(0, ay, 0.5, 0, 1)
 	
 	if floor_below:
 		start_floor()
-		add_point(1, dy, 1,0,0)
-		add_point(0, cy, 1,0,0)
-		add_point(1, by, 0,0,0)	
+		add_point_uv2(1, dy, 1,0,0)
+		add_point_uv2(0, cy, 1,0,0)
+		add_point_uv2(1, by, 0,0,0)	
 		
-		add_point(0, cy, 1,0,0)
-		add_point(0, cy, 0.5, 1, 0)
-		add_point(0.5, by, 0, 1, 0)
+		add_point_uv2(0, cy, 1,0,0)
+		add_point_uv2(0, cy, 0.5, 1, 0)
+		add_point_uv2(0.5, by, 0, 1, 0)
 		
-		add_point(1, by, 0,0,0)	
-		add_point(0, cy, 1,0,0)
-		add_point(0.5, by, 0, 1, 0)
+		add_point_uv2(1, by, 0,0,0)	
+		add_point_uv2(0, cy, 1,0,0)
+		add_point_uv2(0.5, by, 0, 1, 0)
 
 
 # Add an edge, where AB is the raised edge.
@@ -597,35 +618,35 @@ func add_edge(floor_below: bool, floor_above: bool, a_x: float = 0, b_x: float =
 	# Upper floor - use A and B for heights
 	if floor_above:
 		start_floor()
-		add_point(a_x, edge_ay, 0, 1 if a_x > 0 else 0, 0)
-		add_point(b_x, edge_by, 0, 1 if b_x < 1 else 0, 0)
-		add_point(0, edge_ay, 0.5, -1 if b_x < 1 else (1 if a_x > 0 else 0), 1)
+		add_point_uv2(a_x, edge_ay, 0, 1 if a_x > 0 else 0, 0)
+		add_point_uv2(b_x, edge_by, 0, 1 if b_x < 1 else 0, 0)
+		add_point_uv2(0, edge_ay, 0.5, -1 if b_x < 1 else (1 if a_x > 0 else 0), 1)
 		
-		add_point(1, edge_by, 0.5, -1 if a_x > 0  else (1 if b_x < 1 else 0), 1)
-		add_point(0, edge_ay, 0.5, -1 if b_x < 1 else (1 if a_x > 0 else 0), 1)
-		add_point(b_x, edge_by, 0, 1 if b_x < 1 else 0, 0)
+		add_point_uv2(1, edge_by, 0.5, -1 if a_x > 0  else (1 if b_x < 1 else 0), 1)
+		add_point_uv2(0, edge_ay, 0.5, -1 if b_x < 1 else (1 if a_x > 0 else 0), 1)
+		add_point_uv2(b_x, edge_by, 0, 1 if b_x < 1 else 0, 0)
 	
 	# Wall from left to right edge
 	start_wall()
-	add_point(0, edge_cy, 0.5, 0, 0)
-	add_point(0, edge_ay, 0.5, 0, 1)
-	add_point(1, edge_dy, 0.5, 1, 0)
+	add_point_uv2(0, edge_cy, 0.5, 0, 0)
+	add_point_uv2(0, edge_ay, 0.5, 0, 1)
+	add_point_uv2(1, edge_dy, 0.5, 1, 0)
 	
-	add_point(1, edge_by, 0.5, 1, 1)
-	add_point(1, edge_dy, 0.5, 1, 0)
-	add_point(0, edge_ay, 0.5, 0, 1)
+	add_point_uv2(1, edge_by, 0.5, 1, 1)
+	add_point_uv2(1, edge_dy, 0.5, 1, 0)
+	add_point_uv2(0, edge_ay, 0.5, 0, 1)
 	
 	# Lower floor - use C and D for height
 	# Only place a flat floor below if CD is connected
 	if floor_below:
 		start_floor()
-		add_point(0, cy, 0.5, 1, 0)
-		add_point(1, dy, 0.5, 1, 0)
-		add_point(0, cy, 1, 0, 0)
+		add_point_uv2(0, cy, 0.5, 1, 0)
+		add_point_uv2(1, dy, 0.5, 1, 0)
+		add_point_uv2(0, cy, 1, 0, 0)
 		
-		add_point(1, dy, 1, 0, 0)
-		add_point(0, cy, 1, 0, 0)
-		add_point(1, dy, 0.5, 1, 0)
+		add_point_uv2(1, dy, 1, 0, 0)
+		add_point_uv2(0, cy, 1, 0, 0)
+		add_point_uv2(1, dy, 0.5, 1, 0)
 
 
 # Add an inner corner, where A is the lowered corner.
@@ -636,71 +657,71 @@ func add_inner_corner(lower_floor: bool = true, full_upper_floor: bool = true, f
 	# Lower floor with height of point A
 	if lower_floor:
 		start_floor()
-		add_point(0, ay, 0, 0, 0)
-		add_point(0.5, ay, 0, 1, 0)
-		add_point(0, ay, 0.5, 1, 0)
+		add_point_uv2(0, ay, 0, 0, 0)
+		add_point_uv2(0.5, ay, 0, 1, 0)
+		add_point_uv2(0, ay, 0.5, 1, 0)
 	
 	start_wall()
-	add_point(0, ay, 0.5, 1, 0)
-	add_point(0.5, ay, 0, 0, 0)
-	add_point(0, corner_cy, 0.5, 1, 1)
+	add_point_uv2(0, ay, 0.5, 1, 0)
+	add_point_uv2(0.5, ay, 0, 0, 0)
+	add_point_uv2(0, corner_cy, 0.5, 1, 1)
 	
-	add_point(0.5, corner_by, 0, 0, 1)
-	add_point(0, corner_cy, 0.5, 1, 1)
-	add_point(0.5, ay, 0, 0, 0)
+	add_point_uv2(0.5, corner_by, 0, 0, 1)
+	add_point_uv2(0, corner_cy, 0.5, 1, 1)
+	add_point_uv2(0.5, ay, 0, 0, 0)
 	
 	start_floor()
 	if full_upper_floor:
-		add_point(1, dy, 1, 0, 0)
-		add_point(0, corner_cy, 1, 0, 0)
-		add_point(1, corner_by, 0, 0, 0)
+		add_point_uv2(1, dy, 1, 0, 0)
+		add_point_uv2(0, corner_cy, 1, 0, 0)
+		add_point_uv2(1, corner_by, 0, 0, 0)
 		
-		add_point(0, corner_cy, 1, 0, 0)
-		add_point(0, corner_cy, 0.5, 0, 1)
-		add_point(0.5, corner_by, 0, 0, 1)
+		add_point_uv2(0, corner_cy, 1, 0, 0)
+		add_point_uv2(0, corner_cy, 0.5, 0, 1)
+		add_point_uv2(0.5, corner_by, 0, 0, 1)
 		
-		add_point(1, corner_by, 0, 0, 0)
-		add_point(0, corner_cy, 1, 0, 0)
-		add_point(0.5, corner_by, 0, 0, 1)
+		add_point_uv2(1, corner_by, 0, 0, 0)
+		add_point_uv2(0, corner_cy, 1, 0, 0)
+		add_point_uv2(0.5, corner_by, 0, 0, 1)
 	
 	# If C and D are both higher than B, and B does not connect the corners, there's an edge above, place floors that will connect to the CD edge
 	if cd_floor:
 		# use height of B corner
-		add_point(1, by, 0, 0, 0)
-		add_point(0, by, 0.5, 1, 1)
-		add_point(0.5, by, 0, 0, 1)
+		add_point_uv2(1, by, 0, 0, 0)
+		add_point_uv2(0, by, 0.5, 1, 1)
+		add_point_uv2(0.5, by, 0, 0, 1)
 		
-		add_point(1, by, 0, 0, 0)
-		add_point(1, by, 0.5, 1, -1)
-		add_point(0, by, 0.5, 1, 1)
+		add_point_uv2(1, by, 0, 0, 0)
+		add_point_uv2(1, by, 0.5, 1, -1)
+		add_point_uv2(0, by, 0.5, 1, 1)
 	
 	# If B and D are both higher than C, and C does not connect the corners, there's an edge above, place floors that will connect to the BD edge
 	if bd_floor: 
-		add_point(0, cy, 0.5, 0, 1)
-		add_point(0.5, cy, 0, 1, 1)
-		add_point(0, cy, 1, 0, 0)
+		add_point_uv2(0, cy, 0.5, 0, 1)
+		add_point_uv2(0.5, cy, 0, 1, 1)
+		add_point_uv2(0, cy, 1, 0, 0)
 		
-		add_point(0.5, cy, 1, 1, -1)
-		add_point(0, cy, 1, 0, 0)
-		add_point(0.5, cy, 0, 1, 1)
+		add_point_uv2(0.5, cy, 1, 1, -1)
+		add_point_uv2(0, cy, 1, 0, 0)
+		add_point_uv2(0.5, cy, 0, 1, 1)
 
 
 # Add a diagonal floor, using heights of B and C and connecting their points using passed heights.
 func add_diagonal_floor(b_y: float, c_y: float, a_cliff: bool, d_cliff: bool):
 	start_floor()
 	
-	add_point(1, b_y, 0, 0 ,0)
-	add_point(0, c_y, 1, 0 ,0)
-	add_point(0.5, b_y, 0, 0 if a_cliff else 1, 1 if a_cliff else 0)
+	add_point_uv2(1, b_y, 0, 0 ,0)
+	add_point_uv2(0, c_y, 1, 0 ,0)
+	add_point_uv2(0.5, b_y, 0, 0 if a_cliff else 1, 1 if a_cliff else 0)
 	
-	add_point(0, c_y, 1, 0, 0)
-	add_point(0, c_y, 0.5, 0 if a_cliff else 1, 1 if a_cliff else 0)
-	add_point(0.5, b_y, 0, 0 if a_cliff else 1, 1 if a_cliff else 0)
+	add_point_uv2(0, c_y, 1, 0, 0)
+	add_point_uv2(0, c_y, 0.5, 0 if a_cliff else 1, 1 if a_cliff else 0)
+	add_point_uv2(0.5, b_y, 0, 0 if a_cliff else 1, 1 if a_cliff else 0)
 	
-	add_point(1, b_y, 0, 0 ,0)
-	add_point(1, b_y, 0.5, 0 if d_cliff else 1, 1 if d_cliff else 0)
-	add_point(0, c_y, 1, 0 ,0)
+	add_point_uv2(1, b_y, 0, 0 ,0)
+	add_point_uv2(1, b_y, 0.5, 0 if d_cliff else 1, 1 if d_cliff else 0)
+	add_point_uv2(0, c_y, 1, 0 ,0)
 	
-	add_point(0, c_y, 1, 0, 0)
-	add_point(1, b_y, 0.5, 0 if d_cliff else 1, 1 if d_cliff else 0)
-	add_point(0.5, c_y, 1, 0 if d_cliff else 1, 1 if d_cliff else 0)
+	add_point_uv2(0, c_y, 1, 0, 0)
+	add_point_uv2(1, b_y, 0.5, 0 if d_cliff else 1, 1 if d_cliff else 0)
+	add_point_uv2(0.5, c_y, 1, 0 if d_cliff else 1, 1 if d_cliff else 0)

@@ -16,7 +16,6 @@ var _terrain_gizmos : Dictionary[Node, MarchingSquaresTerrainGizmo] = {}
 
 
 func _create_gizmo(node: Node):
-	#return null
 	if node is MarchingSquaresTerrainChunk:
 		if not _chunk_gizmos.has(node):
 			node.tree_exited.connect(func(): _chunk_gizmos.erase(node), CONNECT_ONE_SHOT)
@@ -36,7 +35,6 @@ func trigger_redraw(node: Node) -> void:
 	if node is MarchingSquaresTerrainChunk and _chunk_gizmos.has(node):
 		_chunk_gizmos[node]._redraw()
 	elif node is MarchingSquaresTerrain and _terrain_gizmos.has(node):
-		
 		_terrain_gizmos[node]._redraw()
 
 

@@ -41,7 +41,7 @@ var plugin : MarchingSquaresTerrainPlugin
 var toolbar : TOOLBAR
 var tool_attributes : TOOL_ATTRIBUTES
 var texture_settings : TEXTURE_SETTINGS
-var active_tool : int
+var active_tool : MarchingSquaresTerrainPlugin.TerrainToolMode = MarchingSquaresTerrainPlugin.TerrainToolMode.BRUSH
 var visible : bool = false
 
 
@@ -99,7 +99,7 @@ func set_visible(is_visible: bool) -> void:
 		await get_tree().create_timer(.01).timeout
 		
 		if active_tool == null:
-			active_tool = 0
+			active_tool = MarchingSquaresTerrainPlugin.TerrainToolMode.BRUSH
 		
 		if toolbar and toolbar.tool_buttons.has(active_tool):
 			toolbar.tool_buttons[active_tool].set_pressed(true)
@@ -109,15 +109,19 @@ func set_visible(is_visible: bool) -> void:
 
 #region on-signal functions
 
-func _on_tool_changed(tool_index: int) -> void:
+func _on_tool_changed(tool_index: MarchingSquaresTerrainPlugin.TerrainToolMode) -> void:
 	active_tool = tool_index
 	
-	if tool_index == 5: # Vertex Painting
+	if tool_index == MarchingSquaresTerrainPlugin.TerrainToolMode.VERTEX_PAINTING:
 		tool_attributes.attribute_list = MarchingSquaresToolAttributesList.new()
 		texture_settings.show()
 		texture_settings.add_texture_settings()
 	else:
 		texture_settings.hide()
+	
+	if tool_index == MarchingSquaresTerrainPlugin.TerrainToolMode.BRIDGE:
+		plugin.falloff = false
+		plugin.BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", false)
 	
 	plugin.active_tool = tool_index
 	plugin.mode = tool_index
@@ -251,6 +255,15 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 				# +1 because collision layers don't start from 0 like indexed items
 				# +8 because the selectable collision layers range from 9 to 32
 				terrain.extra_collision_layer = p_value + 9
+		"prefab_set":
+			if p_value is MarchingSquaresPrefabSet:
+				terrain.prefab_set = p_value
+				if p_value.flats.is_empty() or p_value.orthogonals.is_empty() or p_value.diagonals.is_empty() or p_value.fillers.is_empty():
+					push_warning("This prefab set lacks pieces, the geometry will appear empty or have holes! 
+					Make sure to complete the prefab set before assigning it.
+					You can clear the prefab set to revert the changes")
+			if p_value == null:
+				terrain.prefab_set = null
 
 
 func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> void:

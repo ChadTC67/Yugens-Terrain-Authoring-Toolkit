@@ -30,7 +30,7 @@ func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 	var uvs : PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
 	var uv2s : PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
 	
-	var new_uvs := PackedVector2Array()
+	var new_uv2s := PackedVector2Array()
 	var new_verts := PackedVector3Array()
 	
 	var orig_verts := PackedVector3Array()
@@ -104,9 +104,9 @@ func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 		var vi1 := center + scale*(v1-center)
 		var vi2 := center + scale*(v2-center)
 		
-		new_uvs.append(vi0)
-		new_uvs.append(vi1)
-		new_uvs.append(vi2)
+		new_uv2s.append(vi0)
+		new_uv2s.append(vi1)
+		new_uv2s.append(vi2)
 		
 		orig_verts.append(verts[idx0])
 		orig_verts.append(verts[idx1])
@@ -159,7 +159,8 @@ func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 	
 	new_arrays[Mesh.ARRAY_INDEX] = bake_indices
 	new_arrays[Mesh.ARRAY_VERTEX] = new_verts
-	new_arrays[Mesh.ARRAY_TEX_UV] = new_uvs
+	new_arrays[Mesh.ARRAY_TEX_UV] = bake_uvs
+	new_arrays[Mesh.ARRAY_TEX_UV2] = new_uv2s
 	new_arrays[Mesh.ARRAY_NORMAL] = bake_normals
 	
 	new_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, new_arrays, [], {}, Mesh.ARRAY_FORMAT_NORMAL | Mesh.ARRAY_FORMAT_VERTEX | Mesh.ARRAY_FORMAT_TEX_UV | Mesh.ARRAY_FORMAT_COLOR)
@@ -237,9 +238,13 @@ func bake_geometry_texture(inst: MeshInstance3D, scene_tree: SceneTree) -> void:
 		| (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM3_SHIFT))
 	var mat := ShaderMaterial.new()
 	mat.shader = load("uid://b32t80p1iesdd") as Shader
-	transfer_shader_props(mesh.surface_get_material(0), mat)
+	var src_mat := mesh.surface_get_material(0) as ShaderMaterial
+	transfer_shader_props(src_mat, mat)
+	mat.set_shader_parameter("has_prefab_colormap", false)
+	
 	bake_mesh.surface_set_material(0, mat)
 	
+	cam.position -= Vector3(-0.5, 0.5, -1)
 	bake_inst.position = Vector3(-0.5, 0.5, -1)
 	bake_inst.quaternion = Quaternion(1,0,0,0)
 	
@@ -277,7 +282,7 @@ func _pack_verts_to_float_array(verts: PackedVector3Array) -> PackedFloat32Array
 	for i in verts.size():
 		ret.append(verts[i].x)
 		ret.append(verts[i].y)
-		ret.append(verts[i].z)
+		ret.append(-verts[i].z)
 	return ret
 
 

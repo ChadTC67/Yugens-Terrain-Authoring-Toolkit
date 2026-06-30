@@ -21,7 +21,8 @@ enum SettingType {
 	ERROR,
 }
 
-var terrain_settings_data : Dictionary = {
+
+var terrain_settings_data : Dictionary[String, String] = {
 	"dimensions": "Vector3i",
 	"cell_size": "Vector2",
 	"blend_mode": "OptionButton",
@@ -39,6 +40,7 @@ var terrain_settings_data : Dictionary = {
 	"use_ledge_texture": "CheckBox",
 	"ridge_threshold": "EditorSpinSlider",
 	"ledge_threshold": "EditorSpinSlider",
+	"prefab_set": "EditorResourcePicker",
 	# Lighting settings
 	"use_cell_shading": "CheckBox",
 }
@@ -61,7 +63,7 @@ func _ready() -> void:
 	vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 
 
-func show_tool_attributes(tool_index: int) -> void:
+func show_tool_attributes(tool_index: MarchingSquaresTerrainPlugin.TerrainToolMode) -> void:
 	hbox_container = HBoxContainer.new()
 	hbox_container.add_theme_constant_override("separation", 5)
 	hbox_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -479,10 +481,10 @@ func add_setting(p_params: Dictionary) -> void:
 						vbox.add_child(hbox, true)
 					"EditorResourcePicker":
 						var editor_r_picker := EditorResourcePicker.new()
-						if setting == "noise_hmap":
-							editor_r_picker.set_base_type("Noise")
-						else:
-							editor_r_picker.set_base_type("Texture2D")
+						match setting:
+							"noise_hmap": editor_r_picker.set_base_type("Noise")
+							"prefab_set": editor_r_picker.set_base_type("MarchingSquaresPrefabSet")
+							_: editor_r_picker.set_base_type("Texture2D")
 						editor_r_picker.edited_resource = plugin.current_terrain_node.get(setting)
 						_hide_textures(editor_r_picker)
 						editor_r_picker.resource_changed.connect(func(resource): _on_terrain_setting_changed(setting, resource))

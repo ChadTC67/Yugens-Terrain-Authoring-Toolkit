@@ -5,6 +5,8 @@ uniform float wall_threshold : hint_range(0.0, 0.5) = 0.0; // Experimental featu
 group_uniforms;
 
 group_uniforms Visuals.Albedo;
+uniform sampler2D tex_prefab_colormap : source_color;
+uniform bool has_prefab_colormap = false;
 uniform vec4 tex_albedo_1 : source_color = vec4(0.392, 0.471, 0.318, 1.0);
 uniform vec4 tex_albedo_2 : source_color = vec4(0.322, 0.482, 0.384, 1.0);
 uniform vec4 tex_albedo_3 : source_color = vec4(0.373, 0.424, 0.294, 1.0);
@@ -352,6 +354,7 @@ void vertex() {
 }
 
 void fragment() {
+	vec2 rl_uv = UV2;
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 #ifndef BAKE_MODE
 	vec4 vertex_pos = INV_VIEW_MATRIX * vec4(VERTEX, 1.0);
@@ -362,7 +365,7 @@ void fragment() {
 
 	vec2 tiling_factor_floor = vec2(1.0 / float(chunk_size.x - 1), 1.0 / float(chunk_size.z - 1));
 	vec2 tiling_factor_wall = vec2(1.0 / float(chunk_size.x - 1), 1.0 / float(chunk_size.y - 1));
-	bool is_floor = dot(vertex_normal, vec3(0.0, 1.0, 0.0)) > wall_threshold;
+	bool is_floor = custom1.r > 0.5;
 	
 	// Usd for wall/ridge/ledge calculations
 	vec3 abs_normal = abs(vertex_normal);
@@ -372,7 +375,7 @@ void fragment() {
 	vec4 floor_color;
 	vec3 wall_color;
 	if (is_floor) {
-		vec2 floor_uv = UV2 * tiling_factor_floor;
+		vec2 floor_uv = world_pos.xz/2. * tiling_factor_floor;
 
 		//use per-cell material to prevent provoking vertex triangule artefact at ridge and ledge boundaries
 		if (use_hard_textures) {
@@ -502,14 +505,15 @@ void fragment() {
 	float blend_noise = get_world_noise(vertex_pos.xyz, rl_noise_tile_size);
 	float mixed_blend_factor = 0.0;
 	vec3 mixed_triplanar_color;
+	vec2 floor_uv = world_pos.xz/2.;
 	if (use_ledge_texture && custom1.b > 0.5 && is_floor == true) {
 		mixed_blend_factor = ledge_blend_factor.x;
 		if (rl_noise_strength > 0.0) {
 			float noise_variation = (blend_noise - 0.5) * rl_noise_strength;
-			mixed_blend_factor = step(ledge_threshold + noise_variation, max(UV.x, UV.y));
+			mixed_blend_factor = step(ledge_threshold + noise_variation, max(rl_uv.x, rl_uv.y));
 		}
-		vec3 rl_wall_color_x = sample_material_by_index(int(nearest_wall_color_idx), (UV2) * tiling_factor_wall).rgb * tri_weights.x;
-		vec3 rl_wall_color_z = sample_material_by_index(int(nearest_wall_color_idx), (UV2) * tiling_factor_wall).rgb * tri_weights.z;
+		vec3 rl_wall_color_x = sample_material_by_index(int(nearest_wall_color_idx), (floor_uv) * tiling_factor_wall).rgb * tri_weights.x;
+		vec3 rl_wall_color_z = sample_material_by_index(int(nearest_wall_color_idx), (floor_uv) * tiling_factor_wall).rgb * tri_weights.z;
 		mixed_triplanar_color = mix(floor_color.rgb, rl_wall_color_x + rl_wall_color_z, mixed_blend_factor);
 		ALBEDO = mixed_triplanar_color;
 	}
@@ -517,12 +521,18 @@ void fragment() {
 		mixed_blend_factor = ridge_blend_factor.x;
 		if (rl_noise_strength > 0.0) {
 			float noise_variation = (blend_noise - 0.5) * rl_noise_strength;
-			mixed_blend_factor = step(ridge_threshold + noise_variation, max(UV.x, UV.y));
+			mixed_blend_factor = step(ridge_threshold + noise_variation, max(rl_uv.x, rl_uv.y));
 		}
-		vec3 rl_wall_color_x = sample_material_by_index(int(nearest_wall_color_idx), (UV2) * tiling_factor_wall).rgb * tri_weights.x;
-		vec3 rl_wall_color_z = sample_material_by_index(int(nearest_wall_color_idx), (UV2) * tiling_factor_wall).rgb * tri_weights.z;
+		vec3 rl_wall_color_x = sample_material_by_index(int(nearest_wall_color_idx), (floor_uv) * tiling_factor_wall).rgb * tri_weights.x;
+		vec3 rl_wall_color_z = sample_material_by_index(int(nearest_wall_color_idx), (floor_uv) * tiling_factor_wall).rgb * tri_weights.z;
 		mixed_triplanar_color = mix(floor_color.rgb, rl_wall_color_x + rl_wall_color_z, mixed_blend_factor);
 		ALBEDO = mixed_triplanar_color;
+	}
+	
+	if (has_prefab_colormap) {
+		vec4 col = texture(tex_prefab_colormap, UV);
+		ALBEDO.rgb *= col.rgb;
+		ALPHA *= col.a;
 	}
 }
 

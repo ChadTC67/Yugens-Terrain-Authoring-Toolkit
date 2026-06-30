@@ -8,6 +8,7 @@ const GRASS_ALPHA_VALUES := [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
 
 var _chunk : MarchingSquaresTerrainChunk
 var terrain_system : MarchingSquaresTerrain
+var _image_cache : Dictionary[String, Image]
 
 
 func setup(chunk: MarchingSquaresTerrainChunk, redo: bool = true):
@@ -34,6 +35,20 @@ func setup(chunk: MarchingSquaresTerrainChunk, redo: bool = true):
 	cast_shadow = SHADOW_CASTING_SETTING_OFF
 
 
+func fetch_texture_data() -> void:
+	var all_tex_names = ["vc_tex_rg", "vc_tex_rb", "vc_tex_ra", "vc_tex_gr", "vc_tex_gg", "vc_tex_rr", "tex_prefab_colormap"]
+	_image_cache.clear()
+	for tex_name in all_tex_names:
+		var texture : Texture2D = terrain_system.terrain_material.get_shader_parameter(tex_name)
+		if texture == null:
+			continue
+		var img : Image = texture.get_image()
+		if img:
+			img.decompress()
+		_image_cache[tex_name] = img
+	
+
+
 func ensure_multimesh_count() -> void:
 	if not multimesh or not _chunk:
 		return
@@ -57,7 +72,6 @@ func regenerate_all_cells() -> void:
 	
 	if not _chunk.cell_geometry:
 		_chunk.regenerate_mesh()
-	
 	for z in range(terrain_system.dimensions.z-1):
 		for x in range(terrain_system.dimensions.x-1):
 			generate_grass_on_cell(Vector2i(x, z))
@@ -83,8 +97,8 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 	
 	var cell_geometry = _chunk.cell_geometry[cell_coords]
 	
-	if not cell_geometry.has("verts") or not cell_geometry.has("uvs") or not cell_geometry.has("color_0s") or not cell_geometry.has("color_1s") or not cell_geometry.has("custom_1_values") or not cell_geometry.has("is_floor"):
-		push_error("cell_geometry doesn't have one of the following required data: 1) verts, 2) uvs, 3) colors, 4) custom_1_values, 5) is_floor")
+	if not cell_geometry.has("verts") or not cell_geometry.has("uv2s") or not cell_geometry.has("color_0s") or not cell_geometry.has("color_1s") or not cell_geometry.has("custom_1_values") or not cell_geometry.has("is_floor"):
+		push_error("cell_geometry doesn't have one of the following required data: 1) verts, 2) uv2s, 3) colors, 4) custom_1_values, 5) is_floor")
 		return
 	
 	ensure_multimesh_count()
@@ -104,6 +118,7 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 	
 	var verts : PackedVector3Array = cell_geometry["verts"]
 	var uvs : PackedVector2Array = cell_geometry["uvs"]
+	var uv2s : PackedVector2Array = cell_geometry["uv2s"]
 	var color_0s : PackedColorArray = cell_geometry["color_0s"]
 	var color_1s : PackedColorArray = cell_geometry["color_1s"]
 	var custom_1_values : PackedColorArray = cell_geometry["custom_1_values"]
@@ -119,6 +134,9 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 		var a := verts[i]
 		var b := verts[i+1]
 		var c := verts[i+2]
+		var uvA := uvs[i]
+		var uvB := uvs[i+1]
+		var uvC := uvs[i+2]
 		
 		var v0 := Vector2(c.x - a.x, c.z - a.z)
 		var v1 := Vector2(b.x - a.x, b.z - a.z)
@@ -145,14 +163,17 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 				continue
 			
 			if u + v <= 1:
+				var w := 1 - u - v
+				var uv := uvA * w + uvB * u + uvC * v
+
 				# Point is inside triangle, won't be inside any other floor triangle
 				points.remove_at(point_index)
 				var p := a*(1-u-v) + b*u + c*v
-				
+
 				# Don't place grass on ledges or ridges
-				var uv := uvs[i]*u + uvs[i+1]*v + uvs[i+2]*(1-u-v)
-				var on_ledge_or_ridge : bool = uv.y > 0.0 or uv.x > 0.5
-				
+				var uv2 := uv2s[i]*u + uv2s[i+1]*v + uv2s[i+2]*(1-u-v)
+				var on_ledge_or_ridge : bool = uv2.y > 0.0 or uv2.x > 0.5
+
 				var color_0 := MarchingSquaresTerrainVertexColorHelper.get_dominant_color(color_0s[i]*u + color_0s[i+1]*v + color_0s[i+2]*(1-u-v))
 				var color_1 := MarchingSquaresTerrainVertexColorHelper.get_dominant_color(color_1s[i]*u + color_1s[i+1]*v + color_1s[i+2]*(1-u-v))
 				
@@ -165,13 +186,12 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 				var on_grass_tex := _has_grass_for_texture(texture_id, force_grass_on)
 				
 				if on_grass_tex and not on_ledge_or_ridge and not is_masked:
-					_create_grass_instance(index, p, a, b, c, texture_id)
+					_create_grass_instance(index, p, a, b, c, texture_id, uv)
 				else:
 					_hide_grass_instance(index)
 				index += 1
 			else:
 				point_index += 1
-	
 	# Fill remaining points with hidden instances
 	while index < end_index:
 		if index >= multimesh.instance_count:
@@ -182,28 +202,21 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 #region grass property getters
 
 func _get_terrain_image(texture_id: int) -> Image:
-	var terrain_texture : Texture2D = null
-	var material := terrain_system.terrain_material
+	var img : Image = null
 	match texture_id:
 		2:
-			terrain_texture = material.get_shader_parameter("vc_tex_rg")
+			return _image_cache.get("vc_tex_rg")
 		3:
-			terrain_texture = material.get_shader_parameter("vc_tex_rb")
+			return _image_cache.get("vc_tex_rb")
 		4:
-			terrain_texture = material.get_shader_parameter("vc_tex_ra")
+			return _image_cache.get("vc_tex_ra")
 		5:
-			terrain_texture = material.get_shader_parameter("vc_tex_gr")
+			return _image_cache.get("vc_tex_gr")
 		6:
-			terrain_texture = material.get_shader_parameter("vc_tex_gg")
+			return _image_cache.get("vc_tex_gg")
 		_: # Base grass
-			terrain_texture = material.get_shader_parameter("vc_tex_rr")
-	if terrain_texture == null:
-		return null
-	
-	var img : Image = terrain_texture.get_image()
-	if img:
-		img.decompress()
-	return img
+			return _image_cache.get("vc_tex_rr")
+	return null
 
 
 func _get_texture_id(vc_col_0: Color, vc_col_1: Color) -> int:
@@ -287,6 +300,15 @@ func _get_grass_alpha(texture_id: int) -> float:
 	return GRASS_ALPHA_VALUES[idx]
 
 
+func _sample_image(terrain_image: Image, uv_x: float, uv_y: float) -> Color:
+	var px := int(uv_x * (terrain_image.get_width() - 1))
+	var py := int(uv_y * (terrain_image.get_height() - 1))
+	var color := terrain_image.get_pixelv(Vector2(px, py))
+	if _format_needs_conversion(terrain_image.get_format()):
+		return color.srgb_to_linear()
+	return color
+
+
 ## Samples the terrain texture color at the given world position.
 func _sample_terrain_texture_color(world_pos: Vector3, texture_id: int, tex_scale: float) -> Color:
 	var terrain_image := _get_terrain_image(texture_id)
@@ -299,13 +321,15 @@ func _sample_terrain_texture_color(world_pos: Vector3, texture_id: int, tex_scal
 	uv_x = abs(fmod(uv_x * tex_scale, 1.0))
 	uv_y = abs(fmod(uv_y * tex_scale, 1.0))
 	
-	var px := int(uv_x * (terrain_image.get_width() - 1))
-	var py := int(uv_y * (terrain_image.get_height() - 1))
-	var color := terrain_image.get_pixelv(Vector2(px, py))
-	if _format_needs_conversion(terrain_image.get_format()):
-		return color.srgb_to_linear()
-	return color
+	return _sample_image(terrain_image, uv_x, uv_y)
+	
 
+func _sample_prefab_texture_color(uv: Vector2) -> Color:
+	var terrain_image := _image_cache.get("tex_prefab_colormap")
+	if not terrain_image:
+		return Color.WHITE
+	terrain_image.decompress()
+	return _sample_image(terrain_image, uv.x, uv.y)
 
 func _format_needs_conversion(fmt: Image.Format) -> bool:
 	match(fmt):
@@ -325,7 +349,7 @@ func _format_needs_conversion(fmt: Image.Format) -> bool:
 #region grass placement helpers
 
 ## Creates a grass instance at the given position with proper transform and color.
-func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vector3, c: Vector3, texture_id: int) -> void:
+func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vector3, c: Vector3, texture_id: int, albedo_uv: Vector2) -> void:
 	var edge1 := b - a
 	var edge2 := c - a
 	var normal : Vector3
@@ -337,13 +361,15 @@ func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vecto
 	var right := Vector3.FORWARD.cross(normal).normalized()
 	var forward := normal.cross(Vector3.RIGHT).normalized()
 	var instance_basis := Basis(right, forward, -normal)
-	
 	multimesh.set_instance_transform(index, Transform3D(instance_basis, world_pos))
 	multimesh.mesh.center_offset.y = multimesh.mesh.size.y / 2
 	
 	var tex_scale := _get_texture_scale(texture_id)
 	var instance_color := _sample_terrain_texture_color(world_pos, texture_id, tex_scale)
 	instance_color.a = _get_grass_alpha(texture_id)
+	
+	var prefab_color := _sample_prefab_texture_color(albedo_uv)
+	instance_color *= prefab_color
 	
 	multimesh.set_instance_custom_data(index, instance_color)
 
