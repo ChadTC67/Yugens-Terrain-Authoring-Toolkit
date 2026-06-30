@@ -530,14 +530,14 @@ func _add_point(cell_coords: Vector2i, vert: Vector3, uv: Vector2, uv2: Vector2,
 
 #region cell_geometry generators (on being empty)
 
-func generate_height_map(p_base_height: float =  0.0):
+func generate_height_map(base_height: float = 0.0):
 	height_map = []
 	height_map.resize(dimensions.z)
 	for z in range(dimensions.z):
 		height_map[z] = []
 		height_map[z].resize(dimensions.x)
 		for x in range(dimensions.x):
-			height_map[z][x] = p_base_height
+			height_map[z][x] = base_height
 	
 	var noise := terrain_system.noise_hmap
 	if noise:
@@ -546,7 +546,7 @@ func generate_height_map(p_base_height: float =  0.0):
 				var noise_x = (chunk_coords.x * (dimensions.x - 1)) + x
 				var noise_z = (chunk_coords.y * (dimensions.z -1)) + z
 				var noise_sample = noise.get_noise_2d(noise_x, noise_z)
-				height_map[z][x] = p_base_height + (noise_sample * dimensions.y)
+				height_map[z][x] = base_height + (noise_sample * dimensions.y)
 
 
 func generate_color_maps():
