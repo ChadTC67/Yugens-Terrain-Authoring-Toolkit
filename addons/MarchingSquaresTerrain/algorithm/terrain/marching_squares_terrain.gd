@@ -1111,20 +1111,6 @@ func add_new_chunk(chunk_x: int, chunk_z: int, plugin):
 	new_chunk.generate_height_map(plugin.height)
 	new_chunk.mark_dirty()
 	
-	add_chunk(chunk_coords, new_chunk, plugin, false)
-	
-	if plugin.current_quick_paint:
-		plugin.current_draw_pattern.clear()
-		plugin.current_draw_pattern[chunk_coords] = {}
-		
-		for z in range(dimensions.z):
-			for x in range(dimensions.x):
-				var cell := Vector2i(x, z)
-				plugin.current_draw_pattern[chunk_coords][cell] = 1.0
-		
-		plugin.draw_pattern(self) # Apply the current selected quick paint to the new chunk on creation
-		plugin.current_draw_pattern.clear()
-	
 	var chunk_left : MarchingSquaresTerrainChunk = chunks.get(Vector2i(chunk_x-1, chunk_z))
 	if chunk_left and not chunk_left.height_map.is_empty() and not new_chunk.height_map.is_empty():
 		for z in range(0, dimensions.z):
@@ -1150,8 +1136,22 @@ func add_new_chunk(chunk_x: int, chunk_z: int, plugin):
 			for x in range(0, dimensions.x):
 				if x < chunk_down.height_map[0].size() and x < new_chunk.height_map[dimensions.z - 1].size():
 					new_chunk.height_map[dimensions.z - 1][x] = chunk_down.height_map[0][x]
-	
-	new_chunk.regenerate_mesh()
+
+	add_chunk(chunk_coords, new_chunk, plugin, false)
+
+	if plugin.current_quick_paint:
+		plugin.current_draw_pattern.clear()
+		plugin.current_draw_pattern[chunk_coords] = {}
+		
+		for z in range(dimensions.z):
+			for x in range(dimensions.x):
+				var cell := Vector2i(x, z)
+				plugin.current_draw_pattern[chunk_coords][cell] = 1.0
+		
+		plugin.draw_pattern(self) # Apply the current selected quick paint after seam heights are finalized
+		plugin.current_draw_pattern.clear()
+	else:
+		new_chunk.regenerate_mesh()
 
 
 func remove_chunk(x: int, z: int, plugin):

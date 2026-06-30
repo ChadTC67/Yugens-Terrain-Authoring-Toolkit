@@ -1,16 +1,12 @@
 shader_type spatial;
 render_mode blend_mix, diffuse_toon, depth_draw_opaque;
 
-uniform sampler2D texture_albedo : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D texture_albedo : source_color, filter_nearest, repeat_enable;
 uniform sampler2D tex_prefab_colormap : source_color;
 uniform bool has_prefab_colormap = false;
 
 group_uniforms Visuals.Normals;
 uniform bool use_flat_normals = false;
-group_uniforms;
-
-group_uniforms Effects.Experimental;
-uniform float wall_threshold : hint_range(0.0, 0.5) = 0.0; // Experimental feature (used for rounding merge thresholds)
 group_uniforms;
 
 group_uniforms CellShading;
