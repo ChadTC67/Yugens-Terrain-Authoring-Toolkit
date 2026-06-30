@@ -292,7 +292,12 @@ func _sync_slot_legacy_fields(terrain, slot_idx: int) -> void:
 		terrain.set("is_batch_updating", was_batch)
 
 
-func _refresh_slot_runtime(terrain, p_refresh_ui: bool = false) -> void:
+func _refresh_slot_runtime(
+	terrain,
+	p_refresh_ui: bool = false,
+	p_rebuild_grass_array: bool = true,
+	p_request_grass_regen: bool = true
+) -> void:
 	if terrain == null:
 		return
 	terrain.set("baked_albedo_array_path", "")
@@ -300,7 +305,7 @@ func _refresh_slot_runtime(terrain, p_refresh_ui: bool = false) -> void:
 	terrain.set("baked_grass_array_path", "")
 	if terrain.has_method("rebuild_texture_array"):
 		terrain.rebuild_texture_array()
-	if terrain.has_method("rebuild_grass_texture_array"):
+	if p_rebuild_grass_array and terrain.has_method("rebuild_grass_texture_array"):
 		terrain.rebuild_grass_texture_array()
 	if terrain.has_method("_push_tex_scales"):
 		terrain._push_tex_scales()
@@ -308,7 +313,7 @@ func _refresh_slot_runtime(terrain, p_refresh_ui: bool = false) -> void:
 		terrain._rebuild_palette_uniforms()
 	if terrain.has_method("refresh_chunk_surface_materials"):
 		terrain.refresh_chunk_surface_materials()
-	if terrain.has_method("_request_grass_regen"):
+	if p_request_grass_regen and terrain.has_method("_request_grass_regen"):
 		terrain._request_grass_regen()
 	if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
 		terrain.save_to_preset()
@@ -401,6 +406,45 @@ func _get_effective_visible_slot_count(terrain) -> int:
 	return clampi(max(highest_active_slot + 1, 6), 1, MAX_TEXTURE_SLOTS)
 
 
+func _activate_next_texture_slot(terrain) -> bool:
+	if terrain == null or not _ensure_terrain_arrays(terrain):
+		return false
+
+	var current_visible := _get_effective_visible_slot_count(terrain)
+	var preferred_indices: Array[int] = []
+
+	# First fill any inactive holes that already exist inside the visible range.
+	for idx in range(1, min(current_visible, MAX_TEXTURE_SLOTS)):
+		if idx == 15:
+			continue
+		preferred_indices.append(idx)
+
+	# Then grow to the next logical visible slot.
+	for idx in range(current_visible, min(MAX_TEXTURE_SLOTS, current_visible + 2)):
+		if idx == 15:
+			continue
+		if not preferred_indices.has(idx):
+			preferred_indices.append(idx)
+
+	# Finally, search the remaining slots.
+	for idx in range(current_visible + 1, MAX_TEXTURE_SLOTS):
+		if idx == 15:
+			continue
+		preferred_indices.append(idx)
+
+	for idx in preferred_indices:
+		if idx < 0 or idx >= terrain.texture_slots.size():
+			continue
+		if terrain.texture_slots[idx] == null:
+			terrain.texture_slots[idx] = _TEXTURE_SLOT_SCRIPT.new()
+		if _is_slot_inactive(terrain.texture_slots[idx]):
+			terrain.texture_slots[idx].active = true
+			terrain.visible_texture_slot_count = clampi(max(current_visible, idx + 1), 6, MAX_TEXTURE_SLOTS)
+			return true
+
+	return false
+
+
 func _reset_slot_palette_state(terrain, slot_idx: int) -> void:
 	if slot_idx >= 0 and slot_idx < terrain.slot_color_indices.size():
 		terrain.slot_color_indices[slot_idx] = []
@@ -427,14 +471,9 @@ func _reset_slot_palette_state(terrain, slot_idx: int) -> void:
 
 
 func _shrink_visible_texture_slots(terrain) -> void:
-	while int(terrain.visible_texture_slot_count) > 1:
-		var last_idx := int(terrain.visible_texture_slot_count) - 1
-		if last_idx == 15:
-			break
-		var last_slot = terrain.texture_slots[last_idx] if last_idx < terrain.texture_slots.size() else null
-		if not _is_slot_inactive(last_slot):
-			break
-		terrain.visible_texture_slot_count = last_idx
+	if terrain == null or not _ensure_terrain_arrays(terrain):
+		return
+	terrain.visible_texture_slot_count = _get_effective_visible_slot_count(terrain)
 
 
 func _set_modal_preview_texture(preview: TextureRect, terrain, texture: Texture2D, max_size: int = 256) -> void:
@@ -479,11 +518,19 @@ func _clear_slot(terrain, slot_idx: int, p_refresh_ui: bool = true) -> void:
 		return
 	if terrain.texture_slots[slot_idx] == null:
 		terrain.texture_slots[slot_idx] = _TEXTURE_SLOT_SCRIPT.new()
+	var slot_res = terrain.texture_slots[slot_idx]
+	var had_grass_sprite := _coerce_texture2d(slot_res.grass_texture) != null
+	var had_grass_flag := bool(slot_res.get("has_grass")) if slot_res.get("has_grass") != null else false
 	terrain.texture_slots[slot_idx].active = false
 	terrain.texture_slots[slot_idx].texture = null
 	terrain.texture_slots[slot_idx].scale = 1.0
+	terrain.texture_slots[slot_idx].grass_texture = null
+	terrain.texture_slots[slot_idx].has_grass = false
 	_reset_slot_palette_state(terrain, slot_idx)
 	_sync_slot_legacy_fields(terrain, slot_idx)
+	if slot_idx < 6:
+		terrain.set("tex%d_has_grass" % (slot_idx + 1), false)
+		terrain.set("grass_sprite_tex_%d" % (slot_idx + 1), null)
 	_shrink_visible_texture_slots(terrain)
 	var lib_res := _get_texture_library(terrain)
 	if lib_res != null:
@@ -491,8 +538,10 @@ func _clear_slot(terrain, slot_idx: int, p_refresh_ui: bool = true) -> void:
 			lib_res.albedo_textures[slot_idx] = null
 		if slot_idx < lib_res.normal_textures.size():
 			lib_res.normal_textures[slot_idx] = null
+		if slot_idx < lib_res.grass_textures.size():
+			lib_res.grass_textures[slot_idx] = null
 		_save_resource_if_external(lib_res)
-	_refresh_slot_runtime(terrain, p_refresh_ui)
+	_refresh_slot_runtime(terrain, p_refresh_ui, had_grass_sprite, had_grass_sprite or had_grass_flag)
 
 
 func _make_slot_preview(texture: Texture2D, size: int = 64) -> TextureRect:
@@ -646,19 +695,10 @@ func add_texture_settings() -> void:
 	add_compact.pressed.connect(func():
 		if not _ensure_terrain_arrays(terrain):
 			return
-		var made_active := false
-		for idx in range(_get_effective_visible_slot_count(terrain)):
-			if idx == 0 or idx == 15:
-				continue
-			var s = terrain.texture_slots[idx]
-			if s != null and bool(s.get("active")) == false:
-				s.active = true
-				made_active = true
-				break
-		if not made_active:
-			terrain.visible_texture_slot_count = mini(int(terrain.visible_texture_slot_count) + 1, 256)
+		_activate_next_texture_slot(terrain)
 		if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
 			terrain.save_to_preset()
+		EditorInterface.mark_scene_as_unsaved()
 		call_deferred("add_texture_settings")
 	)
 	actions_v.add_child(add_compact)

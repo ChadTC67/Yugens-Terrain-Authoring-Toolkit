@@ -168,7 +168,10 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 			create_trimesh_collision()
 			_apply_collision_layers()
 
-	if grass_planter and (not has_baked_grass_multimesh or grass_count_changed):
+	# Respect deferred initialization: chunk creation adds the node first, then paints/seams it,
+	# and only after that should the first full mesh/grass build happen.
+	var can_generate_grass_now := should_regenerate_mesh or mesh != null or has_baked_grass_multimesh
+	if grass_planter and can_generate_grass_now and (not has_baked_grass_multimesh or grass_count_changed):
 		grass_planter.regenerate_all_cells()
 	
 	var has_texture_array_source := (

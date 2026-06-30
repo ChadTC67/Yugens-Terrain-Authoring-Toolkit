@@ -1,7 +1,7 @@
 shader_type spatial;
 render_mode diffuse_toon, depth_draw_opaque, cull_disabled;
 
-uniform sampler2D texture_albedo : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D texture_albedo : source_color, filter_nearest, repeat_enable;
 
 group_uniforms CellShading;
 uniform vec4 shadow_color : source_color;
