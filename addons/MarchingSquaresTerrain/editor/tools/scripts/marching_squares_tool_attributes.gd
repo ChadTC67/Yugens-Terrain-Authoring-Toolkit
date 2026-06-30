@@ -54,8 +54,13 @@ func _add_texture_preset_options(preset_button: OptionButton, base_path: String)
 		if dir.current_is_dir():
 			_add_texture_preset_options(preset_button, path)
 		elif file_name.ends_with(".tres") or file_name.ends_with(".res"):
-			preset_button.add_item(_resource_label_from_file(path, "preset_name", path.get_file().get_basename()))
-			preset_button.set_item_metadata(preset_button.item_count - 1, path)
+			if file_name == "texture_library.tres":
+				file_name = dir.get_next()
+				continue
+			var resource := load(path)
+			if resource is MarchingSquaresTexturePreset:
+				preset_button.add_item(_resource_label_from_file(path, "preset_name", path.get_file().get_basename()))
+				preset_button.set_item_metadata(preset_button.item_count - 1, path)
 		file_name = dir.get_next()
 	dir.list_dir_end()
 
@@ -73,6 +78,46 @@ func _resource_label_from_file(path: String, property_name: String, fallback: St
 			var value := line.substr(needle.length()).strip_edges()
 			return value.trim_prefix("\"").trim_suffix("\"")
 	return fallback
+
+
+func _get_vertex_paint_material_slots() -> Array[int]:
+	var slots: Array[int] = []
+	var terrain = plugin.current_terrain_node if plugin != null else null
+	if terrain == null:
+		slots.append(0)
+		return slots
+
+	slots.append(15)
+	var highest_active_slot := 0
+	for slot_idx in range(plugin.MAX_TEXTURE_SLOTS):
+		if slot_idx == 15:
+			continue
+		var slot_obj = terrain.texture_slots[slot_idx] if slot_idx < terrain.texture_slots.size() else null
+		var is_active := slot_idx == 0
+		if slot_obj != null and slot_obj.get("active") != null:
+			is_active = bool(slot_obj.get("active")) or slot_idx == 0
+		if is_active:
+			highest_active_slot = slot_idx
+
+	for slot_idx in range(highest_active_slot + 1):
+		if slot_idx == 15:
+			continue
+		var slot_obj = terrain.texture_slots[slot_idx] if slot_idx < terrain.texture_slots.size() else null
+		var is_active := slot_idx == 0
+		if slot_obj != null and slot_obj.get("active") != null:
+			is_active = bool(slot_obj.get("active"))
+		if slot_idx == 0 or is_active:
+			slots.append(slot_idx)
+
+	if slots.is_empty():
+		slots.append(0)
+	return slots
+
+
+func _get_vertex_paint_material_label(slot_idx: int, terrain_names: Array) -> String:
+	if slot_idx >= 0 and slot_idx < terrain_names.size():
+		return str(terrain_names[slot_idx])
+	return "Texture " + str(slot_idx + 1)
 
 var plugin : MarchingSquaresTerrainPlugin
 var attribute_list : MarchingSquaresToolAttributesList
@@ -159,7 +204,10 @@ func show_tool_attributes(tool_index: int) -> void:
 		terrain_names = plugin.current_terrain_node.current_texture_preset.new_tex_names.texture_names
 	else:
 		terrain_names = attribute_list.vp_tex_names.texture_names  # fallback
-	attribute_list.material["options"] = terrain_names
+	var material_options: Array[String] = []
+	for slot_idx in _get_vertex_paint_material_slots():
+		material_options.append(_get_vertex_paint_material_label(slot_idx, terrain_names))
+	attribute_list.material["options"] = material_options
 	
 	for attribute in new_attributes:
 		var setting_dict : Dictionary = attribute
@@ -261,15 +309,36 @@ func add_setting(p_params: Dictionary) -> void:
 		SettingType.OPTION:
 			var options : Array = p_params.get("options", [])
 			var option_button := OptionButton.new()
-			for option in options:
-				option_button.add_item(option)
+			var material_slots: Array[int] = []
+			if setting_name == "material":
+				material_slots = _get_vertex_paint_material_slots()
+				for idx in range(mini(options.size(), material_slots.size())):
+					option_button.add_item(str(options[idx]))
+					option_button.set_item_metadata(option_button.item_count - 1, material_slots[idx])
+			else:
+				for option in options:
+					option_button.add_item(option)
 			var default_value := p_params.get("default", 0) # Fallback base value
 			if saved_setting_value is not String and str(saved_setting_value) !=  "ERROR":
 				default_value = saved_setting_value
-			option_button.selected = default_value
+			if setting_name == "material":
+				var selected_idx := 0
+				for item_idx in range(option_button.item_count):
+					if int(option_button.get_item_metadata(item_idx)) == int(default_value):
+						selected_idx = item_idx
+						break
+				option_button.selected = selected_idx
+			else:
+				option_button.selected = default_value
 			
 			option_button.set_flat(true)
-			option_button.item_selected.connect(func(index): _on_setting_changed(setting_name, index))
+			if setting_name == "material":
+				option_button.item_selected.connect(func(index):
+					var slot_idx = option_button.get_item_metadata(index)
+					_on_setting_changed(setting_name, int(slot_idx))
+				)
+			else:
+				option_button.item_selected.connect(func(index): _on_setting_changed(setting_name, index))
 			option_button.set_custom_minimum_size(Vector2(65, 35))
 			
 			cont = CenterContainer.new()

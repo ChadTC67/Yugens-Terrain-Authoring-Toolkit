@@ -7,6 +7,8 @@ const PLACEHOLDER_ALBEDO := Color(1, 1, 1, 1)
 const PLACEHOLDER_NORMAL := Color(0.5, 0.5, 1.0, 1.0)
 const PLACEHOLDER_GRASS := Color(0, 0, 0, 0)
 const MSTextureLibraryScript := preload("res://addons/MarchingSquaresTerrain/resources/marching_squares_terrain_texture_library.gd")
+const MarchingSquaresTerrainHelpers := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_helpers.gd")
+const MSTVertexColorHelper := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_vertex_color_helper.gd")
 
 func _normalize_array_image(source: Image, size: int, fill_color: Color) -> Image:
 	var img: Image = Image.create(size, size, false, Image.FORMAT_RGBA8)
@@ -32,7 +34,7 @@ func _normalize_array_image(source: Image, size: int, fill_color: Color) -> Imag
 func _highest_texture_slot(textures: Array) -> int:
 	var highest := -1
 	for i in range(textures.size()):
-		if textures[i] != null and textures[i] is Texture2D:
+		if MarchingSquaresTerrainHelpers.is_valid_texture2d(textures[i]):
 			highest = i
 	return highest
 
@@ -59,8 +61,8 @@ func _bake_array(lib, textures: Array, out_dir: String, filename: String, size: 
 		if i < textures.size():
 			tex = textures[i]
 		var img: Image
-		if tex != null and tex is Texture2D:
-			var src: Image = tex.get_image()
+		if MarchingSquaresTerrainHelpers.is_valid_texture2d(tex):
+			var src: Image = MSTVertexColorHelper.get_decompressed_image(tex)
 			img = _normalize_array_image(src, size, fill_color)
 		else:
 			img = Image.create(size, size, false, Image.FORMAT_RGBA8)

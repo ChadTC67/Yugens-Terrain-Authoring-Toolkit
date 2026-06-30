@@ -671,6 +671,13 @@ func get_wall_color_1(cc: Vector2i) -> Color:
 	return wall_color_map_1[cc.y*dimensions.x + cc.x]
 
 
+func get_wall_color_map_state() -> Dictionary:
+	return {
+		"color_0": wall_color_map_0.duplicate(),
+		"color_1": wall_color_map_1.duplicate(),
+	}
+
+
 func get_grass_mask(cc: Vector2i) -> Color:
 	return grass_mask_map[cc.y*dimensions.x + cc.x]
 
@@ -736,6 +743,13 @@ func draw_grass_mask(x: int, z: int, masked: Color):
 	notify_needs_update(z-1, x-1)
 
 
+func set_wall_color_map_state(state: Dictionary, use_threads: bool = false) -> void:
+	wall_color_map_0 = state.get("color_0", PackedColorArray()).duplicate()
+	wall_color_map_1 = state.get("color_1", PackedColorArray()).duplicate()
+	mark_dirty()
+	regenerate_all_cells(use_threads)
+
+
 func get_wall_paint_stamp_state() -> Dictionary:
 	return {
 		"positions": wall_paint_stamp_positions.duplicate(),
@@ -754,11 +768,11 @@ func set_wall_paint_stamp_state(state: Dictionary) -> void:
 	_apply_chunk_surface_material()
 
 
-func append_wall_paint_stamp(world_pos: Vector3, world_normal: Vector3, radius: float, texture_idx: int) -> Dictionary:
-	var positions := wall_paint_stamp_positions.duplicate()
-	var normals := wall_paint_stamp_normals.duplicate()
-	var radii := wall_paint_stamp_radii.duplicate()
-	var texture_indices := wall_paint_stamp_texture_indices.duplicate()
+func append_wall_paint_stamp_to_state(state: Dictionary, world_pos: Vector3, world_normal: Vector3, radius: float, texture_idx: int) -> Dictionary:
+	var positions: PackedVector3Array = state.get("positions", PackedVector3Array()).duplicate()
+	var normals: PackedVector3Array = state.get("normals", PackedVector3Array()).duplicate()
+	var radii: PackedFloat32Array = state.get("radii", PackedFloat32Array()).duplicate()
+	var texture_indices: PackedInt32Array = state.get("texture_indices", PackedInt32Array()).duplicate()
 	if positions.size() >= MAX_WALL_PAINT_STAMPS:
 		positions.remove_at(0)
 		normals.remove_at(0)
@@ -774,6 +788,10 @@ func append_wall_paint_stamp(world_pos: Vector3, world_normal: Vector3, radius: 
 		"radii": radii,
 		"texture_indices": texture_indices,
 	}
+
+
+func append_wall_paint_stamp(world_pos: Vector3, world_normal: Vector3, radius: float, texture_idx: int) -> Dictionary:
+	return append_wall_paint_stamp_to_state(get_wall_paint_stamp_state(), world_pos, world_normal, radius, texture_idx)
 
 #endregion
 
@@ -815,6 +833,7 @@ func _sync_wall_paint_shader_params(mat: ShaderMaterial) -> void:
 	mat.set_shader_parameter("wall_paint_stamps_a", positions)
 	mat.set_shader_parameter("wall_paint_stamps_b", data_b)
 	mat.set_shader_parameter("wall_paint_plane_thickness", maxf(minf(cell_size.x, cell_size.y) * 0.08, 0.03))
+	mat.set_shader_parameter("wall_paint_blend_width", maxf(minf(cell_size.x, cell_size.y) * 0.18, 0.06))
 
 func notify_needs_update(z: int, x: int):
 	if z < 0 or z >=  terrain_system.dimensions.z-1 or x < 0 or x >= terrain_system.dimensions.x-1:

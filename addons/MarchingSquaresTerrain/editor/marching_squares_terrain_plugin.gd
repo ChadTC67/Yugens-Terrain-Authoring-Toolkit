@@ -192,6 +192,7 @@ var draw_height : float
 var _wall_paint_stroke_active : bool = false
 var _wall_paint_stroke_undo_states : Dictionary = {}
 var _wall_paint_stroke_do_states : Dictionary = {}
+var _wall_paint_stroke_dirty_chunks : Dictionary = {}
 var _wall_paint_last_stamp_position : Vector3 = Vector3.ZERO
 var _wall_paint_has_last_stamp_position : bool = false
 
@@ -746,18 +747,26 @@ func _reset_wall_paint_stroke() -> void:
 	_wall_paint_stroke_active = false
 	_wall_paint_stroke_undo_states.clear()
 	_wall_paint_stroke_do_states.clear()
+	_wall_paint_stroke_dirty_chunks.clear()
 	_wall_paint_has_last_stamp_position = false
 
 
 func _begin_wall_paint_stroke() -> void:
 	_wall_paint_stroke_active = true
-	_wall_paint_stroke_undo_states.clear()
-	_wall_paint_stroke_do_states.clear()
+	_wall_paint_stroke_undo_states = {
+		"wall_color_0": {},
+		"wall_color_1": {},
+	}
+	_wall_paint_stroke_do_states = {
+		"wall_color_0": {},
+		"wall_color_1": {},
+	}
+	_wall_paint_stroke_dirty_chunks.clear()
 	_wall_paint_has_last_stamp_position = false
 
 
 func _wall_paint_step_distance() -> float:
-	return maxf(brush_size * 0.2, 0.08)
+	return maxf(brush_size * 0.12, 0.04)
 
 
 func _should_sample_wall_paint_stroke(pos: Vector3) -> bool:
@@ -773,21 +782,54 @@ func _sample_wall_paint_stroke(terrain: MarchingSquaresTerrain) -> void:
 	update_draw_pattern(brush_position)
 	if current_draw_pattern.is_empty():
 		return
-	draw_pattern(terrain)
+	_apply_wall_paint_stroke_sample(terrain)
 	current_draw_pattern.clear()
 	_wall_paint_last_stamp_position = brush_position
 	_wall_paint_has_last_stamp_position = true
+
+
+func _apply_wall_paint_stroke_sample(terrain: MarchingSquaresTerrain) -> void:
+	var undo_wall_color_0: Dictionary = _wall_paint_stroke_undo_states.get("wall_color_0", {})
+	var undo_wall_color_1: Dictionary = _wall_paint_stroke_undo_states.get("wall_color_1", {})
+	var do_wall_color_0: Dictionary = _wall_paint_stroke_do_states.get("wall_color_0", {})
+	var do_wall_color_1: Dictionary = _wall_paint_stroke_do_states.get("wall_color_1", {})
+	for draw_chunk_coords: Vector2i in current_draw_pattern.keys():
+		var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(draw_chunk_coords)
+		if chunk == null:
+			continue
+		if not undo_wall_color_0.has(draw_chunk_coords):
+			undo_wall_color_0[draw_chunk_coords] = {}
+		if not undo_wall_color_1.has(draw_chunk_coords):
+			undo_wall_color_1[draw_chunk_coords] = {}
+		if not do_wall_color_0.has(draw_chunk_coords):
+			do_wall_color_0[draw_chunk_coords] = {}
+		if not do_wall_color_1.has(draw_chunk_coords):
+			do_wall_color_1[draw_chunk_coords] = {}
+		var draw_chunk_dict: Dictionary = current_draw_pattern[draw_chunk_coords]
+		for draw_cell_coords: Vector2i in draw_chunk_dict.keys():
+			if not undo_wall_color_0[draw_chunk_coords].has(draw_cell_coords):
+				undo_wall_color_0[draw_chunk_coords][draw_cell_coords] = chunk.get_wall_color_0(draw_cell_coords)
+				undo_wall_color_1[draw_chunk_coords][draw_cell_coords] = chunk.get_wall_color_1(draw_cell_coords)
+			chunk.draw_wall_color_0(draw_cell_coords.x, draw_cell_coords.y, vertex_color_0)
+			chunk.draw_wall_color_1(draw_cell_coords.x, draw_cell_coords.y, vertex_color_1)
+			do_wall_color_0[draw_chunk_coords][draw_cell_coords] = vertex_color_0
+			do_wall_color_1[draw_chunk_coords][draw_cell_coords] = vertex_color_1
+		_wall_paint_stroke_dirty_chunks[draw_chunk_coords] = chunk
+	_wall_paint_stroke_undo_states["wall_color_0"] = undo_wall_color_0
+	_wall_paint_stroke_undo_states["wall_color_1"] = undo_wall_color_1
+	_wall_paint_stroke_do_states["wall_color_0"] = do_wall_color_0
+	_wall_paint_stroke_do_states["wall_color_1"] = do_wall_color_1
 
 
 func _commit_wall_paint_stroke(terrain: MarchingSquaresTerrain) -> void:
 	if terrain == null:
 		_reset_wall_paint_stroke()
 		return
-	if not _wall_paint_stroke_do_states.is_empty():
+	if _wall_paint_stroke_do_states.has("wall_color_0") and not _wall_paint_stroke_do_states["wall_color_0"].is_empty():
 		var undo_redo := get_undo_redo()
 		undo_redo.create_action("terrain wall paint")
-		undo_redo.add_do_method(self, "apply_wall_paint_stamp_states_action", terrain, _wall_paint_stroke_do_states.duplicate(true))
-		undo_redo.add_undo_method(self, "apply_wall_paint_stamp_states_action", terrain, _wall_paint_stroke_undo_states.duplicate(true))
+		undo_redo.add_do_method(self, "apply_composite_pattern_action", terrain, _wall_paint_stroke_do_states.duplicate(true))
+		undo_redo.add_undo_method(self, "apply_composite_pattern_action", terrain, _wall_paint_stroke_undo_states.duplicate(true))
 		undo_redo.commit_action()
 	_reset_wall_paint_stroke()
 
@@ -1052,39 +1094,33 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 	
 	if mode == TerrainToolMode.VERTEX_PAINTING:
 		if paint_walls_mode:
-			for draw_chunk_coords: Vector2i in current_draw_pattern.keys():
+			if _wall_paint_stroke_active:
+				return
+			var affected_wall_chunks := {}
+			for draw_chunk_coords: Vector2i in pattern.keys():
 				var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(draw_chunk_coords)
 				if chunk == null:
 					continue
 				if _wall_paint_stroke_active and not _wall_paint_stroke_undo_states.has(draw_chunk_coords):
-					_wall_paint_stroke_undo_states[draw_chunk_coords] = chunk.get_wall_paint_stamp_state()
-				var next_state := chunk.append_wall_paint_stamp(
-					brush_position,
-					(terrain.global_transform.basis * brush_surface_normal).normalized(),
-					brush_size,
-					vertex_color_idx
-				)
-				if _wall_paint_stroke_active:
-					_wall_paint_stroke_do_states[draw_chunk_coords] = next_state
-			if not _wall_paint_stroke_active:
-				var do_states := {}
-				var undo_states := {}
-				for draw_chunk_coords: Vector2i in current_draw_pattern.keys():
-					var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(draw_chunk_coords)
-					if chunk == null:
-						continue
-					undo_states[draw_chunk_coords] = chunk.get_wall_paint_stamp_state()
-					do_states[draw_chunk_coords] = chunk.append_wall_paint_stamp(
-						brush_position,
-						(terrain.global_transform.basis * brush_surface_normal).normalized(),
-						brush_size,
-						vertex_color_idx
-					)
-				if not do_states.is_empty():
-					undo_redo.create_action("terrain wall paint")
-					undo_redo.add_do_method(self, "apply_wall_paint_stamp_states_action", terrain, do_states)
-					undo_redo.add_undo_method(self, "apply_wall_paint_stamp_states_action", terrain, undo_states)
-					undo_redo.commit_action()
+					_wall_paint_stroke_undo_states[draw_chunk_coords] = chunk.get_wall_color_map_state()
+				for draw_cell_coords: Vector2i in pattern[draw_chunk_coords]:
+					chunk.draw_wall_color_0(draw_cell_coords.x, draw_cell_coords.y, pattern[draw_chunk_coords][draw_cell_coords])
+					chunk.draw_wall_color_1(draw_cell_coords.x, draw_cell_coords.y, pattern_cc[draw_chunk_coords][draw_cell_coords])
+				affected_wall_chunks[draw_chunk_coords] = chunk
+			for draw_chunk_coords: Vector2i in affected_wall_chunks.keys():
+				var chunk: MarchingSquaresTerrainChunk = affected_wall_chunks[draw_chunk_coords]
+				chunk.regenerate_mesh()
+			if not _wall_paint_stroke_active and not affected_wall_chunks.is_empty():
+				undo_redo.create_action("terrain wall paint")
+				undo_redo.add_do_method(self, "apply_composite_pattern_action", terrain, {
+					"wall_color_0": pattern,
+					"wall_color_1": pattern_cc
+				})
+				undo_redo.add_undo_method(self, "apply_composite_pattern_action", terrain, {
+					"wall_color_0": restore_pattern,
+					"wall_color_1": restore_pattern_cc
+				})
+				undo_redo.commit_action()
 		else:
 			# Standard 2D ground painting
 			var do_patterns := {
@@ -1385,11 +1421,11 @@ func draw_wall_color_1_pattern_action(terrain: MarchingSquaresTerrain, pattern: 
 		chunk.regenerate_mesh()
 
 
-func apply_wall_paint_stamp_states_action(terrain: MarchingSquaresTerrain, states: Dictionary) -> void:
+func apply_wall_color_map_states_action(terrain: MarchingSquaresTerrain, states: Dictionary) -> void:
 	for chunk_coords: Vector2i in states:
 		var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(chunk_coords)
 		if chunk:
-			chunk.set_wall_paint_stamp_state(states[chunk_coords])
+			chunk.set_wall_color_map_state(states[chunk_coords])
 
 
 # Applies all terrain patterns  (for quick paint brush and vertex painting operations)

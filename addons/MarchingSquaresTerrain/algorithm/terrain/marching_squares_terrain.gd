@@ -659,6 +659,7 @@ var _warned_grass_array_slots: Dictionary = {}
 
 @export_storage var current_texture_preset : MarchingSquaresTexturePreset = null
 var _main_texture_library : Resource = null
+var _main_visible_texture_slot_count: int = 6
 
 # Palette System
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var palette_colors: Array[Color] = []
@@ -867,6 +868,28 @@ func _build_texture_library_from_slots() -> MSTextureLibrary:
 	return lib
 
 
+func ensure_texture_library_resource() -> Resource:
+	if texture_library != null:
+		return texture_library
+	var lib := _build_texture_library_from_slots()
+	var out_dir := data_directory
+	if out_dir == null or out_dir == "":
+		out_dir = "res://scenes"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(out_dir))
+	var lib_path := out_dir.path_join("mst_texture_library.tres")
+	var save_err := ResourceSaver.save(lib, lib_path)
+	if save_err != OK:
+		push_warning("[MST] Failed to create texture library at %s (err=%s)." % [lib_path, str(save_err)])
+		return null
+	var lib_res: Resource = ResourceLoader.load(lib_path)
+	if lib_res != null:
+		texture_library = lib_res
+		return lib_res
+	push_warning("[MST] Created texture library but failed to reload it from %s." % lib_path)
+	texture_library = lib
+	return lib
+
+
 func _set_legacy_texture_slot(slot_idx: int, tex: Texture2D) -> void:
 	MarchingSquaresTerrainHelpers.set_legacy_texture_slot(self, slot_idx, tex)
 
@@ -980,40 +1003,6 @@ func _deferred_enter_tree() -> void:
 	force_batch_update()
 	
 	# One-time editor migrations: regenerate meshes so new wall tagging/material selection is present in geometry.
-
-	# Auto-create the editable texture library in the terrain data directory.
-	# Baking is intentionally manual so adding a terrain never performs a heavy texture-array bake.
-	if EngineWrapper.instance.is_editor():
-		var need_lib := (texture_library == null)
-		if need_lib:
-			var lib: MSTextureLibrary = MSTextureLibrary.new()
-			lib.max_slots = 256
-			lib.ensure_length()
-			if texture_slots is Array:
-				for i in range(lib.max_slots):
-					var slot = texture_slots[i] if i < texture_slots.size() else null
-					if slot != null and MarchingSquaresTerrainHelpers.is_valid_texture2d(slot.texture):
-						lib.albedo_textures[i] = slot.texture
-						# If slot provides a normal field, prefer that.
-						if slot.has_method("get") and slot.get("normal_texture") != null:
-							var nt = slot.get("normal_texture")
-							if MarchingSquaresTerrainHelpers.is_valid_texture2d(nt):
-								lib.normal_textures[i] = nt
-				var out_dir := data_directory
-				if out_dir == null or out_dir == "":
-					out_dir = "res://scenes"
-				DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(out_dir))
-				var lib_path := out_dir.path_join("mst_texture_library.tres")
-				ResourceSaver.save(lib, lib_path)
-				var lib_res: Resource = ResourceLoader.load(lib_path)
-				if lib_res != null:
-					texture_library = lib_res
-					_auto_quick_setup_done = true
-					rebuild_texture_array()
-					rebuild_grass_texture_array()
-					print_verbose("[MST] Auto-created texture library at ", lib_path)
-				else:
-					print_verbose("[MST] Auto texture library setup failed at ", lib_path)
 
 	# Initialize all chunks (regenerate mesh/grass from loaded data)
 	var force_regen_for_wall_fixes : bool = false
@@ -1323,9 +1312,16 @@ func save_to_preset() -> void:
 		current_texture_preset.get("baked_albedo_array_path") != null
 		and current_texture_preset.has_baked_arrays()
 	)
+	var preset_has_legacy_texture_payload := false
+	if current_texture_preset.new_textures != null and current_texture_preset.new_textures.terrain_textures.size() >= 15:
+		for legacy_tex in current_texture_preset.new_textures.terrain_textures:
+			if MarchingSquaresTerrainHelpers.is_valid_texture2d(legacy_tex):
+				preset_has_legacy_texture_payload = true
+				break
+	current_texture_preset.visible_texture_slot_count = clampi(int(visible_texture_slot_count), 6, MAX_TEXTURE_SLOTS)
 	
 	# Terrain textures
-	if preset_owns_texture_resources:
+	if preset_owns_texture_resources or preset_has_legacy_texture_payload:
 		current_texture_preset.new_textures.terrain_textures[0] = texture_1
 		current_texture_preset.new_textures.terrain_textures[1] = texture_2
 		current_texture_preset.new_textures.terrain_textures[2] = texture_3
@@ -1414,11 +1410,24 @@ func save_to_preset() -> void:
 func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 	if preset == null:
 		return
+
+	var current_preset_owns_texture_resources := false
+	if current_texture_preset != null:
+		var current_has_texture_library := current_texture_preset.get("texture_library") != null and current_texture_preset.texture_library != null
+		var current_has_baked_arrays := current_texture_preset.get("baked_albedo_array_path") != null and current_texture_preset.has_baked_arrays()
+		var current_has_legacy_textures := false
+		if current_texture_preset.new_textures != null and current_texture_preset.new_textures.terrain_textures.size() >= 15:
+			for legacy_tex in current_texture_preset.new_textures.terrain_textures:
+				if MarchingSquaresTerrainHelpers.is_valid_texture2d(legacy_tex):
+					current_has_legacy_textures = true
+					break
+		current_preset_owns_texture_resources = current_has_texture_library or current_has_baked_arrays or current_has_legacy_textures
 	
 	var preset_has_texture_library := preset.get("texture_library") != null and preset.texture_library != null
 	if preset_has_texture_library:
-		if texture_library != null and texture_library != preset.texture_library:
+		if texture_library != null and texture_library != preset.texture_library and (_main_texture_library == null or not current_preset_owns_texture_resources):
 			_main_texture_library = texture_library
+			_main_visible_texture_slot_count = clampi(int(visible_texture_slot_count), 6, MAX_TEXTURE_SLOTS)
 		texture_library = preset.texture_library
 	else:
 		if _main_texture_library != null:
@@ -1454,7 +1463,7 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 		palette_colors.resize(128)
 		palette_weights.resize(128)
 		for i in range(128):
-			palette_colors[i] = Color("647851ff")
+			palette_colors[i] = MarchingSquaresTerrainHelpers.default_palette_color_for_slot(i)
 			palette_weights[i] = 100.0
 
 	if preset.slot_blend_modes.size() == 15 or preset.slot_blend_modes.size() == MAX_TEXTURE_SLOTS:
@@ -1505,13 +1514,22 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 	var preset_slot_scales: Array = []
 	if preset.get("slot_texture_scales") is Array:
 		preset_slot_scales = preset.slot_texture_scales
+	if preset.new_textures != null and preset.new_textures.has_method("_ensure_grass_arrays"):
+		preset.new_textures._ensure_grass_arrays()
+	var requested_visible_slot_count: int = 0
+	if preset.get("visible_texture_slot_count") != null:
+		requested_visible_slot_count = clampi(int(preset.visible_texture_slot_count), 6, MAX_TEXTURE_SLOTS)
 	var preset_has_legacy_textures := false
 	if preset.new_textures != null and preset.new_textures.terrain_textures.size() >= 15:
 		for legacy_tex in preset.new_textures.terrain_textures:
 			if MarchingSquaresTerrainHelpers.is_valid_texture2d(legacy_tex):
 				preset_has_legacy_textures = true
 				break
-	var apply_legacy_texture_resources := preset_has_legacy_textures and not preset_has_texture_library and texture_library == null
+	var apply_legacy_texture_resources := preset_has_legacy_textures and not preset_has_texture_library
+	if not preset_has_texture_library and not apply_legacy_texture_resources and not current_preset_owns_texture_resources:
+		if texture_library != null:
+			_main_texture_library = texture_library
+		_main_visible_texture_slot_count = clampi(int(visible_texture_slot_count), 6, MAX_TEXTURE_SLOTS)
 
 	_ensure_palette_settings()
 	_rebuild_palette_uniforms()
@@ -1546,6 +1564,8 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 			var gtex = lib_res.grass_textures[i] if i < lib_res.grass_textures.size() else null
 			if MarchingSquaresTerrainHelpers.is_valid_texture2d(gtex):
 				texture_slots[i].grass_texture = gtex
+			else:
+				texture_slots[i].grass_texture = null
 			if i < preset_slot_scales.size() and preset_slot_scales[i] != null:
 				texture_slots[i].scale = float(preset_slot_scales[i])
 		if highest_library_slot >= 0:
@@ -1574,6 +1594,10 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 				texture_slots[i] = _TEXTURE_SLOT_SCRIPT.new()
 			var legacy_slot_tex = preset.new_textures.terrain_textures[i]
 			texture_slots[i].texture = legacy_slot_tex if MarchingSquaresTerrainHelpers.is_valid_texture2d(legacy_slot_tex) else null
+		if texture_library != null and (_main_texture_library == null or not current_preset_owns_texture_resources):
+			_main_texture_library = texture_library
+			_main_visible_texture_slot_count = clampi(int(visible_texture_slot_count), 6, MAX_TEXTURE_SLOTS)
+		texture_library = _build_texture_library_from_slots()
 
 	# Texture scales (first 15)
 	if preset.new_textures != null and preset.new_textures.texture_scales.size() >= 15:
@@ -1640,8 +1664,34 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 		tex5_has_grass = bool(p_has[4]) if p_has.size() > 4 else tex5_has_grass
 		tex6_has_grass = bool(p_has[5]) if p_has.size() > 5 else tex6_has_grass
 
-	if _main_texture_library == null and apply_legacy_texture_resources:
-		texture_library = _build_texture_library_from_slots()
+	# Restore UI-visible slot layout from preset intent, not just from whichever albedo textures happen
+	# to exist in the currently linked library. This keeps older/light presets from collapsing down to
+	# only Texture 1 when they mainly carry color-array data.
+	var highest_preset_slot: int = 0
+	for i in range(MAX_TEXTURE_SLOTS):
+		var slot_palette_indices: Array = slot_color_indices[i] if i < slot_color_indices.size() and slot_color_indices[i] is Array else []
+		var slot_has_palette: bool = slot_palette_indices.size() > 0
+		var slot_has_texture: bool = texture_slots[i] != null and MarchingSquaresTerrainHelpers.is_valid_texture2d(texture_slots[i].texture)
+		var slot_has_grass_flag: bool = texture_slots[i] != null and bool(texture_slots[i].has_grass)
+		var should_show: bool = (i == 0) or slot_has_palette or slot_has_texture or slot_has_grass_flag
+		if should_show and i != 15:
+			highest_preset_slot = i
+	var inferred_visible_slot_count: int = clampi(max(highest_preset_slot + 1, 6), 6, MAX_TEXTURE_SLOTS)
+	var target_visible_slot_count: int = inferred_visible_slot_count
+	if not preset_has_texture_library and not apply_legacy_texture_resources and _main_visible_texture_slot_count > 0:
+		target_visible_slot_count = clampi(max(_main_visible_texture_slot_count, inferred_visible_slot_count), 6, MAX_TEXTURE_SLOTS)
+	if not preset.resource_path.is_empty() and requested_visible_slot_count > 0:
+		target_visible_slot_count = clampi(max(requested_visible_slot_count, inferred_visible_slot_count), 6, MAX_TEXTURE_SLOTS)
+	for i in range(MAX_TEXTURE_SLOTS):
+		var slot_palette_indices: Array = slot_color_indices[i] if i < slot_color_indices.size() and slot_color_indices[i] is Array else []
+		var slot_has_palette: bool = slot_palette_indices.size() > 0
+		var slot_has_texture: bool = texture_slots[i] != null and MarchingSquaresTerrainHelpers.is_valid_texture2d(texture_slots[i].texture)
+		var slot_has_grass_flag: bool = texture_slots[i] != null and bool(texture_slots[i].has_grass)
+		var should_show: bool = (i == 0) or slot_has_palette or slot_has_texture or slot_has_grass_flag or (i < target_visible_slot_count and i != 15)
+		if texture_slots[i] == null:
+			texture_slots[i] = _TEXTURE_SLOT_SCRIPT.new()
+		texture_slots[i].active = should_show
+	visible_texture_slot_count = target_visible_slot_count
 
 	is_batch_updating = false
 

@@ -49,6 +49,7 @@ uniform int wall_paint_count = 0;
 uniform vec4 wall_paint_stamps_a[64];
 uniform vec4 wall_paint_stamps_b[64];
 uniform float wall_paint_plane_thickness : hint_range(0.001, 1.0, 0.001) = 0.03;
+uniform float wall_paint_blend_width : hint_range(0.0, 2.0, 0.001) = 0.06;
 group_uniforms;
 
 group_uniforms Visuals.Normals;
@@ -456,7 +457,7 @@ vec4 get_palette_color(int tex_idx, vec2 world_xz) {
 		// Dithered: weights own area; only non-zero color boundaries dither.
 		vec4 result = sample_palette_entry(tex_idx, i0);
 		float boundary = 0.0;
-		float transition = max(total * 0.06, 0.0001);
+		float transition = max(total * 0.09, 0.0001);
 		vec3 dither_coord = floor(world_pos * 8.0);
 		float dither = hash3(dither_coord);
 		for (int i = 0; i < 7; i++) {
@@ -473,8 +474,8 @@ vec4 get_palette_color(int tex_idx, vec2 world_xz) {
 		// Stipple: weights own area; only non-zero color boundaries checker/stipple.
 		vec4 result = sample_palette_entry(tex_idx, i0);
 		float boundary = 0.0;
-		float transition = max(total * 0.06, 0.0001);
-		float seam = 0.08;
+		float transition = max(total * 0.09, 0.0001);
+		float seam = 0.12;
 		vec3 checker_coord = floor(world_pos * 4.0);
 		float checker = mod(checker_coord.x + checker_coord.y + checker_coord.z, 2.0);
 		for (int i = 0; i < 7; i++) {
@@ -596,7 +597,17 @@ vec3 stylized_texture_weights(vec3 weights) {
 	if (shaped_total <= 0.001) {
 		return _weight_onehot(top_idx, 1.0);
 	}
-	return shaped / shaped_total;
+	vec3 styled = shaped / shaped_total;
+
+	// True three-way corners can collapse into a tiny pointed "bald" tip when the
+	// third material gets pushed too low by the stylized remap. Blend a bit of the
+	// original barycentric weights back in only when all three materials are
+	// meaningfully present so junctions stay filled without blurring ordinary edges.
+	float third_weight = min(weights.x, min(weights.y, weights.z));
+	float junction_fill = smoothstep(0.10, 0.22, third_weight);
+	vec3 mixed = mix(styled, weights, junction_fill * 0.20);
+	float mixed_total = mixed.x + mixed.y + mixed.z;
+	return mixed / max(mixed_total, 0.001);
 }
 
 vec3 blend_slot_normals(vec2 base_uv) {
@@ -865,39 +876,6 @@ void fragment() {
 		vec4 wall_mat = sample_material_by_index(mat_a, wall_uv) * weight_a
 					+ sample_material_by_index(mat_b, wall_uv) * weight_b
 					+ sample_material_by_index(mat_c, wall_uv) * weight_c;
-
-		int wall_override_mat = -1;
-		vec3 frag_wall_normal = normalize(world_normal);
-		for (int i = 63; i >= 0; i--) {
-			if (i >= wall_paint_count) {
-				continue;
-			}
-			vec4 stamp_a = wall_paint_stamps_a[i];
-			vec4 stamp_b = wall_paint_stamps_b[i];
-			vec3 stamp_normal = normalize(stamp_b.xyz);
-			if (length(stamp_normal) < 0.0001) {
-				continue;
-			}
-			if (dot(frag_wall_normal, stamp_normal) < 0.35) {
-				continue;
-			}
-			vec3 delta = world_pos - stamp_a.xyz;
-			float signed_plane = dot(delta, stamp_normal);
-			if (abs(signed_plane) > wall_paint_plane_thickness) {
-				continue;
-			}
-			vec3 plane_delta = delta - stamp_normal * signed_plane;
-			if (length(plane_delta) <= stamp_a.w) {
-				wall_override_mat = int(round(stamp_b.w));
-				break;
-			}
-		}
-		if (wall_override_mat >= 0) {
-			wall_mat = sample_material_by_index(wall_override_mat, wall_uv);
-			out_roughness = _palette_roughness(wall_override_mat);
-			out_wet_enabled = _palette_wet_enabled(wall_override_mat);
-			out_wet_mode = _palette_wet_mode(wall_override_mat);
-		}
 
 		ALBEDO = wall_mat.rgb;
 		ALPHA = wall_mat.a;

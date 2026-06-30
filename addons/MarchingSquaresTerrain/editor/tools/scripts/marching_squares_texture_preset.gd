@@ -26,6 +26,7 @@ class_name MarchingSquaresTexturePreset
 @export var terrain_settings: Dictionary = {}
 
 @export_group("")
+@export var visible_texture_slot_count: int = 6
 @export var slot_color_indices: Array = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
 
 @export var slot_blend_modes: Array[int] = [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
