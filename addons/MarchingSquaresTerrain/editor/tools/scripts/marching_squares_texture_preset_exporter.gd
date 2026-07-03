@@ -26,14 +26,14 @@ func _create_texture_export_dialog() -> void:
 	filename_dialog.title = "Save Preset"
 	filename_dialog.unresizable = true
 	filename_dialog.confirmed.connect(_on_filename_confirmed)
-	
+
 	var cont := VBoxContainer.new()
 	cont.add_theme_constant_override("seperation", 10)
-	
+
 	var label := Label.new()
 	label.text = "Enter preset name:"
 	cont.add_child(label)
-	
+
 	filename_input = LineEdit.new()
 	filename_input.placeholder_text = "new_texture_preset"
 	cont.add_child(filename_input)
@@ -51,20 +51,20 @@ func _create_texture_export_dialog() -> void:
 	include_texture_library_check.text = "Include Texture Library / Baked Arrays (*)"
 	include_texture_library_check.tooltip_text = "Creates a self-contained preset folder with a texture library snapshot and any baked Texture2DArray resources."
 	cont.add_child(include_texture_library_check)
-	
+
 	filename_dialog.add_child(cont)
-	
+
 	add_child(filename_dialog)
 
 
 func _export_to_texture_preset() -> void:
 	MarchingSquaresTerrainPlugin._ensure_texture_names_resource(TEXTURE_NAMES)
 	texture_preset_data = _get_current_texture_data()
-	
+
 	filename_input.text = "new_texture_preset"
 	save_path_input.text = PRESET_DIR
 	include_texture_library_check.button_pressed = false
-	
+
 	filename_dialog.popup_centered(Vector2(400, 150))
 	filename_input.grab_focus()
 	filename_input.select_all()
@@ -72,15 +72,15 @@ func _export_to_texture_preset() -> void:
 
 func _on_filename_confirmed() -> void:
 	var filename := filename_input.text.strip_edges().to_lower().to_snake_case()
-	
+
 	if filename == "":
 		push_error("Filename cannot be empty!")
 		return
-	
+
 	var dir := DirAccess.open("res://")
 	if not dir.dir_exists(PRESET_DIR):
 		dir.make_dir_recursive(PRESET_DIR)
-	
+
 	var save_dir := _normalize_save_dir(save_path_input.text)
 	var include_library := include_texture_library_check != null and include_texture_library_check.button_pressed
 	var path := save_dir + filename + ".tres"
@@ -90,7 +90,7 @@ func _on_filename_confirmed() -> void:
 		if not DirAccess.dir_exists_absolute(dir_abs):
 			DirAccess.make_dir_recursive_absolute(dir_abs)
 		path = preset_folder.path_join(filename + ".tres")
-	
+
 	if FileAccess.file_exists(path):
 		_show_overwrite_confirmation(path)
 	else:
@@ -101,15 +101,15 @@ func _show_overwrite_confirmation(path: String) -> void:
 	var confirm_dialog = ConfirmationDialog.new()
 	confirm_dialog.title = "Overwrite File?"
 	confirm_dialog.dialog_text = "A preset with this name already exists.\nDo you want to overwrite it?"
-	
+
 	confirm_dialog.confirmed.connect(
 		func():
 			_save_preset(path)
 			confirm_dialog.queue_free()
 	)
-	
+
 	confirm_dialog.canceled.connect(confirm_dialog.queue_free)
-	
+
 	add_child(confirm_dialog)
 	confirm_dialog.popup_centered()
 
@@ -117,19 +117,19 @@ func _show_overwrite_confirmation(path: String) -> void:
 func _save_preset(path: String) -> void:
 	var new_tex_preset := MarchingSquaresTexturePreset.new()
 	var include_library := include_texture_library_check != null and include_texture_library_check.button_pressed
-	
+
 	new_tex_preset.preset_name = filename_input.text
 	new_tex_preset.new_textures = texture_preset_data
 	if not include_library:
 		_strip_texture_resources(new_tex_preset.new_textures)
-	
+
 	# Copy per-slot names from the currently active preset (if present) so names persist.
 	var src_names : MarchingSquaresTextureNames = TEXTURE_NAMES
 	if current_terrain_node and current_terrain_node.current_texture_preset and current_terrain_node.current_texture_preset.new_tex_names:
 		src_names = current_terrain_node.current_texture_preset.new_tex_names
 	MarchingSquaresTerrainPlugin._ensure_texture_names_resource(src_names)
 	new_tex_preset.new_tex_names = src_names.duplicate(true)
-	
+
 	# Copy palette and surface settings from the current terrain so the exported preset is a true "look" preset.
 	if current_terrain_node != null:
 		if current_terrain_node.get("visible_texture_slot_count") != null:
@@ -146,6 +146,8 @@ func _save_preset(path: String) -> void:
 			new_tex_preset.slot_wet_modes = current_terrain_node.slot_wet_modes.duplicate()
 		if current_terrain_node.get("slot_roughnesses") is Array:
 			new_tex_preset.slot_roughnesses = current_terrain_node.slot_roughnesses.duplicate()
+		if current_terrain_node.get("slot_grass_wetnesses") is Array:
+			new_tex_preset.slot_grass_wetnesses = current_terrain_node.slot_grass_wetnesses.duplicate()
 		if current_terrain_node.get("slot_floor_noise_enabled") is Array:
 			new_tex_preset.slot_floor_noise_enabled = current_terrain_node.slot_floor_noise_enabled.duplicate()
 		if current_terrain_node.get("slot_floor_noise_strengths") is Array:
@@ -163,7 +165,7 @@ func _save_preset(path: String) -> void:
 			for i in range(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS):
 				var slot = current_terrain_node.texture_slots[i] if i < current_terrain_node.texture_slots.size() else null
 				new_tex_preset.slot_texture_scales[i] = float(slot.scale) if slot != null else 1.0
-	
+
 	# If a preset is currently selected, inherit its Global Settings apply flags so exports preserve intent.
 	if current_terrain_node != null and current_terrain_node.current_texture_preset != null:
 		var src_preset := current_terrain_node.current_texture_preset
@@ -175,7 +177,7 @@ func _save_preset(path: String) -> void:
 			new_tex_preset.apply_vertex_painter_settings = bool(src_preset.apply_vertex_painter_settings)
 		if src_preset.get("apply_grass_settings") != null:
 			new_tex_preset.apply_grass_settings = bool(src_preset.apply_grass_settings)
-	
+
 	# PR1: Do not export terrain/global settings unless explicitly enabled.
 	# This prevents PR2/PR4 keys (wind/global noise/etc.) from leaking into PR1 presets.
 	if new_tex_preset.apply_terrain_settings and current_terrain_node != null and current_terrain_node.has_method("_gather_preset_terrain_settings"):
@@ -186,7 +188,7 @@ func _save_preset(path: String) -> void:
 	if include_library:
 		_save_texture_library_snapshot(new_tex_preset, path)
 		_copy_baked_arrays_to_preset(new_tex_preset, path)
-	
+
 	var save_error := ResourceSaver.save(new_tex_preset, path)
 	if save_error == OK:
 		print_verbose("Texture preset saved to: " + path)
@@ -256,25 +258,25 @@ func _build_export_texture_library_snapshot() -> Resource:
 
 func _get_current_texture_data() -> MarchingSquaresTextureList:
 	var new_texture_list := MarchingSquaresTextureList.new()
-	
+
 	if current_terrain_node.has_method("_ensure_texture_slots"):
 		current_terrain_node._ensure_texture_slots()
 
 	# Terrain textures (first 15 legacy compatibility payload)
 	for i_tex in range(new_texture_list.terrain_textures.size()):
 		new_texture_list.terrain_textures[i_tex] = _get_slot_albedo_texture(i_tex)
-	
+
 	# Texture scales (first 15 legacy compatibility payload)
 	for i_tex_scale in range(new_texture_list.texture_scales.size()):
 		new_texture_list.texture_scales[i_tex_scale] = _get_slot_scale(i_tex_scale)
-	
+
 	# Palette colors (0..127) are stored in new_textures.grass_colors for historical reasons.
 	if current_terrain_node.get("palette_colors") is Array:
 		new_texture_list.grass_colors.resize(128)
 		var pal_size := current_terrain_node.palette_colors.size()
 		for i in range(128):
 			new_texture_list.grass_colors[i] = current_terrain_node.palette_colors[i] if i < pal_size else Color.WHITE
-	
+
 	# Slot-based grass sprites + has-grass flags (0..255)
 	if current_terrain_node.get("texture_slots") is Array and current_terrain_node.texture_slots.size() >= MarchingSquaresTextureList.MAX_TEXTURE_SLOTS:
 		new_texture_list.grass_sprites.resize(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS)
@@ -282,7 +284,7 @@ func _get_current_texture_data() -> MarchingSquaresTextureList:
 		for i in range(MarchingSquaresTextureList.MAX_TEXTURE_SLOTS):
 			var slot = current_terrain_node.texture_slots[i]
 			new_texture_list.grass_sprites[i] = slot.grass_texture if slot != null else null
-			new_texture_list.has_grass[i] = bool(slot.has_grass) if slot != null else (i < 6)
+			new_texture_list.has_grass[i] = bool(slot.has_grass) if slot != null else (i == 0)
 	else:
 		# Legacy fallback (first 6 only); keep arrays at MAX_TEXTURE_SLOTS.
 		new_texture_list.grass_sprites[0] = current_terrain_node.grass_sprite_tex_1
@@ -297,7 +299,7 @@ func _get_current_texture_data() -> MarchingSquaresTextureList:
 		new_texture_list.has_grass[3] = bool(current_terrain_node.tex4_has_grass)
 		new_texture_list.has_grass[4] = bool(current_terrain_node.tex5_has_grass)
 		new_texture_list.has_grass[5] = bool(current_terrain_node.tex6_has_grass)
-	
+
 	return new_texture_list
 
 

@@ -28,7 +28,7 @@ static func ensure_texture_slots(terrain) -> void:
 		# Default missing 'active' from the current visible range instead of enabling all 256 slots.
 		if terrain.texture_slots[i] !=  null and terrain.texture_slots[i].get("active") == null:
 			terrain.texture_slots[i].active = (i < default_visible_count and i != VOID_TEXTURE_SLOT)
-		
+
 		# Default any missing grass fields (older saves / older slot resources).
 		# Slot 0 (Texture 1) defaults to having grass enabled.
 		if terrain.texture_slots[i] !=  null and terrain.texture_slots[i].get("has_grass") == null:
@@ -136,19 +136,19 @@ static func maybe_migrate_legacy_grass(terrain) -> void:
 		t1 = true
 	var t2 = terrain.tex2_has_grass
 	if t2 == null:
-		t2 = true
+		t2 = false
 	var t3 = terrain.tex3_has_grass
 	if t3 == null:
-		t3 = true
+		t3 = false
 	var t4 = terrain.tex4_has_grass
 	if t4 == null:
-		t4 = true
+		t4 = false
 	var t5 = terrain.tex5_has_grass
 	if t5 == null:
-		t5 = true
+		t5 = false
 	var t6 = terrain.tex6_has_grass
 	if t6 == null:
-		t6 = true
+		t6 = false
 	terrain.texture_slots[0].has_grass = bool(t1)
 	terrain.texture_slots[1].has_grass = bool(t2)
 	terrain.texture_slots[2].has_grass = bool(t3)
@@ -180,6 +180,9 @@ static func push_tex_scales(terrain) -> void:
 	for i in range(MAX_TEXTURE_SLOTS):
 		scales[i] = float(terrain.texture_slots[i].scale) if terrain.texture_slots[i] != null else 1.0
 	terrain.terrain_material.set_shader_parameter("tex_scales", scales)
+	if terrain.grass_mesh != null and terrain.grass_mesh.material is ShaderMaterial:
+		var grass_mat := terrain.grass_mesh.material as ShaderMaterial
+		grass_mat.set_shader_parameter("tex_scales", scales)
 
 
 static func _try_load_baked(terrain, path_var_name: String) -> Texture2DArray:
@@ -260,6 +263,10 @@ static func rebuild_texture_array(terrain) -> void:
 	if baked !=  null:
 		terrain._runtime_texture_array = baked
 		terrain.terrain_material.set_shader_parameter("vc_tex_array", terrain._runtime_texture_array)
+		if terrain.grass_mesh != null and terrain.grass_mesh.material is ShaderMaterial:
+			var grass_mat := terrain.grass_mesh.material as ShaderMaterial
+			grass_mat.set_shader_parameter("vc_floor_tex_array", terrain._runtime_texture_array)
+			grass_mat.set_shader_parameter("use_floor_tex_array", true)
 		var baked_normal := _try_load_baked(terrain, "baked_normal_array_path")
 		terrain._runtime_normal_texture_array = baked_normal
 		terrain.terrain_material.set_shader_parameter("vc_normal_array", terrain._runtime_normal_texture_array)
@@ -300,10 +307,14 @@ static func rebuild_texture_array(terrain) -> void:
 			terrain._runtime_texture_array = arr
 			terrain._runtime_normal_texture_array = normal_arr
 			terrain.terrain_material.set_shader_parameter("vc_tex_array", terrain._runtime_texture_array)
+			if terrain.grass_mesh != null and terrain.grass_mesh.material is ShaderMaterial:
+				var grass_mat := terrain.grass_mesh.material as ShaderMaterial
+				grass_mat.set_shader_parameter("vc_floor_tex_array", terrain._runtime_texture_array)
+				grass_mat.set_shader_parameter("use_floor_tex_array", true)
 			terrain.terrain_material.set_shader_parameter("vc_normal_array", terrain._runtime_normal_texture_array)
 			terrain.terrain_material.set_shader_parameter("use_normal_array", has_normal_maps and terrain._runtime_normal_texture_array != null)
 			return
-	
+
 	# Priority 3: Legacy fallback (build 16 canonical slices as before)
 	# (Preserve previous behavior for compatibility)
 	var canonical_w := 1
@@ -362,6 +373,10 @@ static func rebuild_texture_array(terrain) -> void:
 
 	terrain._runtime_texture_array = arr
 	terrain.terrain_material.set_shader_parameter("vc_tex_array", terrain._runtime_texture_array)
+	if terrain.grass_mesh != null and terrain.grass_mesh.material is ShaderMaterial:
+		var grass_mat := terrain.grass_mesh.material as ShaderMaterial
+		grass_mat.set_shader_parameter("vc_floor_tex_array", terrain._runtime_texture_array)
+		grass_mat.set_shader_parameter("use_floor_tex_array", true)
 	terrain._runtime_normal_texture_array = null
 	terrain.terrain_material.set_shader_parameter("vc_normal_array", null)
 	terrain.terrain_material.set_shader_parameter("use_normal_array", false)
@@ -473,8 +488,15 @@ static func ensure_palette_settings(terrain) -> void:
 		terrain.slot_wet_enabled.resize(MAX_TEXTURE_SLOTS)
 	if terrain.slot_wet_modes.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_wet_modes.resize(MAX_TEXTURE_SLOTS)
+	var old_roughness_size: int = terrain.slot_roughnesses.size()
 	if terrain.slot_roughnesses.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_roughnesses.resize(MAX_TEXTURE_SLOTS)
+	var old_grass_wetness_size: int = 0
+	if terrain.get("slot_grass_wetnesses") is Array:
+		old_grass_wetness_size = terrain.slot_grass_wetnesses.size()
+	if terrain.get("slot_grass_wetnesses") is Array:
+		if terrain.slot_grass_wetnesses.size() !=  MAX_TEXTURE_SLOTS:
+			terrain.slot_grass_wetnesses.resize(MAX_TEXTURE_SLOTS)
 	var had_floor_noise: bool = terrain.slot_floor_noise_enabled.size() > 0
 	var had_wall_noise: bool = terrain.slot_wall_noise_enabled.size() > 0
 	if terrain.slot_floor_noise_enabled.size() !=  MAX_TEXTURE_SLOTS:
@@ -497,7 +519,15 @@ static func ensure_palette_settings(terrain) -> void:
 		terrain.slot_wet_modes[i] = clampi(int(terrain.slot_wet_modes[i]), 0, 1)
 		if terrain.slot_roughnesses[i] == null:
 			terrain.slot_roughnesses[i] = 1.0
+		if i >= old_roughness_size:
+			terrain.slot_roughnesses[i] = 1.0
 		terrain.slot_roughnesses[i] = clampf(float(terrain.slot_roughnesses[i]), 0.0, 1.0)
+		if terrain.get("slot_grass_wetnesses") is Array:
+			if terrain.slot_grass_wetnesses[i] == null:
+				terrain.slot_grass_wetnesses[i] = 0.0
+			if i >= old_grass_wetness_size:
+				terrain.slot_grass_wetnesses[i] = 0.0
+			terrain.slot_grass_wetnesses[i] = clampf(float(terrain.slot_grass_wetnesses[i]), 0.0, 1.0)
 		if terrain.slot_floor_noise_enabled[i] == null:
 			terrain.slot_floor_noise_enabled[i] = not had_floor_noise and float(terrain.global_noise_strength) > 0.0
 		if terrain.slot_floor_noise_strengths[i] == null:

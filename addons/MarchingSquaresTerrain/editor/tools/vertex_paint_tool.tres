@@ -30,7 +30,7 @@ Used to paint textures onto the terrain.
 • Texture presets can be used to quickly swap between texture pallets.
     • They can be exported via the right hand panel at the bottom.
 • \"Quick Paints\" are a way to quickly set textures while moddeling the terrain.
-    • You can make global or texture preset specific ones. 
+    • You can make global or texture preset specific ones.
         • → Create a MarchingSquaresQuickPaint resource in their dedicated folders in the parent plugin folder."
 attributes = SubResource("Resource_2cita")
 metadata/_custom_type_script = "uid://brkjbcthwswel"

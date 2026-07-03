@@ -1,8 +1,8 @@
-[gd_resource type="ShaderMaterial" format=3 uid="uid://bahbybbjwkhlg"]
+[gd_resource type="ShaderMaterial" format=4 uid="uid://bahbybbjwkhlg"]
 
 [ext_resource type="Shader" uid="uid://ltkimbmrvpyo" path="res://addons/MarchingSquaresTerrain/resources/shaders/mst_terrain.gdshader" id="1_0jm5n"]
 [ext_resource type="Texture2D" uid="uid://85iqlmnoua0e" path="res://addons/MarchingSquaresTerrain/resources/plugin_materials/rl_noise_texture.tres" id="2_rv4si"]
-[ext_resource type="Texture2D" uid="uid://dbnc04k3n0sro" path="uid://dbnc04k3n0sro" id="3_gntex"]
+[ext_resource type="Texture2D" uid="uid://dbnc04k3n0sro" path="res://addons/MarchingSquaresTerrain/resources/plugin_materials/grass_terrain_noise.res" id="3_gntex"]
 
 [resource]
 render_priority = -1
@@ -10,15 +10,25 @@ shader = ExtResource("1_0jm5n")
 shader_parameter/chunk_size = Vector3i(33, 32, 33)
 shader_parameter/cell_size = Vector2(2, 2)
 shader_parameter/wall_threshold = 0.0
+shader_parameter/has_prefab_colormap = false
+shader_parameter/use_normal_array = false
+shader_parameter/normal_map_strength = 1.0
 shader_parameter/tex_scales = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/use_hard_textures = false
+shader_parameter/blend_mode = 0
+shader_parameter/blend_sharpness = 2.5
+shader_parameter/blend_noise_scale = 10.0
+shader_parameter/blend_noise_strength = 0.0
+shader_parameter/use_stylized_texture_edges = true
+shader_parameter/texture_edge_width = 0.18
+shader_parameter/wall_paint_count = 0
+shader_parameter/wall_paint_stamps_a = PackedVector4Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/wall_paint_stamps_b = PackedVector4Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/wall_paint_plane_thickness = 0.03
+shader_parameter/wall_paint_blend_width = 0.06
 shader_parameter/use_flat_normals = false
 shader_parameter/detail_normal_scale = 0.25
 shader_parameter/detail_normal_strength = 0.0
-shader_parameter/use_hard_textures = false
-shader_parameter/blend_mode = 0
-shader_parameter/blend_sharpness = 5.0
-shader_parameter/blend_noise_scale = 10.0
-shader_parameter/blend_noise_strength = 0.0
 shader_parameter/use_ridge_texture = true
 shader_parameter/use_ledge_texture = true
 shader_parameter/ridge_threshold = 1.0

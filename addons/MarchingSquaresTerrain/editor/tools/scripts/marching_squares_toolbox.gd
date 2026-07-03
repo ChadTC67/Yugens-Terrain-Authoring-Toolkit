@@ -17,5 +17,3 @@ var tools : Array[MarchingSquaresTool] = [
 	preload("uid://ups2hlmespdm"), # Chunk manager tool
 	preload("uid://vh1ngh2y52b8"), # Terrain settings tool
 ]
-
-

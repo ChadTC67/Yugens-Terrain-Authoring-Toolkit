@@ -15,12 +15,17 @@ group_uniforms Visuals.Palette;
 uniform sampler2D palette_colors_tex : filter_nearest;
 uniform sampler2D palette_weights_tex : filter_nearest;
 uniform sampler2D palette_meta_tex : filter_nearest;
-// Per-slot surface settings: roughness=.r, wetness_enabled=.g, wetness_mode=.b.
+// Per-slot surface settings: roughness=.r, wetness_enabled=.g, wetness_mode=.b, grass_wetness=.a.
 uniform sampler2D palette_surface_settings_tex : filter_nearest;
 // Per-slot shared global-noise settings: strength=.r, scale=.g, enabled=.b.
 uniform sampler2D palette_floor_noise_tex : filter_nearest;
 uniform sampler2D palette_wall_noise_tex : filter_nearest;
 
+group_uniforms;
+
+group_uniforms Visuals.Prefabs;
+uniform sampler2D tex_prefab_colormap : source_color;
+uniform bool has_prefab_colormap = false;
 group_uniforms;
 
 group_uniforms Visuals.Vertex_Painting;
@@ -37,7 +42,7 @@ group_uniforms;
 group_uniforms Effects.Blending;
 uniform bool use_hard_textures = false;
 uniform int blend_mode = 0;
-uniform float blend_sharpness : hint_range(0.0, 10.0, 0.1) = 5.0;
+uniform float blend_sharpness : hint_range(0.0, 1.0, 0.01) = 0.5;
 uniform float blend_noise_scale : hint_range(0.0, 50.0, 1.0) = 10.0;
 uniform float blend_noise_strength : hint_range(0.0, 1.0, 0.05) = 0.0;
 uniform bool use_stylized_texture_edges = true;
@@ -94,6 +99,7 @@ uniform float specular_threshold : hint_range(0.0, 1.0, 0.01) = 0.7;
 // Wetness mode controls (used when slot wetness is enabled)
 uniform float wet_puddle_noise_scale : hint_range(0.01, 2.0, 0.01) = 0.25;
 uniform float wet_puddle_threshold : hint_range(0.0, 1.0, 0.01) = 0.55;
+const float GLOSSY_PUDDLE_GLOBAL_NOISE_SCALE = 0.007;
 
 group_uniforms;
 
@@ -130,6 +136,31 @@ vec2 _mst_surface_plane_uv(vec3 wpos, vec3 n) {
 	vec3 t = normalize(cross(up, nn));
 	vec3 b = cross(nn, t);
 	return vec2(dot(wpos, t), dot(wpos, b));
+}
+
+vec2 _mst_wall_strip_uv(vec3 wpos, vec3 n) {
+	vec2 horiz_n = vec2(n.x, n.z);
+	float horiz_len = length(horiz_n);
+	if (horiz_len <= 0.00001) {
+		return _mst_surface_plane_uv(wpos, n);
+	}
+	horiz_n /= horiz_len;
+	vec2 tangent = vec2(-horiz_n.y, horiz_n.x);
+	return vec2(dot(wpos.xz, tangent), wpos.y);
+}
+
+float _mst_sample_wall_global_noise(vec3 wpos, vec3 n, float scale) {
+	vec2 horiz_n = abs(vec2(n.x, n.z));
+	float weight_sum = horiz_n.x + horiz_n.y;
+	if (weight_sum <= 0.00001) {
+		vec2 uv = fract(wpos.xz * scale);
+		return texture(global_noise_texture, uv).r;
+	}
+	vec2 wall_x_uv = fract(vec2(wpos.z, wpos.y) * scale);
+	vec2 wall_z_uv = fract(vec2(wpos.x, wpos.y) * scale);
+	float gn_x = texture(global_noise_texture, wall_x_uv).r;
+	float gn_z = texture(global_noise_texture, wall_z_uv).r;
+	return (gn_x * horiz_n.x + gn_z * horiz_n.y) / weight_sum;
 }
 
 vec3 _mst_tangent_normal_to_surface(vec3 ts_normal, vec3 n) {
@@ -385,7 +416,7 @@ float sample_palette_weight(int slot, int color_idx) {
 	return max(texture(palette_weights_tex, vec2(u, v)).r, 0.0);
 }
 
-vec4 get_palette_color(int tex_idx, vec2 world_xz) {
+vec4 get_palette_color(int tex_idx, vec2 surface_coords) {
 	tex_idx = clamp(tex_idx, 0, 255);
 	int color_count = _palette_count(tex_idx);
 
@@ -401,7 +432,7 @@ vec4 get_palette_color(int tex_idx, vec2 world_xz) {
 	// Internal remap for palette blending: fixed higher-frequency sampling + inverted.
 	// This keeps the UI Global Noise settings independent of palette blending behavior.
 	float palette_gn_scale = gradient_mode ? 0.014 : 0.008;
-	vec2 uv = fract(world_xz * palette_gn_scale);
+	vec2 uv = fract(surface_coords * palette_gn_scale);
 	n = 1.0 - texture(global_noise_texture, uv).r;
 	if (gradient_mode) {
 		float centered = (clamp(n, 0.0, 1.0) - 0.5) * 2.0;
@@ -458,8 +489,8 @@ vec4 get_palette_color(int tex_idx, vec2 world_xz) {
 		vec4 result = sample_palette_entry(tex_idx, i0);
 		float boundary = 0.0;
 		float transition = max(total * 0.09, 0.0001);
-		vec3 dither_coord = floor(world_pos * 8.0);
-		float dither = hash3(dither_coord);
+		vec2 dither_coord = floor(surface_coords * 8.0);
+		float dither = hash(dither_coord);
 		for (int i = 0; i < 7; i++) {
 			if (i >= color_count - 1) break;
 			boundary += ws[i];
@@ -476,8 +507,8 @@ vec4 get_palette_color(int tex_idx, vec2 world_xz) {
 		float boundary = 0.0;
 		float transition = max(total * 0.09, 0.0001);
 		float seam = 0.12;
-		vec3 checker_coord = floor(world_pos * 4.0);
-		float checker = mod(checker_coord.x + checker_coord.y + checker_coord.z, 2.0);
+		vec2 checker_coord = floor(surface_coords * 4.0);
+		float checker = mod(checker_coord.x + checker_coord.y, 2.0);
 		for (int i = 0; i < 7; i++) {
 			if (i >= color_count - 1) break;
 			boundary += ws[i];
@@ -534,12 +565,12 @@ vec4 sample_material_by_index_tint(int index, vec2 base_uv, vec4 tint) {
 	return mix(tex, tint, clamp(tint.a, 0.0, 1.0));
 }
 
-vec4 sample_material_by_index(int index, vec2 base_uv) {
+vec4 sample_material_by_index_with_palette_coords(int index, vec2 base_uv, vec2 palette_coords) {
 	float scale = get_texture_scale(index);
 	vec2 uv = base_uv * scale;
 	vec4 tex = sample_texture_layer(index, uv);
 	if (index == 15) return tex;
-	vec4 palette = get_palette_color(index, world_pos.xz);
+	vec4 palette = get_palette_color(index, palette_coords);
 	// Heuristic: prefer assigned texture when it contains meaningful data (not a white placeholder).
 	// When a real texture exists, blend the palette additively (tint/multiply) rather than fully replacing the texture.
 	bool tex_has_content = (tex.a > 0.001) && (abs(tex.r - 1.0) > 0.001 || abs(tex.g - 1.0) > 0.001 || abs(tex.b - 1.0) > 0.001);
@@ -551,6 +582,33 @@ vec4 sample_material_by_index(int index, vec2 base_uv) {
 	}
 	// Fallback: if texture is effectively empty/placeholder, blend with palette as before.
 	return mix(tex, palette, clamp(palette.a, 0.0, 1.0));
+}
+
+vec4 sample_material_by_index(int index, vec2 base_uv) {
+	return sample_material_by_index_with_palette_coords(index, base_uv, world_pos.xz);
+}
+
+vec4 _mst_apply_material_tint(int index, vec4 tex, vec2 palette_coords) {
+	if (index == 15) return tex;
+	vec4 palette = get_palette_color(index, palette_coords);
+	bool tex_has_content = (tex.a > 0.001) && (abs(tex.r - 1.0) > 0.001 || abs(tex.g - 1.0) > 0.001 || abs(tex.b - 1.0) > 0.001);
+	if (tex_has_content) {
+		float pal_alpha = clamp(palette.a, 0.0, 1.0);
+		vec3 tinted = mix(tex.rgb, tex.rgb * palette.rgb, pal_alpha);
+		return vec4(tinted, tex.a);
+	}
+	return mix(tex, palette, clamp(palette.a, 0.0, 1.0));
+}
+
+vec4 sample_wall_material_by_index(int index) {
+	// Walls need a face-aligned strip projection, not a world-axis X/Z blend.
+	// The old triplanar-style wall sampling smeared diagonals because 45-degree faces
+	// blended two unrelated projections instead of following the actual wall tangent.
+	float wall_u_scale = max(cell_size.x * float(chunk_size.x - 1), 0.0001);
+	float wall_v_scale = max(cell_size.x * float(chunk_size.y - 1), 0.0001);
+	vec2 wall_palette_coords = _mst_wall_strip_uv(world_pos, vertex_normal);
+	vec2 wall_uv = wall_palette_coords / vec2(wall_u_scale, wall_v_scale);
+	return sample_material_by_index_with_palette_coords(index, wall_uv, wall_palette_coords);
 }
 
 vec3 sample_normal_by_index(int index, vec2 base_uv) {
@@ -585,7 +643,8 @@ vec3 stylized_texture_weights(vec3 weights) {
 		top_w = weights.z;
 	}
 
-	float width = clamp(texture_edge_width, 0.01, 0.45);
+	float width = mix(0.05, 0.30, clamp(blend_sharpness, 0.0, 1.0));
+	width = clamp(min(width, texture_edge_width), 0.01, 0.45);
 	float low = 0.5 - width;
 	float high = 0.5 + width;
 	vec3 shaped = vec3(
@@ -663,9 +722,10 @@ void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(virtual_vertex, 1.0)).xyz;
 #endif
 	vec2 rl_uv = UV;
-	float rl_factor = max(rl_uv.x, rl_uv.y);
-	ridge_blend_factor = vec4(step(ridge_threshold, rl_factor), 0.0, 0.0, 0.0);
-	ledge_blend_factor = vec4(step(ledge_threshold, rl_factor), 0.0, 0.0, 0.0);
+	float ridge_factor = max(rl_uv.x, rl_uv.y);
+	float ledge_factor = ridge_factor;
+	ridge_blend_factor = vec4(step(ridge_threshold, ridge_factor), 0.0, 0.0, 0.0);
+	ledge_blend_factor = vec4(step(ledge_threshold, ledge_factor), 0.0, 0.0, 0.0);
 
 	mat_indices = CUSTOM2.rgb;
 	mat_weights = vec2(CUSTOM2.a, CUSTOM0.r);
@@ -702,6 +762,7 @@ void fragment() {
 
 	vec4 floor_color;
 	vec3 wall_color;
+	int ridge_ledge_idx = int(round(nearest_wall_color_idx));
 
 	vec2 floor_uv = vec2(0.0);
 	float out_roughness = 1.0;
@@ -766,14 +827,14 @@ void fragment() {
 			}
 
 			if (blend_sharpness > 0.0) {
-				// Use linear weighting by default; keep hook for future sharpness but set neutral for now
-				float power = 1.0;
+				// Lower values keep the dominant material sharper, higher values keep blends softer.
+				float power = mix(5.0, 0.45, clamp(blend_sharpness, 0.0, 1.0));
 				weight_a = pow(weight_a, power);
 				weight_b = pow(weight_b, power);
 				weight_c = pow(weight_c, power);
 				float total = weight_a + weight_b + weight_c;
 				if (total > 0.001) { weight_a /= total; weight_b /= total; weight_c /= total; }
-			
+
 			}
 			if (use_stylized_texture_edges) {
 				vec3 styled_weights = stylized_texture_weights(vec3(weight_a, weight_b, weight_c));
@@ -817,10 +878,6 @@ void fragment() {
 		ALPHA = (alpha_mat == 15) ? 0.0 : 1.0;
 	}
 	else {
-		float wall_u_scale = max(cell_size.x * float(chunk_size.x - 1), 0.0001);
-		float wall_v_scale = max(cell_size.x * float(chunk_size.y - 1), 0.0001);
-		vec2 wall_uv = _mst_surface_plane_uv(world_pos, vertex_normal) / vec2(wall_u_scale, wall_v_scale);
-
 		int mat_a = int(round(mat_indices.x));
 		int mat_b = int(round(mat_indices.y));
 		int mat_c = int(round(mat_indices.z));
@@ -854,8 +911,8 @@ void fragment() {
 		}
 
 		if (blend_sharpness > 0.0) {
-			// Use linear weighting by default; keep hook for future sharpness but set neutral for now
-			float power = 1.0;
+			// Lower values keep the dominant material sharper, higher values keep blends softer.
+			float power = mix(5.0, 0.45, clamp(blend_sharpness, 0.0, 1.0));
 			weight_a = pow(weight_a, power);
 			weight_b = pow(weight_b, power);
 			weight_c = pow(weight_c, power);
@@ -873,9 +930,9 @@ void fragment() {
 		out_wet_enabled = _palette_wet_enabled(dom_mat);
 		out_wet_mode = _palette_wet_mode(dom_mat);
 
-		vec4 wall_mat = sample_material_by_index(mat_a, wall_uv) * weight_a
-					+ sample_material_by_index(mat_b, wall_uv) * weight_b
-					+ sample_material_by_index(mat_c, wall_uv) * weight_c;
+		vec4 wall_mat = sample_wall_material_by_index(mat_a) * weight_a
+					+ sample_wall_material_by_index(mat_b) * weight_b
+					+ sample_wall_material_by_index(mat_c) * weight_c;
 
 		ALBEDO = wall_mat.rgb;
 		ALPHA = wall_mat.a;
@@ -890,13 +947,12 @@ void fragment() {
 			float noise_variation = (blend_noise - 0.5) * rl_noise_strength;
 			mixed_blend_factor = step(ledge_threshold + noise_variation, max(UV.x, UV.y));
 		}
-		vec3 rl_x = sample_material_by_index(int(nearest_wall_color_idx), UV2 * tiling_factor_wall).rgb * tri_weights.x;
-		vec3 rl_z = sample_material_by_index(int(nearest_wall_color_idx), UV2 * tiling_factor_wall).rgb * tri_weights.z;
-		ALBEDO = mix(floor_color.rgb, rl_x + rl_z, mixed_blend_factor);
-		out_roughness = mix(out_roughness, _palette_roughness(int(nearest_wall_color_idx)), mixed_blend_factor);
+		vec3 rl_color = sample_material_by_index(ridge_ledge_idx, floor_uv).rgb;
+		ALBEDO = mix(floor_color.rgb, rl_color, mixed_blend_factor);
+		out_roughness = mix(out_roughness, _palette_roughness(ridge_ledge_idx), mixed_blend_factor);
 		if (mixed_blend_factor > 0.5) {
-			out_wet_enabled = _palette_wet_enabled(int(nearest_wall_color_idx));
-			out_wet_mode = _palette_wet_mode(int(nearest_wall_color_idx));
+			out_wet_enabled = _palette_wet_enabled(ridge_ledge_idx);
+			out_wet_mode = _palette_wet_mode(ridge_ledge_idx);
 		}
 	}
 	else if (use_ridge_texture && custom1.g > 0.5 && is_floor) {
@@ -905,14 +961,18 @@ void fragment() {
 			float noise_variation = (blend_noise - 0.5) * rl_noise_strength;
 			mixed_blend_factor = step(ridge_threshold + noise_variation, max(UV.x, UV.y));
 		}
-		vec3 rl_x = sample_material_by_index(int(nearest_wall_color_idx), UV2 * tiling_factor_wall).rgb * tri_weights.x;
-		vec3 rl_z = sample_material_by_index(int(nearest_wall_color_idx), UV2 * tiling_factor_wall).rgb * tri_weights.z;
-		ALBEDO = mix(floor_color.rgb, rl_x + rl_z, mixed_blend_factor);
-		out_roughness = mix(out_roughness, _palette_roughness(int(nearest_wall_color_idx)), mixed_blend_factor);
+		vec3 rl_color = sample_material_by_index(ridge_ledge_idx, floor_uv).rgb;
+		ALBEDO = mix(floor_color.rgb, rl_color, mixed_blend_factor);
+		out_roughness = mix(out_roughness, _palette_roughness(ridge_ledge_idx), mixed_blend_factor);
 		if (mixed_blend_factor > 0.5) {
-			out_wet_enabled = _palette_wet_enabled(int(nearest_wall_color_idx));
-			out_wet_mode = _palette_wet_mode(int(nearest_wall_color_idx));
+			out_wet_enabled = _palette_wet_enabled(ridge_ledge_idx);
+			out_wet_mode = _palette_wet_mode(ridge_ledge_idx);
 		}
+	}
+
+	if (has_prefab_colormap) {
+		vec4 prefab_col = texture(tex_prefab_colormap, UV);
+		ALBEDO *= prefab_col.rgb;
 	}
 
 
@@ -920,19 +980,11 @@ void fragment() {
 	float slot_noise_strength = slot_noise.x;
 	float slot_noise_scale = slot_noise.y;
 	if (slot_noise_strength > 0.0) {
-		vec2 scroll = vec2(0.0);
-		if (global_noise_scroll > 0.0) {
-			vec2 dir = normalize(wind_direction);
-			scroll = dir * TIME * wind_speed * 3.0 * global_noise_scroll;
-		}
-
-		// Floors: XZ projection. Walls: use ZY or XY (blended by wall orientation) to avoid streaking.
-		vec2 uv_floor = fract((world_pos.xz + scroll) * slot_noise_scale);
-		vec2 uv_x = fract((vec2(world_pos.z + scroll.y, world_pos.y)) * slot_noise_scale);
-		vec2 uv_z = fract((vec2(world_pos.x + scroll.x, world_pos.y)) * slot_noise_scale);
-
+		// Scroll intentionally disabled: global noise is a static visual driver for
+		// palette/texturing only.
+		vec2 uv_floor = fract(world_pos.xz * slot_noise_scale);
 		float gn_floor = texture(global_noise_texture, uv_floor).r;
-		float gn_wall = texture(global_noise_texture, uv_x).r * tri_weights.x + texture(global_noise_texture, uv_z).r * tri_weights.z;
+		float gn_wall = _mst_sample_wall_global_noise(world_pos, vertex_normal, slot_noise_scale);
 		float gn = is_floor ? gn_floor : gn_wall;
 
 		// Centered multiplier: darkens and brightens around 1.0.
@@ -957,24 +1009,10 @@ void fragment() {
 			// Wet: darkening with variation (no puddle pooling).
 			wet_mask = wet_amount * wet_variation;
 		} else {
-			// Glossy puddles: drive placement from detail_normal_texture (so changing the noise changes puddles),
-			// with a procedural fallback when the texture is effectively flat/white.
-			vec2 uv0 = fract(world_pos.xz * wet_puddle_noise_scale * 2.5);
-			vec2 uv1 = fract(world_pos.xz * wet_puddle_noise_scale * 6.0);
-
-			float t0a = texture(detail_normal_texture, uv0).r;
-			float t1a = texture(detail_normal_texture, uv1).r;
-
-			// Detect default/flat texture (typically hint_default_white) and fall back to procedural noise.
-			float t0b = texture(detail_normal_texture, uv0 + vec2(0.37, 0.19)).r;
-			float tflat = (1.0 - step(0.0005, abs(t0a - t0b))) * step(0.98, t0a);
-
-			float p0 = cheap_noise(world_pos.xz * wet_puddle_noise_scale * 2.5);
-			float p1 = cheap_noise(world_pos.xz * wet_puddle_noise_scale * 6.0);
-
-			float n_tex = clamp((t0a * 0.7 + t1a * 0.3) * wet_variation, 0.0, 1.0);
-			float n_proc = clamp((p0 * 0.7 + p1 * 0.3) * wet_variation, 0.0, 1.0);
-			float n = mix(n_tex, n_proc, tflat);
+			// Glossy puddles: use a dedicated slower global-noise field so puddle placement
+			// stays stable and seam-free instead of coming from procedural breakup.
+			vec2 puddle_uv = fract(world_pos.xz * GLOSSY_PUDDLE_GLOBAL_NOISE_SCALE);
+			float n = clamp(texture(global_noise_texture, puddle_uv).r * wet_variation, 0.0, 1.0);
 
 			// Invert mask: pick "valleys" of the noise as puddles (often nicer shapes).
 			n = 1.0 - n;
@@ -1016,7 +1054,7 @@ void light() {
 		} else {
 			float wall_u_scale = max(cell_size.x * float(chunk_size.x - 1), 0.0001);
 			float wall_v_scale = max(cell_size.x * float(chunk_size.y - 1), 0.0001);
-			normal_uv = _mst_surface_plane_uv(world_pos, vertex_normal) / vec2(wall_u_scale, wall_v_scale);
+			normal_uv = _mst_wall_strip_uv(world_pos, vertex_normal) / vec2(wall_u_scale, wall_v_scale);
 		}
 
 		vec3 nts = blend_slot_normals(normal_uv);

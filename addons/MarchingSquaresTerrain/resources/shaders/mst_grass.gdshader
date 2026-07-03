@@ -1,16 +1,24 @@
 shader_type spatial;
-render_mode diffuse_toon, depth_draw_opaque;
+render_mode diffuse_toon, depth_draw_opaque, depth_prepass_alpha;
 
 group_uniforms Visuals.Palette;
 // Palette data is provided via lookup textures (see mst_terrain.gdshaderinc for details).
 uniform sampler2D palette_colors_tex : filter_nearest;
 uniform sampler2D palette_weights_tex : filter_nearest;
 uniform sampler2D palette_meta_tex : filter_nearest;
+uniform sampler2D palette_surface_settings_tex : filter_nearest;
 uniform sampler2D palette_floor_noise_tex : filter_nearest;
 uniform sampler2D slot_albedo_tex : filter_nearest;
+uniform sampler2D tex_prefab_colormap : source_color;
+uniform bool has_prefab_colormap = false;
 group_uniforms;
 
 group_uniforms Visuals.Textures;
+uniform sampler2DArray vc_floor_tex_array : source_color, filter_nearest;
+uniform bool use_floor_tex_array = false;
+uniform float tex_scales[256];
+uniform ivec3 chunk_size = ivec3(33, 32, 33);
+uniform vec2 cell_size = vec2(2.0, 2.0);
 // Legacy per-grass-sprite textures (fallback)
 uniform sampler2D grass_texture_1 : source_color, filter_nearest;
 uniform sampler2D grass_texture_2 : source_color, filter_nearest;
@@ -74,8 +82,10 @@ group_uniforms;
 varying float v_brightness;
 varying vec3 v_grass_color;
 varying vec3 model_origin;
-varying vec3 instance_color;
+varying vec2 instance_ground_uv;
+varying float instance_has_ground_uv;
 varying float instance_slot_id;
+varying float v_grass_wet_mask;
 varying flat int instance_id;
 
 // ------------- Wind Choices --------------
@@ -119,6 +129,24 @@ int _palette_count(int slot) {
 
 int _palette_blend_mode(int slot) {
 	return int(round(_palette_meta(slot).g * 255.0));
+}
+
+float _palette_roughness(int slot) {
+	slot = clamp(slot, 0, 255);
+	float v = (float(slot) + 0.5) / 256.0;
+	return clamp(texture(palette_surface_settings_tex, vec2(0.5, v)).r, 0.0, 1.0);
+}
+
+float _palette_wet_enabled(int slot) {
+	slot = clamp(slot, 0, 255);
+	float v = (float(slot) + 0.5) / 256.0;
+	return texture(palette_surface_settings_tex, vec2(0.5, v)).g;
+}
+
+float _palette_grass_wetness(int slot) {
+	slot = clamp(slot, 0, 255);
+	float v = (float(slot) + 0.5) / 256.0;
+	return clamp(texture(palette_surface_settings_tex, vec2(0.5, v)).a, 0.0, 1.0);
 }
 
 vec3 _palette_floor_noise_settings(int slot) {
@@ -275,6 +303,33 @@ vec4 get_slot_albedo_color(int slot) {
 	return texture(slot_albedo_tex, vec2(0.5, v));
 }
 
+float get_texture_scale(int slot) {
+	slot = clamp(slot, 0, 255);
+	if (slot == 15) return 1.0;
+	return max(tex_scales[slot], 0.0001);
+}
+
+vec4 sample_floor_texture_layer(int slot, vec2 base_uv) {
+	slot = clamp(slot, 0, 255);
+	vec2 uv = fract(base_uv * get_texture_scale(slot));
+	if (slot == 15) return texture(vc_floor_tex_array, vec3(uv, 15.0));
+	return texture(vc_floor_tex_array, vec3(uv, float(slot)));
+}
+
+vec4 sample_floor_material_color(int slot, vec2 base_uv) {
+	vec4 tex = use_floor_tex_array ? sample_floor_texture_layer(slot, base_uv) : vec4(1.0);
+	if (slot == 15) return tex;
+
+	vec4 palette = get_grass_palette_color(slot, world_origin.xz, world_origin.y);
+	bool tex_has_content = (tex.a > 0.001) && (abs(tex.r - 1.0) > 0.001 || abs(tex.g - 1.0) > 0.001 || abs(tex.b - 1.0) > 0.001);
+	if (tex_has_content) {
+		float pal_alpha = clamp(palette.a, 0.0, 1.0);
+		vec3 tinted = mix(tex.rgb, tex.rgb * palette.rgb, pal_alpha);
+		return vec4(tinted, tex.a);
+	}
+	return mix(tex, palette, clamp(palette.a, 0.0, 1.0));
+}
+
 void vertex() {
 
 	// Billboarding
@@ -306,10 +361,11 @@ void vertex() {
 
 	model_origin = (MODELVIEW_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	world_origin = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-	instance_color = INSTANCE_CUSTOM.rgb;
+	instance_ground_uv = INSTANCE_CUSTOM.rg;
+	instance_has_ground_uv = INSTANCE_CUSTOM.b;
 	instance_slot_id = floor(clamp(INSTANCE_CUSTOM.a, 0.0, 1.0) * 255.0 + 0.5);
 	instance_id = INSTANCE_ID;
-	
+
 	int slot = int(instance_slot_id);
 	vec3 _gc;
 	bool use_base = false;
@@ -325,10 +381,27 @@ void vertex() {
 	vec3 slot_col = slot_albedo.rgb;
 	vec3 base_col = slot_albedo.a > 0.5 ? slot_col : palette_col;
 	float pal_alpha = clamp(palette.a, 0.0, 1.0);
-	vec3 sampled_floor_col = mix(instance_color, instance_color * palette_col, pal_alpha);
+	vec3 floor_sample_col = vec3(1.0);
+	if (use_floor_tex_array) {
+		vec2 floor_world_tile = cell_size * vec2(float(chunk_size.x - 1), float(chunk_size.z - 1));
+		vec2 floor_uv = vec2(
+			world_origin.x / max(floor_world_tile.x, 0.0001),
+			world_origin.z / max(floor_world_tile.y, 0.0001)
+		);
+		floor_sample_col = sample_floor_material_color(slot, floor_uv).rgb;
+	}
+	if (has_prefab_colormap && instance_has_ground_uv > 0.5) {
+		floor_sample_col *= texture(tex_prefab_colormap, instance_ground_uv).rgb;
+	}
+	vec3 sampled_floor_col = use_floor_tex_array ? floor_sample_col : mix(floor_sample_col, floor_sample_col * palette_col, pal_alpha);
 	_gc = use_base ? base_col : sampled_floor_col;
 	v_grass_color = _gc;
-	
+	v_grass_wet_mask = 0.0;
+	if (_palette_wet_enabled(slot) > 0.5) {
+		float top_half_mask = smoothstep(0.70, 0.98, 1.0 - UV.y);
+		v_grass_wet_mask = clamp(_palette_grass_wetness(slot), 0.0, 1.0) * top_half_mask;
+	}
+
 	v_brightness = 1.0;
 
 	vec3 world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
@@ -362,12 +435,9 @@ void fragment() {
 	float floor_noise_strength = clamp(floor_noise.r, 0.0, 1.0) * step(0.5, floor_noise.b);
 	float floor_noise_scale = clamp(floor_noise.g, 0.001, 1.0);
 	if (floor_noise_strength > 0.0) {
-		vec2 scroll = vec2(0.0);
-		if (global_noise_scroll > 0.0) {
-			vec2 dir = normalize(wind_direction);
-			scroll = dir * TIME * wind_speed * 3.0 * global_noise_scroll;
-		}
-		vec2 uv = fract((world_origin.xz + scroll) * floor_noise_scale);
+		// Scroll intentionally disabled: grass follows the same static global-noise
+		// field as terrain tinting.
+		vec2 uv = fract(world_origin.xz * floor_noise_scale);
 		float gn = texture(global_noise_texture, uv).r;
 		// Centered multiplier: darkens and brightens around 1.0.
 		float mult = mix(1.0 - floor_noise_strength, 1.0 + floor_noise_strength, clamp(gn, 0.0, 1.0));
@@ -402,6 +472,11 @@ void fragment() {
 
 	if (ALPHA < 0.1) discard;
 
+	float grass_wet_mask = v_grass_wet_mask;
+	ALBEDO *= (1.0 - 0.14 * grass_wet_mask);
+	ALBEDO = mix(ALBEDO, ALBEDO * 1.05, grass_wet_mask * 0.35);
+	ROUGHNESS = mix(1.0, _palette_roughness(slot), grass_wet_mask);
+
 	ALBEDO *= v_brightness;
 
 	LIGHT_VERTEX = model_origin;
@@ -422,4 +497,14 @@ void light() {
 	toon_light = clamp(toon_light, 0.0, 1.0);
 	vec3 light_color = mix(shadow_color.rgb, LIGHT_COLOR.rgb, toon_light);
 	DIFFUSE_LIGHT += light_color * ATTENUATION;
+
+	float wet_mask = clamp(v_grass_wet_mask, 0.0, 1.0);
+	if (wet_mask > 0.001) {
+		vec3 half_vec = normalize(LIGHT + VIEW);
+		float ndoth = max(dot(NORMAL, half_vec), 0.0);
+		float spec = pow(ndoth, mix(10.0, 22.0, wet_mask));
+		float fres = pow(1.0 - max(dot(NORMAL, VIEW), 0.0), 3.0);
+		float wet_spec = (spec * 0.55 + fres * 0.25) * wet_mask;
+		SPECULAR_LIGHT += LIGHT_COLOR.rgb * wet_spec * ATTENUATION;
+	}
 }

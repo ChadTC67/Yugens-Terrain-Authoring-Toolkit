@@ -14,9 +14,13 @@ func is_editor() -> bool:
 	return Engine.is_editor_hint()
 
 
-func get_edited_scene_root():
+func get_edited_scene_root() -> Node:
 	var editor_interface = Engine.get_singleton('EditorInterface')
 	return editor_interface.get_edited_scene_root()
+
+func mark_scene_as_unsaved() -> void:
+	var editor_interface = Engine.get_singleton('EditorInterface')
+	editor_interface.mark_scene_as_unsaved()
 
 
 func get_root_for_node(node: Node) -> Node:
@@ -48,4 +52,3 @@ static func load_resource(path: String) -> Resource:
 
 static func load_script(path: String) -> Script:
 	return load_resource(path) as Script
-

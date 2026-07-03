@@ -16,12 +16,12 @@ static func generate_terrain_uid() -> String:
 static func ensure_directory_exists(path: String) -> bool:
 	if DirAccess.dir_exists_absolute(path):
 		return true
-	
+
 	var err := DirAccess.make_dir_recursive_absolute(path)
 	if err != OK:
 		printerr("MSTDataHandler: Failed to create directory: ", path, " Error: ", err)
 		return false
-	
+
 	return true
 
 
@@ -36,7 +36,7 @@ static func generate_data_directory(terrain: MarchingSquaresTerrain) -> String:
 	var scene_root := inst.get_root_for_node(terrain)
 	if not scene_root or scene_root.scene_file_path.is_empty():
 		return ""
-	
+
 	var scene_path := scene_root.scene_file_path
 	var scene_dir := scene_path.get_base_dir()
 	var scene_name := scene_path.get_file().get_basename()
@@ -49,20 +49,20 @@ static func copy_recursive(from_path: String, to_path: String) -> void:
 	if dir == null:
 		push_error("Cannot open source directory: " + from_path)
 		return
-	
+
 	DirAccess.make_dir_recursive_absolute(to_path)
-	
+
 	dir.list_dir_begin()
 	var file_name = dir.get_next()
-	
+
 	while file_name != "":
 		if file_name == "." or file_name == "..":
 			file_name = dir.get_next()
 			continue
-		
+
 		var src = from_path.path_join(file_name)
 		var dst = to_path.path_join(file_name)
-		
+
 		if dir.current_is_dir():
 			copy_recursive(src, dst)
 		else:
@@ -143,17 +143,17 @@ static func _chunk_has_source_data(terrain: MarchingSquaresTerrain, chunk: March
 ## Save all dirty chunks to external .res files.
 ## Called from terrain._notification(NOTIFICATION_EDITOR_PRE_SAVE).
 static func save_all_chunks(terrain: MarchingSquaresTerrain) -> bool:
-	
+
 	var dir_path := terrain.data_directory
 	if dir_path.is_empty():
 		# No valid data directory - scene might not be saved yet
 		return false
-	
+
 	# Ensure directory exists
 	if not ensure_directory_exists(dir_path):
 		printerr("MSTDataHandler: Failed to create data directory: ", dir_path)
 		return false
-	
+
 	# Calculate initial size
 	var initial_size : int = MarchingSquaresFileUtils.get_directory_size_recursive(dir_path)
 	var scene_chunks: Array[MarchingSquaresTerrainChunk] = _get_scene_chunks(terrain)
@@ -168,7 +168,7 @@ static func save_all_chunks(terrain: MarchingSquaresTerrain) -> bool:
 		var mapped_chunk : MarchingSquaresTerrainChunk = terrain.chunks[chunk_coords]
 		if mapped_chunk != null:
 			chunks_to_save.append(mapped_chunk)
-	
+
 	var saved_count := 0
 	var all_saved := true
 	for chunk in chunks_to_save:
@@ -176,12 +176,12 @@ static func save_all_chunks(terrain: MarchingSquaresTerrain) -> bool:
 		# Skip chunks being removed during undo/redo
 		if chunk._skip_save_on_exit:
 			continue
-		
+
 		# Determine if chunk needs saving:
 		var needs_save : bool = chunk._data_dirty
 		if not needs_save and not metadata_exists(dir_path, chunk_coords):
 			needs_save = true
-		
+
 		if needs_save:
 			if not _chunk_has_source_data(terrain, chunk):
 				push_error("MSTDataHandler: Refusing to save invalid or uninitialized chunk source data for " + str(chunk_coords))
@@ -192,11 +192,11 @@ static func save_all_chunks(terrain: MarchingSquaresTerrain) -> bool:
 				saved_count += 1
 			else:
 				all_saved = false
-	
+
 	if saved_count > 0:
 		_report_storage_size_change(terrain, dir_path, initial_size, saved_count)
 		terrain._last_storage_mode = terrain.storage_mode
-	
+
 	if all_saved:
 		# Clean up orphaned chunk directories that no longer exist in scene only after
 		# The current chunks have been safely persisted.
@@ -204,7 +204,7 @@ static func save_all_chunks(terrain: MarchingSquaresTerrain) -> bool:
 			cleanup_orphaned_chunk_files(terrain)
 		cleanup_orphaned_terrain_directories(terrain)
 		terrain._storage_initialized = true
-	
+
 	return all_saved
 
 
@@ -214,28 +214,28 @@ static func save_chunk_resources(terrain: MarchingSquaresTerrain, chunk: Marchin
 	if dir_path.is_empty():
 		printerr("MSTDataHandler: Cannot save chunk - no valid data directory")
 		return false
-	
+
 	var chunk_name := "chunk_%d_%d" % [chunk.chunk_coords.x, chunk.chunk_coords.y]
 	var chunk_dir := dir_path.path_join(chunk_name)
 	if not ensure_directory_exists(chunk_dir):
 		printerr("MSTDataHandler: Cannot save chunk - failed to create ", chunk_dir)
 		return false
-	
-	# Export chunk data 
+
+	# Export chunk data
 	var data : MSTChunkData = export_chunk_data(chunk)
-	
+
 	# Clear ephemeral data based on mode and config
 	var is_baked_mode : bool = terrain.storage_mode == MarchingSquaresTerrain.StorageMode.BAKED
-	
+
 	if not is_baked_mode:
 		data.mesh = null
-	
+
 	if not is_baked_mode or not terrain.bake_grass:
 		data.grass_multimesh = null
-	
+
 	if not is_baked_mode or not terrain.bake_collision:
 		data.collision_faces = PackedVector3Array()
-	
+
 	var metadata_path := chunk_dir.path_join("metadata.res")
 	var err := ResourceSaver.save(data, metadata_path, ResourceSaver.FLAG_COMPRESS)
 	if err != OK:
@@ -244,7 +244,7 @@ static func save_chunk_resources(terrain: MarchingSquaresTerrain, chunk: Marchin
 	if not FileAccess.file_exists(metadata_path):
 		printerr("MSTDataHandler: Save reported OK, but metadata is missing: ", metadata_path)
 		return false
-	
+
 	print_verbose("MSTDataHandler: Saved chunk ", chunk.chunk_coords)
 	return true
 
@@ -258,12 +258,12 @@ static func load_terrain_data(terrain: MarchingSquaresTerrain) -> void:
 	print_verbose("MSTDataHandler: load_terrain_data")
 	if dir_path.is_empty():
 		return
-	
+
 	# Scan for chunk directories (format: chunk_X_Y/)
 	var dir := DirAccess.open(dir_path)
 	if not dir:
 		return
-	
+
 	var chunk_dirs : Array[Vector2i] = []
 	dir.list_dir_begin()
 	var folder_name := dir.get_next()
@@ -276,12 +276,12 @@ static func load_terrain_data(terrain: MarchingSquaresTerrain) -> void:
 				chunk_dirs.append(coords)
 		folder_name = dir.get_next()
 	dir.list_dir_end()
-	
+
 	if chunk_dirs.is_empty():
 		return
-	
+
 	print_verbose("MSTDataHandler: Loading ", chunk_dirs.size(), " chunk(s) from ", dir_path)
-	
+
 	for coords in chunk_dirs:
 		load_chunk_from_directory(terrain, coords)
 
@@ -291,24 +291,24 @@ static func load_chunk_from_directory(terrain: MarchingSquaresTerrain, coords: V
 	var dir_path := terrain.data_directory
 	var chunk_name := "chunk_%d_%d" % [coords.x, coords.y]
 	var chunk_dir := dir_path.path_join(chunk_name)
-	
+
 	# Mesh, collision, and grass are regenerated separately by the chunk
 	var chunk : MarchingSquaresTerrainChunk = terrain.chunks.get(coords)
 	if not chunk:
 		return
-	
+
 	# Load metadata source data
 	var metadata_path := chunk_dir.path_join("metadata.res")
 	if ResourceLoader.exists(metadata_path):
 		var data : MSTChunkData = load(metadata_path)
 		if data:
 			import_chunk_data(chunk, data)
-	
+
 	print_verbose("MSTDataHandler: Loaded chunk ", coords)
 
 #endregion
 
-#region data export 
+#region data export
 
 ## Export chunk state to MSTChunkData for external storage.
 ## Converts color maps to compact byte arrays.
@@ -316,16 +316,16 @@ static func export_chunk_data(chunk: MarchingSquaresTerrainChunk) -> MSTChunkDat
 	var data := MSTChunkData.new()
 	data.chunk_coords = chunk.chunk_coords
 	data.merge_mode = chunk.merge_mode
-	
+
 	# Source data
 	data.height_map = chunk.height_map.duplicate(true)
-	
+
 	# Convert to new data model
 	var cell_count : int = chunk.color_map_0.size()
 	data.ground_texture_idx.resize(cell_count)
 	data.wall_texture_idx.resize(cell_count)
 	data.grass_mask.resize(cell_count)
-	
+
 	for i in cell_count:
 		data.ground_texture_idx[i] = _colors_to_texture_idx(chunk.color_map_0[i], chunk.color_map_1[i])
 		data.wall_texture_idx[i] = _colors_to_texture_idx(chunk.wall_color_map_0[i], chunk.wall_color_map_1[i])
@@ -336,17 +336,17 @@ static func export_chunk_data(chunk: MarchingSquaresTerrainChunk) -> MSTChunkDat
 			data.grass_mask[i] = 2
 		else:
 			data.grass_mask[i] = 1
-	
+
 	# Ephemeral data for BAKED mode
 	data.mesh = chunk.mesh
-	
+
 	if chunk.terrain_system.bake_grass and chunk.grass_planter:
 		data.grass_multimesh = chunk.grass_planter.multimesh
 	data.wall_paint_stamp_positions = chunk.wall_paint_stamp_positions
 	data.wall_paint_stamp_normals = chunk.wall_paint_stamp_normals
 	data.wall_paint_stamp_radii = chunk.wall_paint_stamp_radii
 	data.wall_paint_stamp_texture_indices = chunk.wall_paint_stamp_texture_indices
-	
+
 	if chunk.terrain_system.bake_collision:
 		# Find collision shape
 		for child in chunk.get_children():
@@ -355,19 +355,19 @@ static func export_chunk_data(chunk: MarchingSquaresTerrainChunk) -> MSTChunkDat
 					if shape_child is CollisionShape3D and shape_child.shape is ConcavePolygonShape3D:
 						data.set_collision_from_shape(shape_child.shape)
 						break
-	
-	# Clear legacy arrays 
+
+	# Clear legacy arrays
 	data.color_map_0 = PackedColorArray()
 	data.color_map_1 = PackedColorArray()
 	data.wall_color_map_0 = PackedColorArray()
 	data.wall_color_map_1 = PackedColorArray()
 	data.grass_mask_map = PackedColorArray()
-	
+
 	return data
 
 #endregion
 
-#region data import 
+#region data import
 
 ## Restore chunk state from MSTChunkData (loaded from external file).
 ## Expands compact byte arrays back to color arrays for runtime use.
@@ -375,36 +375,36 @@ static func import_chunk_data(chunk: MarchingSquaresTerrainChunk, data: MSTChunk
 	if not data:
 		printerr("MSTDataHandler: import_chunk_data called with null data")
 		return
-	
+
 	chunk.chunk_coords = data.chunk_coords
 	chunk.merge_mode = data.merge_mode as MarchingSquaresTerrainChunk.Mode
 	chunk.height_map = data.height_map.duplicate(true)
-	
+
 	# Restore baked assets if present
 	if data.mesh:
 		chunk.mesh = data.mesh
 	elif chunk.terrain_system.storage_mode == MarchingSquaresTerrain.StorageMode.BAKED:
 		push_warning("Baking enabled, but terrain-resource does not contain mesh data")
-		
+
 	if chunk.terrain_system.bake_grass and not data.grass_multimesh:
 		push_warning("Grass baking enabled, but terrain-resource does not contain grass data")
-	
+
 	if chunk.terrain_system.bake_collision and data.collision_faces.is_empty():
 		push_warning("Collision baking enabled, but terrain-resource does not contain collision data")
-	
+
 	if data.grass_multimesh:
 		chunk._temp_grass_multimesh = data.grass_multimesh
 	chunk.wall_paint_stamp_positions = data.wall_paint_stamp_positions
 	chunk.wall_paint_stamp_normals = data.wall_paint_stamp_normals
 	chunk.wall_paint_stamp_radii = data.wall_paint_stamp_radii
 	chunk.wall_paint_stamp_texture_indices = data.wall_paint_stamp_texture_indices
-	
+
 	if not data.collision_faces.is_empty():
 		chunk._temp_collision_shapes = [data.get_collision_shape()]
-	
+
 	# Check format version
 	var is_v2 : bool = data.is_v2_format()
-	
+
 	if is_v2:
 		# If we use the new format, expand the compact arrays.
 		var cell_count : int = data.ground_texture_idx.size()
@@ -413,16 +413,16 @@ static func import_chunk_data(chunk: MarchingSquaresTerrainChunk, data: MSTChunk
 		chunk.wall_color_map_0.resize(cell_count)
 		chunk.wall_color_map_1.resize(cell_count)
 		chunk.grass_mask_map.resize(cell_count)
-	
+
 		for i in cell_count:
 			var ground_colors : Array = _texture_idx_to_colors(data.ground_texture_idx[i])
 			chunk.color_map_0[i] = ground_colors[0]
 			chunk.color_map_1[i] = ground_colors[1]
-			
+
 			var wall_colors : Array = _texture_idx_to_colors(data.wall_texture_idx[i])
 			chunk.wall_color_map_0[i] = wall_colors[0]
 			chunk.wall_color_map_1[i] = wall_colors[1]
-			
+
 			var mask_value := int(data.grass_mask[i])
 			if mask_value <= 0:
 				chunk.grass_mask_map[i] = Color(0, 0, 0, 0)
@@ -439,7 +439,7 @@ static func import_chunk_data(chunk: MarchingSquaresTerrainChunk, data: MSTChunk
 		chunk.wall_color_map_0 = data.wall_color_map_0.duplicate()
 		chunk.wall_color_map_1 = data.wall_color_map_1.duplicate()
 		chunk.grass_mask_map = data.grass_mask_map.duplicate()
-		# Mark dirty to force re-save 
+		# Mark dirty to force re-save
 		chunk._data_dirty = true
 
 #endregion
@@ -451,19 +451,19 @@ static func needs_migration(terrain: MarchingSquaresTerrain) -> bool:
 	# If already initialized with external storage, no migration needed
 	if terrain._storage_initialized:
 		return false
-	
+
 	# Check if any chunks have embedded data but no external files exist
 	var dir_path := terrain.data_directory
 	if dir_path.is_empty():
 		return false
-	
+
 	for chunk_coords in terrain.chunks:
 		var chunk : MarchingSquaresTerrainChunk = terrain.chunks[chunk_coords]
 		# Check if chunk has embedded data (height_map populated)
 		if chunk.height_map and not chunk.height_map.is_empty():
 			if not metadata_exists(dir_path, chunk_coords):
 				return true
-	
+
 	return false
 
 
@@ -471,12 +471,12 @@ static func needs_migration(terrain: MarchingSquaresTerrain) -> bool:
 ## Marks all chunks as dirty and triggers save.
 static func migrate_to_external_storage(terrain: MarchingSquaresTerrain) -> void:
 	print_verbose("MSTDataHandler: Migrating to external storage...")
-	
+
 	# Mark all chunks as dirty to force save
 	for chunk_coords in terrain.chunks:
 		var chunk : MarchingSquaresTerrainChunk = terrain.chunks[chunk_coords]
 		chunk._data_dirty = true
-	
+
 	if save_all_chunks(terrain):
 		print_verbose("MSTDataHandler: Migration complete. External data saved to: " + str(terrain.data_directory))
 	else:
@@ -491,14 +491,14 @@ static func cleanup_orphaned_chunk_files(terrain: MarchingSquaresTerrain) -> voi
 	var dir_path := terrain.data_directory
 	if dir_path.is_empty():
 		return
-	
+
 	var dir := DirAccess.open(dir_path)
 	if not dir:
 		return
-	
+
 	var orphaned_dirs : Array[String] = []
 	var scene_chunk_coords := _get_chunk_coords_in_scene(terrain)
-	
+
 	dir.list_dir_begin()
 	var folder_name := dir.get_next()
 	while folder_name != "":
@@ -514,7 +514,7 @@ static func cleanup_orphaned_chunk_files(terrain: MarchingSquaresTerrain) -> voi
 					orphaned_dirs.append(dir_path.path_join(folder_name))
 		folder_name = dir.get_next()
 	dir.list_dir_end()
-	
+
 	# Delete orphaned directories
 	for orphaned_dir in orphaned_dirs:
 		_delete_chunk_directory(orphaned_dir)
@@ -526,7 +526,7 @@ static func _delete_chunk_directory(chunk_dir: String) -> void:
 	var dir := DirAccess.open(chunk_dir)
 	if not dir:
 		return
-	
+
 	# Delete all files in directory
 	dir.list_dir_begin()
 	var file_name := dir.get_next()
@@ -538,7 +538,7 @@ static func _delete_chunk_directory(chunk_dir: String) -> void:
 				printerr("MSTDataHandler: Failed to delete file ", file_name, " in ", chunk_dir)
 		file_name = dir.get_next()
 	dir.list_dir_end()
-	
+
 	# Remove the directory itself
 	err = DirAccess.remove_absolute(chunk_dir.trim_suffix("/"))
 	if err != OK:
@@ -569,7 +569,7 @@ static func _colors_to_texture_idx(c0: Color, c1: Color) -> int:
 		if c1.b > c1_m: c1_m = c1.b; c1_idx = 2
 		if c1.a > c1_m: c1_idx = 3
 		return c0_idx * 4 + c1_idx
-	
+
 	# New encoding: store texture index in c0.r (0..1 mapped to 0..255)
 	return clampi(int(round(clampf(c0.r, 0.0, 1.0) * 255.0)), 0, 255)
 
@@ -592,30 +592,30 @@ static func cleanup_orphaned_terrain_directories(terrain: MarchingSquaresTerrain
 	var tree := terrain.get_tree()
 	if not tree:
 		return
-	
+
 	var scene_root := EngineWrapper.instance.get_root_for_node(terrain)
 	if not scene_root or scene_root.scene_file_path.is_empty():
 		return
-	
+
 	# Get the TerrainData folder for this scene
 	var scene_path := scene_root.scene_file_path
 	var scene_dir := scene_path.get_base_dir()
 	var scene_name := scene_path.get_file().get_basename()
 	var terrain_data_dir := scene_dir.path_join(scene_name + "_TerrainData")
-	
+
 	if not DirAccess.dir_exists_absolute(terrain_data_dir):
 		return
-	
+
 	# Collect all terrain data_UID currently in the scene
 	var active_dirs : Dictionary[String, Array] = _collect_terrain_dirs_recursive(scene_root)
 	if active_dirs.is_empty():
 		return
-	
+
 	# Scan terrain data directory for orphaned folders
 	var dir := DirAccess.open(terrain_data_dir)
 	if not dir:
 		return
-	
+
 	var orphaned_dirs : Array[String] = []
 	dir.list_dir_begin()
 	var folder_name := dir.get_next()
@@ -626,7 +626,7 @@ static func cleanup_orphaned_terrain_directories(terrain: MarchingSquaresTerrain
 				orphaned_dirs.append(res_name)
 		folder_name = dir.get_next()
 	dir.list_dir_end()
-	
+
 	# Delete orphaned directories
 	for orphaned_dir in orphaned_dirs:
 		_delete_directory_recursive(orphaned_dir)
@@ -652,7 +652,7 @@ static func _delete_directory_recursive(dir_path: String) -> void:
 	var dir := DirAccess.open(dir_path)
 	if not dir:
 		return
-	
+
 	dir.list_dir_begin()
 	var item_name := dir.get_next()
 	while item_name != "":
@@ -662,7 +662,7 @@ static func _delete_directory_recursive(dir_path: String) -> void:
 			dir.remove(item_name)
 		item_name = dir.get_next()
 	dir.list_dir_end()
-	
+
 	DirAccess.remove_absolute(dir_path.trim_suffix("/"))
 
 
@@ -671,24 +671,24 @@ static func _report_storage_size_change(terrain: MarchingSquaresTerrain, dir_pat
 	var final_size : int = MarchingSquaresFileUtils.get_directory_size_recursive(dir_path)
 	var size_difference_bytes : int = final_size - initial_size
 	var percentage_change : float = 0.0
-	
+
 	if initial_size > 0:
 		percentage_change = (float(size_difference_bytes) / float(initial_size)) * 100.0
 	elif size_difference_bytes > 0:
 		percentage_change = 100.0
-	
+
 	var sign_string := "+" if size_difference_bytes >= 0 else ""
-	
+
 	var previous_storage_mode_name : String = MarchingSquaresTerrain.StorageMode.keys()[terrain._last_storage_mode]
 	var current_storage_mode_name : String = MarchingSquaresTerrain.StorageMode.keys()[terrain.storage_mode]
-	
+
 	print_verbose("MSTDataHandler: Saved " + str(saved_count) + " chunk(s) to " + str(dir_path))
 	print_verbose("MSTDataHandler: Storage Size: %s (%s) -> %s (%s) (%s%.2f%%)" % [
-		String.humanize_size(initial_size), 
+		String.humanize_size(initial_size),
 		previous_storage_mode_name,
-		String.humanize_size(final_size), 
+		String.humanize_size(final_size),
 		current_storage_mode_name,
-		sign_string, 
+		sign_string,
 		percentage_change
 	])
 

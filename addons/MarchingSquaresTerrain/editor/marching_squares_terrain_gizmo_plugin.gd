@@ -16,7 +16,6 @@ var _terrain_gizmos : Dictionary[Node, MarchingSquaresTerrainGizmo] = {}
 
 
 func _create_gizmo(node: Node):
-	#return null
 	if node is MarchingSquaresTerrainChunk:
 		if not _chunk_gizmos.has(node):
 			node.tree_exited.connect(func(): _chunk_gizmos.erase(node), CONNECT_ONE_SHOT)
@@ -48,8 +47,3 @@ func clear() -> void:
 
 func _get_gizmo_name() -> String:
 	return "Marching Squares Terrain"
-
-
-
-
-

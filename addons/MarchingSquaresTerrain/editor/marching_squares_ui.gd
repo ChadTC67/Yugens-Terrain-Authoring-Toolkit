@@ -50,27 +50,27 @@ func _deferred_enter_tree() -> void:
 	if not EngineWrapper.instance.is_editor():
 		push_error("Attempt to load during runtime (NOT SUPPORTED IN CURRENT BUILD)")
 		return
-	
+
 	if not plugin:
 		push_error("Plugin not ready")
 		return
-	
+
 	toolbar = TOOLBAR.new()
 	toolbar.tool_changed.connect(_on_tool_changed)
 	toolbar.hide()
-	
+
 	tool_attributes = TOOL_ATTRIBUTES.new()
 	tool_attributes.setting_changed.connect(_on_setting_changed)
 	tool_attributes.terrain_setting_changed.connect(_on_terrain_setting_changed)
 	tool_attributes.plugin = plugin
 	tool_attributes.attribute_list = MarchingSquaresToolAttributesList.new()
 	tool_attributes.hide()
-	
+
 	texture_settings = TEXTURE_SETTINGS.new()
 	texture_settings.texture_setting_changed.connect(_on_texture_setting_changed)
 	texture_settings.plugin = plugin
 	texture_settings.hide()
-	
+
 	plugin.add_control_to_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_SIDE_LEFT, toolbar)
 	plugin.add_control_to_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_BOTTOM, tool_attributes)
 	plugin.add_control_to_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_SIDE_RIGHT, texture_settings)
@@ -80,7 +80,7 @@ func _exit_tree() -> void:
 	plugin.remove_control_from_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_SIDE_LEFT, toolbar)
 	plugin.remove_control_from_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_BOTTOM, tool_attributes)
 	plugin.remove_control_from_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_SIDE_RIGHT, texture_settings)
-	
+
 	toolbar.queue_free()
 	tool_attributes.queue_free()
 	texture_settings.queue_free()
@@ -94,16 +94,16 @@ func set_visible(is_visible: bool) -> void:
 		tool_attributes.set_visible(is_visible)
 	if texture_settings != null and is_instance_valid(texture_settings) and texture_settings.has_method("set_visible"):
 		texture_settings.set_visible(is_visible)
-	
+
 	if is_visible:
 		await get_tree().create_timer(.01).timeout
-		
+
 		if active_tool == null:
 			active_tool = 0
-		
+
 		if toolbar and toolbar.tool_buttons.has(active_tool):
 			toolbar.tool_buttons[active_tool].set_pressed(true)
-		
+
 		tool_attributes.show()
 		_on_tool_changed(active_tool)
 
@@ -111,7 +111,7 @@ func set_visible(is_visible: bool) -> void:
 
 func _on_tool_changed(tool_index: int) -> void:
 	active_tool = tool_index
-	
+
 	if tool_index == 5: # Vertex Painting:
 		tool_attributes.attribute_list = MarchingSquaresToolAttributesList.new()
 		texture_settings.show()
@@ -119,11 +119,11 @@ func _on_tool_changed(tool_index: int) -> void:
 			texture_settings.add_texture_settings()
 	else:
 		texture_settings.hide()
-	
+
 	if tool_index == 3: # Bridge tool:
 		plugin.falloff = false
 		plugin.BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", false)
-	
+
 	plugin.active_tool = tool_index
 	plugin.mode = tool_index
 	# Keep the user's selected material; only clamp to a valid range.
@@ -146,8 +146,8 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 						visible = (plugin.vp_falloff_mode == plugin.VertexPaintFalloffMode.DITHERED)
 					plugin.BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", visible)
 		"vp_falloff_mode":
-			if p_value is int:
-				plugin.vp_falloff_mode = p_value
+			if p_value is bool:
+				plugin.vp_falloff_mode = plugin.VertexPaintFalloffMode.DITHERED if p_value else plugin.VertexPaintFalloffMode.HARD
 		"size":
 			if p_value is float or p_value is int:
 				plugin.brush_size = float(p_value)
@@ -257,6 +257,9 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 		"blend_mode":
 			if p_value is int:
 				terrain.blend_mode = p_value
+		"blend_sharpness":
+			if p_value is float or p_value is int:
+				terrain.blend_sharpness = float(p_value)
 		"wall_threshold":
 			if p_value is float:
 				terrain.wall_threshold = p_value
@@ -278,6 +281,12 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 		"grass_size":
 			if p_value is Vector2:
 				terrain.grass_size = p_value
+		"use_flat_normals":
+			if p_value is bool:
+				terrain.use_flat_normals = p_value
+		"use_cell_shading":
+			if p_value is bool:
+				terrain.use_cell_shading = p_value
 		"ridge_threshold":
 			if p_value is float:
 				terrain.ridge_threshold = p_value
@@ -298,6 +307,13 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 				# +1 because collision layers don't start from 0 like indexed items
 				# +8 because the selectable collision layers range from 9 to 32
 				terrain.extra_collision_layer = p_value + 9
+		"prefab_set":
+			if p_value is MarchingSquaresPrefabSet:
+				terrain.prefab_set = p_value
+				if p_value.flats.is_empty() or p_value.orthogonals.is_empty() or p_value.diagonals.is_empty() or p_value.fillers.is_empty():
+					push_warning("This prefab set lacks pieces, the geometry will appear empty or have holes! Make sure to complete the prefab set before assigning it. You can clear the prefab set to revert the changes.")
+			elif p_value == null:
+				terrain.prefab_set = null
 
 
 func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> void:
@@ -305,7 +321,7 @@ func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 	if not terrain:
 		push_error("No current terrain node to apply texture settings to")
 		return
-	
+
 	# Texture properties (Texture2D or null)
 	if p_setting_name in TEXTURE_PROPERTIES:
 		if p_value is Texture2D or p_value == null:
@@ -322,7 +338,7 @@ func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 	elif p_setting_name in TEXTURE_SCALE_PROPERTIES:
 		if p_value is float or p_value is int:
 			terrain.set(p_setting_name, float(p_value))
-	
+
 	if terrain.current_texture_preset !=  null and not terrain.current_texture_preset.resource_path.is_empty():
 		terrain.save_to_preset()
 

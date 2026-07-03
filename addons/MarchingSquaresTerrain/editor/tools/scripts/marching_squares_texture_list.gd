@@ -73,16 +73,12 @@ func _ensure_grass_arrays() -> void:
 			has_grass[i] = false
 	elif has_grass.size() !=  MAX_TEXTURE_SLOTS:
 		has_grass.resize(MAX_TEXTURE_SLOTS)
-		# default: keep legacy behavior for first 6
+		# default: only Texture 1 starts with grass enabled
 		for i in range(MAX_TEXTURE_SLOTS):
-			has_grass[i] = (i < 6)
+			has_grass[i] = (i == 0)
 
 	# Older placeholder presets expanded every slot to the default grass sprite.
 	# Treat disabled slots as empty so they do not masquerade as 256 meaningful slots.
 	for i in range(6, MAX_TEXTURE_SLOTS):
 		if not bool(has_grass[i]) and grass_sprites[i] == GRASS_SPRITE:
 			grass_sprites[i] = null
-
-
-
-

@@ -103,7 +103,7 @@ func _ready() -> void:
 func _ensure_terrain_arrays(terrain: Object) -> bool:
 	if terrain == null:
 		return false
-	
+
 	# Avoid calling into the terrain script from the editor UI.
 	# In editor reload/order edge-cases the selected node can be a plain Node3D or a placeholder script,
 	# Which makes method calls like _ensure_texture_slots() fail even though exported properties exist.
@@ -127,7 +127,7 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 			slots_var[i].has_grass = (i == 0)
 		if slots_var[i] != null and slots_var[i].get("grass_texture") == null:
 			slots_var[i].grass_texture = null
-	
+
 	# Palette-per-slot arrays (all optional, but expected for the UI).
 	var slot_color_indices = terrain.get("slot_color_indices")
 	if slot_color_indices is Array:
@@ -136,7 +136,7 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 		for i in range(MAX_TEXTURE_SLOTS):
 			if slot_color_indices[i] == null:
 				slot_color_indices[i] = []
-	
+
 	var slot_blend_modes = terrain.get("slot_blend_modes")
 	if slot_blend_modes is Array:
 		if slot_blend_modes.size() != MAX_TEXTURE_SLOTS:
@@ -144,7 +144,7 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 		for i in range(MAX_TEXTURE_SLOTS):
 			if slot_blend_modes[i] == null:
 				slot_blend_modes[i] = 3
-	
+
 	var slot_wet_enabled = terrain.get("slot_wet_enabled")
 	if slot_wet_enabled is Array:
 		if slot_wet_enabled.size() != MAX_TEXTURE_SLOTS:
@@ -164,13 +164,28 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 
 	var slot_roughnesses = terrain.get("slot_roughnesses")
 	if slot_roughnesses is Array:
+		var old_roughness_size: int = slot_roughnesses.size()
 		if slot_roughnesses.size() != MAX_TEXTURE_SLOTS:
 			slot_roughnesses.resize(MAX_TEXTURE_SLOTS)
 		for i in range(MAX_TEXTURE_SLOTS):
 			if slot_roughnesses[i] == null:
 				slot_roughnesses[i] = 1.0
+			if i >= old_roughness_size:
+				slot_roughnesses[i] = 1.0
 			slot_roughnesses[i] = clampf(float(slot_roughnesses[i]), 0.0, 1.0)
-	
+
+	var slot_grass_wetnesses = terrain.get("slot_grass_wetnesses")
+	if slot_grass_wetnesses is Array:
+		var old_grass_wetness_size: int = slot_grass_wetnesses.size()
+		if slot_grass_wetnesses.size() != MAX_TEXTURE_SLOTS:
+			slot_grass_wetnesses.resize(MAX_TEXTURE_SLOTS)
+		for i in range(MAX_TEXTURE_SLOTS):
+			if slot_grass_wetnesses[i] == null:
+				slot_grass_wetnesses[i] = 0.0
+			if i >= old_grass_wetness_size:
+				slot_grass_wetnesses[i] = 0.0
+			slot_grass_wetnesses[i] = clampf(float(slot_grass_wetnesses[i]), 0.0, 1.0)
+
 	_ensure_slot_noise_arrays(terrain)
 	return true
 
@@ -456,6 +471,8 @@ func _reset_slot_palette_state(terrain, slot_idx: int) -> void:
 		terrain.slot_wet_modes[slot_idx] = 0
 	if terrain.get("slot_roughnesses") is Array and slot_idx >= 0 and slot_idx < terrain.slot_roughnesses.size():
 		terrain.slot_roughnesses[slot_idx] = 1.0
+	if terrain.get("slot_grass_wetnesses") is Array and slot_idx >= 0 and slot_idx < terrain.slot_grass_wetnesses.size():
+		terrain.slot_grass_wetnesses[slot_idx] = 0.0
 	if terrain.get("slot_floor_noise_enabled") is Array and slot_idx >= 0 and slot_idx < terrain.slot_floor_noise_enabled.size():
 		terrain.slot_floor_noise_enabled[slot_idx] = false
 	if terrain.get("slot_floor_noise_strengths") is Array and slot_idx >= 0 and slot_idx < terrain.slot_floor_noise_strengths.size():
@@ -557,17 +574,17 @@ func _make_slot_preview(texture: Texture2D, size: int = 64) -> TextureRect:
 func add_texture_settings() -> void:
 	for child in get_children():
 		child.queue_free()
-	
+
 	var terrain := plugin.current_terrain_node
 	if terrain == null:
 		_built_for_terrain_id = 0
 		return
 	_built_for_terrain_id = terrain.get_instance_id()
-	
+
 	# Ensure slot/palette arrays are initialized before we build UI.
 	if not _ensure_terrain_arrays(terrain):
 		return
-	
+
 	var vbox := VBoxContainer.new()
 	# Keep the inspector-side painter narrow enough that it does not steal viewport space.
 	vbox.set_custom_minimum_size(Vector2(190, 0))
@@ -588,7 +605,7 @@ func add_texture_settings() -> void:
 	elif vp_tex_names:
 		MarchingSquaresTerrainPlugin._ensure_texture_names_resource(vp_tex_names)
 		names = vp_tex_names.get("texture_names")
-	
+
 	# "Ghost" slot: Global Noise (not a texture slot).
 	var gn_label := Label.new()
 	gn_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -684,7 +701,7 @@ func add_texture_settings() -> void:
 	vbox.add_child(HSeparator.new())
 
 	var visible_count := _get_effective_visible_slot_count(terrain)
-	
+
 	# Compact slot list. Per-slot editing lives in _open_slot_modal().
 	var actions_v := VBoxContainer.new()
 	actions_v.set_custom_minimum_size(Vector2(120, 56))
@@ -765,7 +782,41 @@ func add_texture_settings() -> void:
 func is_built_for_current_terrain() -> bool:
 	var terrain := plugin.current_terrain_node if plugin != null else null
 	return terrain != null and _built_for_terrain_id == terrain.get_instance_id() and get_child_count() > 0
-	
+
+
+func _add_modal_box(parent: VBoxContainer, title: String) -> VBoxContainer:
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.32, 0.32, 0.32, 1.0)
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_right = 4
+	style.corner_radius_bottom_left = 4
+	panel.add_theme_stylebox_override("panel", style)
+	parent.add_child(panel)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	panel.add_child(margin)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 6)
+	margin.add_child(inner)
+
+	var label := Label.new()
+	label.text = title
+	inner.add_child(label)
+	return inner
+
 func _open_slot_modal(slot_idx: int) -> void:
 	var terrain := plugin.current_terrain_node
 	if terrain == null:
@@ -788,8 +839,7 @@ func _open_slot_modal(slot_idx: int) -> void:
 	v.set_custom_minimum_size(Vector2(300, 0))
 	v.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	# Name
-	var name_lbl := Label.new()
-	name_lbl.text = "Texture Name"
+	var name_section := _add_modal_box(v, "Texture Name")
 	var name_edit := LineEdit.new()
 	name_edit.name = "name_edit"
 	# Fill with preset or default name
@@ -801,11 +851,9 @@ func _open_slot_modal(slot_idx: int) -> void:
 	elif vp_tex_names:
 		names = vp_tex_names.get("texture_names")
 	name_edit.text = names[slot_idx] if slot_idx < names.size() else ("Texture " + str(slot_idx + 1))
-	v.add_child(name_lbl)
-	v.add_child(name_edit)
+	name_section.add_child(name_edit)
 	# Preview
-	var preview_lbl := Label.new()
-	preview_lbl.text = "Preview"
+	var preview_section := _add_modal_box(v, "Preview")
 	var preview := TextureRect.new()
 	preview.name = "preview"
 	# Force a compact preview container so very large textures don't resize the modal
@@ -824,8 +872,7 @@ func _open_slot_modal(slot_idx: int) -> void:
 	preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	preview.set_custom_minimum_size(Vector2(256, 256))
 	preview_container.add_child(preview)
-	v.add_child(preview_lbl)
-	v.add_child(preview_container)
+	preview_section.add_child(preview_container)
 	# Inline color preview overlay inside preview (bottom-right)
 	var overlay_v := VBoxContainer.new()
 	overlay_v.name = "preview_overlay"
@@ -867,9 +914,10 @@ func _open_slot_modal(slot_idx: int) -> void:
 	# Position swatch after layout
 	call_deferred("_position_preview_swatch", preview, initial_sw)
 	# Texture picker
+	var maps_section := _add_modal_box(v, "Textures")
 	var alb_label := Label.new()
 	alb_label.text = "Albedo Map"
-	v.add_child(alb_label)
+	maps_section.add_child(alb_label)
 	var picker := EditorResourcePicker.new()
 	picker.name = "tex_picker"
 	picker.set_base_type("Texture2D")
@@ -884,12 +932,12 @@ func _open_slot_modal(slot_idx: int) -> void:
 		# Reposition the inline swatch after the preview may have resized
 		call_deferred("_position_preview_swatch", preview, preview.get_node_or_null("preview_overlay/preview_overlay_h/color_preview_rect_0"))
 	)
-	v.add_child(picker)
+	maps_section.add_child(picker)
 
 	# Normal picker (modal)
 	var nrm_label := Label.new()
 	nrm_label.text = "Normal Map"
-	v.add_child(nrm_label)
+	maps_section.add_child(nrm_label)
 	var lib_res_modal: Resource = terrain.get("texture_library") if terrain.has_method("get") else null
 	var initial_norm_modal: Texture2D = null
 	if lib_res_modal != null and lib_res_modal is MSTextureLibraryScript and slot_idx < lib_res_modal.normal_textures.size():
@@ -903,7 +951,7 @@ func _open_slot_modal(slot_idx: int) -> void:
 		_apply_slot_normal(terrain, slot_idx, resource)
 		call_deferred("add_texture_settings")
 	)
-	v.add_child(nrm_picker_modal)
+	maps_section.add_child(nrm_picker_modal)
 
 	# Advanced collapsible
 	body.add_child(v)
@@ -990,6 +1038,8 @@ func _refresh_slot_modal(slot_idx: int) -> void:
 		return
 	_build_palette_ui(adv_vbox, terrain, slot_idx)
 	_refresh_modal_preview_swatches(dlg, terrain, slot_idx)
+	adv_vbox.queue_sort()
+	call_deferred("_force_modal_layout_refresh")
 	# Ensure a status_label exists (modal expects it)
 	if not adv_vbox.has_node("status_label"):
 		var status_lbl := Label.new()
@@ -998,6 +1048,17 @@ func _refresh_slot_modal(slot_idx: int) -> void:
 		adv_vbox.add_child(status_lbl)
 	# Make sure visibility remains as before (don't force toggle)
 	# Done.
+
+func _force_modal_layout_refresh() -> void:
+	var dlg := get_tree().get_root().get_node_or_null("mst_slot_modal")
+	if dlg == null:
+		return
+	var body := _find_modal_node(dlg, "modal_body") as Control
+	if body != null:
+		body.queue_sort()
+	var adv_vbox := _find_modal_node(dlg, "adv_vbox") as Control
+	if adv_vbox != null:
+		adv_vbox.queue_sort()
 
 func _refresh_modal_preview_swatches(dlg: Node, terrain, slot_idx: int) -> void:
 	var preview_node := _find_modal_node(dlg, "preview") as TextureRect
@@ -1125,13 +1186,14 @@ func _repair_slot_palette_indices(terrain, slot: int) -> void:
 
 func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slot: int) -> void:
 	_repair_slot_palette_indices(terrain, slot)
+	var colors_section := _add_modal_box(vbox, "Colors")
 	# Blend mode dropdown
 	var blend_hbox := HBoxContainer.new()
 	var blend_label := Label.new()
 	blend_label.text = "Blend:"
 	blend_label.set_custom_minimum_size(Vector2(50, 20))
 	blend_hbox.add_child(blend_label)
-	
+
 	var blend_opt := OptionButton.new()
 	blend_opt.add_item("Gradient", 0)
 	blend_opt.add_item("Retro", 1)
@@ -1145,8 +1207,8 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 		terrain.save_to_preset()
 	)
 	blend_hbox.add_child(blend_opt)
-	vbox.add_child(blend_hbox, true)
-	
+	colors_section.add_child(blend_hbox, true)
+
 	# Color rows
 	var slot_indices : Array = terrain.slot_color_indices[slot]
 	var weight_labels := {}
@@ -1171,14 +1233,14 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 		var c_hbox := HBoxContainer.new()
 		c_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		c_hbox.set_custom_minimum_size(Vector2(0, 28))
-		
+
 		# Small numeric label
 		var c_label := Label.new()
 		c_label.text = str(ci + 1)
 		c_label.set_custom_minimum_size(Vector2(20, 20))
 		c_label.tooltip_text = "Color index"
 		c_hbox.add_child(c_label)
-		
+
 		# Color picker
 		var c_btn := ColorPickerButton.new()
 		c_btn.color = terrain.palette_colors[palette_idx]
@@ -1200,23 +1262,23 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 			terrain.save_to_preset()
 		)
 		c_hbox.add_child(c_btn)
-		
+
 		# Inline weight display (only if multiple colors)
 		if slot_indices.size() > 1:
 			terrain._ensure_palette_weights()
 			var w_label := Label.new()
 			w_label.text = str(int(round(terrain.palette_weights[palette_idx]))) + "%"
-			w_label.set_custom_minimum_size(Vector2(36, 20))
+			w_label.set_custom_minimum_size(Vector2(42, 20))
 			weight_labels[palette_idx] = w_label
 			c_hbox.add_child(w_label)
-			
+
 			var w_slider := HSlider.new()
 			w_slider.min_value = 0.0
 			w_slider.max_value = 100.0
 			w_slider.step = 1.0
 			w_slider.value = clampf(float(terrain.palette_weights[palette_idx]), 0.0, 100.0)
-			w_slider.set_custom_minimum_size(Vector2(90, 20))
-			w_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			w_slider.set_custom_minimum_size(Vector2(150, 20))
+			w_slider.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 			w_slider.focus_mode = Control.FOCUS_NONE
 			weight_sliders[palette_idx] = w_slider
 			w_slider.value_changed.connect(func(val, s = slot, pidx = palette_idx):
@@ -1256,7 +1318,7 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 				add_texture_settings()
 			)
 			c_hbox.add_child(w_slider)
-		
+
 		var remove_btn := Button.new()
 		remove_btn.text = "X"
 		remove_btn.set_custom_minimum_size(Vector2(22, 22))
@@ -1282,12 +1344,13 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 			call_deferred("add_texture_settings")
 		)
 		c_hbox.add_child(remove_btn)
-		vbox.add_child(c_hbox, true)
-	
+		colors_section.add_child(c_hbox, true)
+
 	# Add Color button
 	var add_btn := Button.new()
 	add_btn.text = "+ Add Color"
-	add_btn.set_custom_minimum_size(Vector2(150, 25))
+	add_btn.set_custom_minimum_size(Vector2(210, 28))
+	add_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	add_btn.pressed.connect(func(s = slot):
 		if not is_instance_valid(terrain) or not is_instance_valid(plugin.current_terrain_node) or plugin.current_terrain_node != terrain:
 			return
@@ -1324,14 +1387,14 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 				if gpreview != null:
 					gpreview.color = terrain.palette_colors[next_idx]
 		if dlg != null:
-			# Refresh immediately so the first Add Color appears without needing a close/reopen cycle.
-			_refresh_slot_modal(s)
+			# Rebuild on the next idle step so the newly added row is part of the refreshed tree.
+			call_deferred("_refresh_slot_modal", s)
 			# Also refresh main UI after current frame so compact list updates if needed.
 			call_deferred("add_texture_settings")
 		else:
 			call_deferred("add_texture_settings")
 	)
-	vbox.add_child(add_btn, true)
+	colors_section.add_child(add_btn, true)
 
 	# Grass settings (slot-based)
 	var slot_res = terrain.texture_slots[slot]
@@ -1436,7 +1499,7 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 	var wetness_hbox := HBoxContainer.new()
 	wetness_hbox.set_custom_minimum_size(Vector2(150, 20))
 	var wetness_label := Label.new()
-	wetness_label.text = "Wetness:"
+	wetness_label.text = "Terrain:"
 	wetness_label.set_custom_minimum_size(Vector2(70, 20))
 	wetness_hbox.add_child(wetness_label)
 	var wetness_slider := EditorSpinSlider.new()
@@ -1454,6 +1517,26 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 	wetness_hbox.visible = wet_cb.button_pressed
 	vbox.add_child(wetness_hbox, true)
 
+	var grass_wetness_hbox := HBoxContainer.new()
+	grass_wetness_hbox.set_custom_minimum_size(Vector2(150, 20))
+	var grass_wetness_label := Label.new()
+	grass_wetness_label.text = "Grass:"
+	grass_wetness_label.set_custom_minimum_size(Vector2(70, 20))
+	grass_wetness_hbox.add_child(grass_wetness_label)
+	var grass_wetness_slider := EditorSpinSlider.new()
+	grass_wetness_slider.set_flat(true)
+	grass_wetness_slider.set_min(0.0)
+	grass_wetness_slider.set_max(1.0)
+	grass_wetness_slider.set_step(0.05)
+	if terrain.get("slot_grass_wetnesses") is Array and slot >= 0 and slot < terrain.slot_grass_wetnesses.size():
+		grass_wetness_slider.set_value(float(terrain.slot_grass_wetnesses[slot]))
+	else:
+		grass_wetness_slider.set_value(0.0)
+	grass_wetness_slider.set_custom_minimum_size(Vector2(95, 25))
+	grass_wetness_hbox.add_child(grass_wetness_slider)
+	grass_wetness_hbox.visible = wet_cb.button_pressed
+	vbox.add_child(grass_wetness_hbox, true)
+
 	wet_cb.toggled.connect(func(pressed: bool):
 		if not _ensure_terrain_arrays(terrain):
 			return
@@ -1461,6 +1544,7 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 			terrain.slot_wet_enabled[slot] = pressed
 		wet_mode_hbox.visible = pressed
 		wetness_hbox.visible = pressed
+		grass_wetness_hbox.visible = pressed
 		terrain._rebuild_palette_uniforms()
 		terrain.save_to_preset()
 	)
@@ -1479,6 +1563,15 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 			return
 		if terrain.get("slot_roughnesses") is Array and slot >= 0 and slot < terrain.slot_roughnesses.size():
 			terrain.slot_roughnesses[slot] = clampf(1.0 - float(value), 0.0, 1.0)
+		terrain._rebuild_palette_uniforms()
+		terrain.save_to_preset()
+	)
+
+	grass_wetness_slider.value_changed.connect(func(value: float):
+		if not _ensure_terrain_arrays(terrain):
+			return
+		if terrain.get("slot_grass_wetnesses") is Array and slot >= 0 and slot < terrain.slot_grass_wetnesses.size():
+			terrain.slot_grass_wetnesses[slot] = clampf(float(value), 0.0, 1.0)
 		terrain._rebuild_palette_uniforms()
 		terrain.save_to_preset()
 	)
@@ -1511,45 +1604,45 @@ func _add_slot_noise_column(parent: HBoxContainer, terrain: MarchingSquaresTerra
 	cb.button_pressed = enabled
 	col.add_child(cb, true)
 
-	var strength_row := HBoxContainer.new()
+	var fields := GridContainer.new()
+	fields.columns = 2
+	fields.add_theme_constant_override("h_separation", 8)
+	fields.add_theme_constant_override("v_separation", 4)
+	fields.visible = enabled
+	col.add_child(fields, true)
+
 	var strength_label := Label.new()
 	strength_label.text = "Strength:"
 	strength_label.set_custom_minimum_size(Vector2(62, 20))
-	strength_row.add_child(strength_label)
+	fields.add_child(strength_label)
 	var strength_slider := EditorSpinSlider.new()
 	strength_slider.set_flat(true)
 	strength_slider.set_min(0.0)
 	strength_slider.set_max(1.0)
 	strength_slider.set_step(0.01)
 	strength_slider.set_value(clampf(float(strength_arr[slot]), 0.0, 1.0))
-	strength_slider.set_custom_minimum_size(Vector2(72, 24))
-	strength_row.add_child(strength_slider)
-	strength_row.visible = enabled
-	col.add_child(strength_row, true)
+	strength_slider.set_custom_minimum_size(Vector2(86, 24))
+	fields.add_child(strength_slider)
 
-	var scale_row := HBoxContainer.new()
 	var scale_label := Label.new()
 	scale_label.text = "Scale:"
 	scale_label.set_custom_minimum_size(Vector2(62, 20))
-	scale_row.add_child(scale_label)
+	fields.add_child(scale_label)
 	var scale_slider := EditorSpinSlider.new()
 	scale_slider.set_flat(true)
 	scale_slider.set_min(0.001)
 	scale_slider.set_max(1.0)
 	scale_slider.set_step(0.001)
 	scale_slider.set_value(clampf(float(scale_arr[slot]), 0.001, 1.0))
-	scale_slider.set_custom_minimum_size(Vector2(72, 24))
-	scale_row.add_child(scale_slider)
-	scale_row.visible = enabled
-	col.add_child(scale_row, true)
+	scale_slider.set_custom_minimum_size(Vector2(86, 24))
+	fields.add_child(scale_slider)
 
 	cb.toggled.connect(func(pressed: bool):
 		if not _ensure_terrain_arrays(terrain):
 			return
 		var current_enabled: Array = terrain.get(enabled_prop)
 		current_enabled[slot] = pressed
-		strength_row.visible = pressed
-		scale_row.visible = pressed
+		fields.visible = pressed
 		terrain._rebuild_palette_uniforms()
 		terrain.save_to_preset()
 	)

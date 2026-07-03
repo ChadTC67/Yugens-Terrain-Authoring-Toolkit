@@ -5,6 +5,7 @@ class_name MarchingSquaresTerrainChunk
 # Explicit preloads avoid tool-script class resolution issues.
 const MSTVertexColorHelper := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_vertex_color_helper.gd")
 const MSTTerrainCell := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_cell.gd")
+const MSTPrefabCell := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/prefab/marching_squares_prefab_cell.gd")
 const MSTDataHandler := preload("res://addons/MarchingSquaresTerrain/resources/mst_data_handler.gd")
 const MAX_WALL_PAINT_STAMPS := 64
 
@@ -85,8 +86,11 @@ var _temp_collision_shapes : Array[ConcavePolygonShape3D] = []  # COMMENT: Old s
 var _temp_height_map : Array  # Source data - saved to external storage, not scene file
 #endregion
 
+var _grass_regen_queued: bool = false
+var _mesh_regen_queued: bool = false
+
 #region blend option vars
-# Terrain blend options to allow for smooth color and height blend influence at transitions and at different heights 
+# Terrain blend options to allow for smooth color and height blend influence at transitions and at different heights
 var lower_thresh : float = 0.3 # Sharp bands: < 0.3 = lower color
 var upper_thresh : float = 0.7 #, > 0.7 = upper color, middle = blend
 var blend_zone := upper_thresh - lower_thresh
@@ -111,7 +115,7 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 		needs_update.append([])
 		for x in range(dimensions.x - 1):
 			needs_update[z].append(true)
-	
+
 	grass_planter = get_node_or_null("GrassPlanter")
 	if not grass_planter:
 		grass_planter = MarchingSquaresGrassPlanter.new()
@@ -125,7 +129,7 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 	grass_planter.terrain_system = terrain_system
 	grass_planter.setup(self)
 	EngineWrapper.instance.set_owner_recursive(grass_planter)
-	
+
 	var has_baked_grass_multimesh := _temp_grass_multimesh != null
 	if _temp_grass_multimesh:
 		grass_planter.multimesh = _temp_grass_multimesh
@@ -134,7 +138,7 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 		grass_planter.setup(self)
 		grass_count_changed = true
 	grass_planter.multimesh.mesh = terrain_system.grass_mesh
-	
+
 	# Generate maps if not loaded from external storage (works for both editor and runtime)
 	# Validate height_map shape — serialized scenes may contain empty arrays or malformed rows.
 	var need_hm := true
@@ -153,7 +157,7 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 		generate_wall_color_maps()
 	if not (grass_mask_map is PackedColorArray) or grass_mask_map.size() !=  dimensions.z * dimensions.x:
 		generate_grass_mask_map()
-	
+
 	if not mesh and should_regenerate_mesh:
 		regenerate_mesh(true)
 	elif mesh:
@@ -172,8 +176,11 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 	# and only after that should the first full mesh/grass build happen.
 	var can_generate_grass_now := should_regenerate_mesh or mesh != null or has_baked_grass_multimesh
 	if grass_planter and can_generate_grass_now and (not has_baked_grass_multimesh or grass_count_changed):
-		grass_planter.regenerate_all_cells()
-	
+		if mesh != null and not has_baked_grass_multimesh:
+			_queue_grass_regen()
+		else:
+			grass_planter.regenerate_all_cells()
+
 	var has_texture_array_source := (
 		terrain_system.get("texture_library") != null
 		or str(terrain_system.get("baked_albedo_array_path")) != ""
@@ -188,7 +195,7 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 				mat = terrain_system.bake_material_override.duplicate()
 			else:
 				mat = bake_material.duplicate()
-			
+
 			if mat is StandardMaterial3D:
 				mat.albedo_texture = ImageTexture.create_from_image(img)
 			elif mat is ShaderMaterial:
@@ -221,7 +228,7 @@ func _save_external_data_before_scene_strip() -> bool:
 func _notification(what: int) -> void:
 	if not EngineWrapper.instance.is_editor():
 		return
-	
+
 	match what:
 		NOTIFICATION_EDITOR_PRE_SAVE:
 			var can_strip_scene_data := _save_external_data_before_scene_strip()
@@ -232,19 +239,19 @@ func _notification(what: int) -> void:
 			_skip_save_on_exit = _skip_save_on_exit # Surpress warning
 			_temp_height_map = height_map
 			height_map = []
-		
+
 			# Clear in-memory cache of generated cell geometry to avoid serializing Vector2i keys
 			cell_geometry.clear()
-		
+
 			# Store mesh and clear to prevent serialization
 			_temp_mesh = mesh
 			mesh = null
-		
+
 			# Store grass multimesh and clear
 			if grass_planter and grass_planter.multimesh:
 				_temp_grass_multimesh = grass_planter.multimesh
 				grass_planter.multimesh = null
-			
+
 			# Handle ALL collision bodies (old scenes may have multiple duplicates!)
 			_temp_collision_shapes.clear()
 			var bodies_to_free : Array[StaticBody3D] = []
@@ -261,27 +268,27 @@ func _notification(what: int) -> void:
 			for body in bodies_to_free:
 				body.name += "_"
 				body.queue_free()
-		
+
 		NOTIFICATION_EDITOR_POST_SAVE:
 			# Restore height_map
 			if _temp_height_map:
 				height_map = _temp_height_map
 				_temp_height_map = []
-			
+
 			# Restore mesh
 			if _temp_mesh:
 				mesh = _temp_mesh
 				_temp_mesh = null
-			
+
 			# Restore grass multimesh
 			if _temp_grass_multimesh and grass_planter:
 				grass_planter.multimesh = _temp_grass_multimesh
 				_temp_grass_multimesh = null
-			
+
 			# Recreate ONE collision body (only need one, even if old scene had duplicates)
 			if not _temp_collision_shapes.is_empty():
 				_recreate_collision_body.call_deferred()
-		
+
 		NOTIFICATION_PREDELETE:
 			# Safety cleanup - clear owner on ALL collision nodes
 			for child in get_children():
@@ -306,7 +313,7 @@ func _enter_tree() -> void:
 		if not keys_valid:
 			cell_geometry.clear()
 			push_warning("[MST] Cleared unexpected serialized cell_geometry: please re-save the scene to remove runtime caches.")
-	
+
 	if get_parent() !=  terrain_system:
 		push_error("Chunk must remain within its parent!")
 		return
@@ -319,7 +326,7 @@ func _exit_tree() -> void:
 	_temp_mesh = null
 	_temp_grass_multimesh = null
 	_temp_collision_shapes.clear()
-	
+
 	# Clear owner on ALL collision nodes to prevent serialization edge cases
 	if EngineWrapper.instance.is_editor():
 		for child in get_children():
@@ -328,7 +335,7 @@ func _exit_tree() -> void:
 				for shape_child in child.get_children():
 					if shape_child is CollisionShape3D:
 						shape_child.owner = null
-	
+
 	# Only erase if terrain_system still has THIS chunk at chunk_coords
 	if terrain_system and terrain_system.chunks.get(chunk_coords) == self:
 		terrain_system.chunks.erase(chunk_coords)
@@ -343,25 +350,25 @@ func regenerate_mesh(use_threads: bool =  false):
 	st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA_FLOAT)
 	st.set_custom_format(1, SurfaceTool.CUSTOM_RGBA_FLOAT)
 	st.set_custom_format(2, SurfaceTool.CUSTOM_RGBA_FLOAT)
-	
+
 	var start_time : int = Time.get_ticks_msec()
-	
+
 	generate_terrain_cells(use_threads)
-	
+
 	st.generate_normals()
 	st.index()
 	# Create a new mesh out of floor, and add the wall surface to it
 	mesh = st.commit()
-		
+
 	if mesh and terrain_system and mesh.get_surface_count() > 0:
 		_apply_chunk_surface_material()
-	
+
 	for child in get_children():
 		if child is StaticBody3D:
 			child.free()
 	create_trimesh_collision()
 	_apply_collision_layers()
-	
+
 	var elapsed_time : int = Time.get_ticks_msec() - start_time
 	print_verbose("Generated terrain in "+str(elapsed_time)+"ms")
 
@@ -369,10 +376,10 @@ func regenerate_mesh(use_threads: bool =  false):
 func generate_terrain_cells(use_threads: bool):
 	if not cell_geometry:
 		cell_geometry = {}
-	
+
 	global_position_cached = global_position if is_inside_tree() else position
 	var thread_pool := MarchingSquaresThreadPool.new(max(1, OS.get_processor_count()))
-	
+
 	for z in range(dimensions.z - 1):
 		for x in range(dimensions.x - 1):
 			var cell_coords = Vector2i(x, z)
@@ -383,7 +390,7 @@ func generate_terrain_cells(use_threads: bool):
 				if not cell_geometry.has(cell_coords):
 					needs_update[z][x] = true
 					# fall through to generation
-					
+
 					# continue to next iteration so generation handles it
 					# (avoid executing the cached-copy branch)
 					# Note: do NOT call continue here because we want the generation code below to run in this iteration.
@@ -422,11 +429,11 @@ func generate_terrain_cells(use_threads: bool):
 					else:
 						work_load.call()
 					continue
-			
+
 			# Cell is now being updated
 			needs_update[z][x] = false
-			
-			# If geometry did change or none exists yet, 
+
+			# If geometry did change or none exists yet,
 			# Create an entry for this cell (will also override any existing one)
 			cell_geometry[cell_coords] = {
 				"verts": PackedVector3Array(),
@@ -438,7 +445,7 @@ func generate_terrain_cells(use_threads: bool):
 				"mat_blend": PackedColorArray(),
 				"is_floor": [],
 			}
-			
+
 			var color_helper := MSTVertexColorHelper.new()
 			# Defensive: guard against malformed/serialized height_map rows
 			var h00 := 0.0
@@ -459,10 +466,14 @@ func generate_terrain_cells(use_threads: bool):
 				h11 = float(height_map[z+1][x+1])
 			else:
 				h11 = h00
-			var cell := MSTTerrainCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold)
+			var cell
+			if terrain_system != null and terrain_system.prefab_set != null:
+				cell = MSTPrefabCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold)
+			else:
+				cell = MSTTerrainCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold)
 			color_helper.chunk = self
 			color_helper.cell = cell
-			
+
 			work_load =  func():
 				cell.generate_geometry(cell_coords)
 				if not use_threads and EngineWrapper.instance.is_editor() and grass_planter and grass_planter.terrain_system:
@@ -471,14 +482,14 @@ func generate_terrain_cells(use_threads: bool):
 				thread_pool.enqueue(work_load)
 			else:
 				work_load.call()
-	
+
 	if use_threads:
 		thread_pool.start()
 		thread_pool.wait()
 
 
 func add_polygons(
-	cell_coords : Vector2i, 
+	cell_coords : Vector2i,
 	pts : PackedVector3Array,
 	uvs : PackedVector2Array,
 	uv2s : PackedVector2Array,
@@ -496,7 +507,7 @@ func add_polygons(
 		assert(pts.size() == custom_1_values.size())
 		assert(pts.size() == mat_blends.size())
 		assert(pts.size() == floors.size())
-		
+
 		cell_generation_mutex.lock()
 		var floor_mode : bool = true
 		st.set_smooth_group(0)
@@ -521,7 +532,7 @@ func _add_point(cell_coords: Vector2i, vert: Vector3, uv: Vector2, uv2: Vector2,
 	st.set_uv(uv)
 	st.set_uv2(uv2)
 	st.add_vertex(vert)
-	
+
 	cell_geometry[cell_coords]["verts"].append(vert)
 	cell_geometry[cell_coords]["uvs"].append(uv)
 	cell_geometry[cell_coords]["uv2s"].append(uv2)
@@ -541,7 +552,7 @@ func generate_height_map(base_height: float = 0.0):
 		height_map[z].resize(dimensions.x)
 		for x in range(dimensions.x):
 			height_map[z][x] = base_height
-	
+
 	var noise := terrain_system.noise_hmap
 	if noise:
 		for z in range(dimensions.z):
@@ -815,6 +826,34 @@ func refresh_surface_material() -> void:
 	_apply_chunk_surface_material()
 
 
+func queue_mesh_regen(use_threads: bool = false) -> void:
+	if _mesh_regen_queued:
+		return
+	_mesh_regen_queued = true
+	call_deferred("_run_deferred_mesh_regen", use_threads)
+
+
+func _run_deferred_mesh_regen(use_threads: bool = false) -> void:
+	_mesh_regen_queued = false
+	if not is_inside_tree():
+		return
+	regenerate_mesh(use_threads)
+
+
+func _queue_grass_regen() -> void:
+	if _grass_regen_queued:
+		return
+	_grass_regen_queued = true
+	call_deferred("_run_deferred_grass_regen")
+
+
+func _run_deferred_grass_regen() -> void:
+	_grass_regen_queued = false
+	if not is_inside_tree() or not is_instance_valid(grass_planter):
+		return
+	grass_planter.regenerate_all_cells()
+
+
 func _sync_wall_paint_shader_params(mat: ShaderMaterial) -> void:
 	var positions: Array[Vector4] = []
 	var data_b: Array[Vector4] = []
@@ -841,7 +880,7 @@ func _sync_wall_paint_shader_params(mat: ShaderMaterial) -> void:
 func notify_needs_update(z: int, x: int):
 	if z < 0 or z >=  terrain_system.dimensions.z-1 or x < 0 or x >= terrain_system.dimensions.x-1:
 		return
-	
+
 	needs_update[z][x] = true
 
 
@@ -855,11 +894,11 @@ func _recreate_collision_body() -> void:
 	if not is_inside_tree() or _temp_collision_shapes.is_empty():
 		_temp_collision_shapes.clear()
 		return
-			
+
 	for child in get_children():
 		if child is StaticBody3D:
 			child.free()
-	
+
 	# Only create ONE body with the FIRST shape
 	var shape : ConcavePolygonShape3D = null
 	if _temp_collision_shapes.size() > 0 and _temp_collision_shapes[0] !=  null:
@@ -868,20 +907,20 @@ func _recreate_collision_body() -> void:
 	if shape == null:
 		# Nothing to create
 		return
-	
+
 	var body := StaticBody3D.new()
 	body.name = name + "_col"
 	body.collision_layer = 17
 	if terrain_system:
 		body.set_collision_layer_value(terrain_system.extra_collision_layer, true)
-	
+
 	var col_shape := CollisionShape3D.new()
 	col_shape.name = "CollisionShape3D"
 	col_shape.shape = shape
 	col_shape.visible = false
 	body.add_child(col_shape)
 	add_child(body)
-	
+
 	# Set owner for editor visibility at first, but we clear it later
 	if EngineWrapper.instance.is_editor():
 		var scene_root = EngineWrapper.instance.get_root_for_node(self)
@@ -907,22 +946,22 @@ func regenerate_all_cells(use_threads: bool):
 	for z in range(dimensions.z-1):
 		for x in range(dimensions.x-1):
 			needs_update[z][x] = true
-	
+
 	regenerate_mesh(use_threads)
 
 
 @export_tool_button("Export GLB") var bake =  func():
 	var tree := get_tree()
-	
+
 	var baker = MarchingSquaresGeometryBaker.new()
 	baker.polygon_texture_resolution = terrain_system.polygon_texture_resolution
-	
+
 	var f := func(bakedMesh: Mesh, original: MeshInstance3D, bakedTexture: Image):
 		var dialog := FileDialog.new()
 		get_tree().root.add_child(dialog)
 		dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
 		dialog.access = FileDialog.ACCESS_FILESYSTEM
-		
+
 		var inst := MeshInstance3D.new()
 		inst.mesh = bakedMesh
 		var mat := StandardMaterial3D.new()
@@ -938,6 +977,6 @@ func regenerate_all_cells(use_threads: bool):
 		dialog.add_filter("*.glb", "GLB file")
 		dialog.connect("file_selected", file_selected)
 		dialog.popup_centered()
-	
+
 	baker.finished.connect(f, CONNECT_ONE_SHOT)
 	baker.bake_geometry_texture(self, tree)

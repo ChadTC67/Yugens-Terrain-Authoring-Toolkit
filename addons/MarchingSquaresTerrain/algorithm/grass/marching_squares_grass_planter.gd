@@ -2,7 +2,6 @@
 extends MultiMeshInstance3D
 class_name MarchingSquaresGrassPlanter
 
-
 var _chunk : MarchingSquaresTerrainChunk
 var terrain_system : MarchingSquaresTerrain
 
@@ -80,40 +79,40 @@ func _wall_push_offset(p: Vector3) -> Vector3:
 func setup(chunk: MarchingSquaresTerrainChunk, redo: bool =  true) -> void:
 	_chunk = chunk
 	terrain_system = _chunk.terrain_system if _chunk else null
-	
+
 	if not _chunk or not terrain_system:
 		push_error("SETUP FAILED - no chunk or terrain system found for GrassPlanter")
 		return
-	
+
 	if (redo and multimesh) or not multimesh:
 		multimesh = MultiMesh.new()
-	
+
 	multimesh.instance_count = 0
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.use_custom_data = true
-	
+
 	multimesh.instance_count = (_chunk.dimensions.x - 1) * (_chunk.dimensions.z - 1) * terrain_system.grass_subdivisions * terrain_system.grass_subdivisions
-	
+
 	# Mesh assignment
 	if terrain_system.grass_mesh:
 		multimesh.mesh = terrain_system.grass_mesh
 	else:
 		multimesh.mesh = QuadMesh.new()
-	
+
 	# Only QuadMesh has size/center_offset. If user provides a custom mesh, don't touch it.
 	if multimesh.mesh is QuadMesh:
 		var q := multimesh.mesh as QuadMesh
 		q.size = terrain_system.grass_size * (terrain_system.cell_size.x + terrain_system.cell_size.y) / 4.0
 		# Pivot so the quad grows "up" from the ground
 		q.center_offset.y = q.size.y * 0.5
-	
+
 	cast_shadow = SHADOW_CASTING_SETTING_OFF
 
 
 func ensure_multimesh_count() -> bool:
 	if not multimesh or not _chunk or not terrain_system:
 		return false
-	
+
 	var expected := (_chunk.dimensions.x - 1) * (_chunk.dimensions.z - 1) * terrain_system.grass_subdivisions * terrain_system.grass_subdivisions
 	if multimesh.instance_count !=  expected:
 		multimesh.instance_count = expected
@@ -126,17 +125,17 @@ func regenerate_all_cells() -> void:
 	if not _chunk:
 		push_error("_chunk not set while regenerating cells")
 		return
-	
+
 	if not terrain_system:
 		push_error("terrain_system not set while regenerating cells")
 		return
-	
+
 	if not multimesh:
 		setup(_chunk)
-	
+
 	if not _chunk.cell_geometry:
 		_chunk.regenerate_mesh()
-	
+
 	for z in range(terrain_system.dimensions.z - 1):
 		for x in range(terrain_system.dimensions.x - 1):
 			generate_grass_on_cell(Vector2i(x, z))
@@ -147,30 +146,30 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 	if not _chunk:
 		push_error("Couldn't find a reference to _chunk")
 		return
-	
+
 	if not terrain_system:
 		push_error("Couldn't find a reference to terrain_system")
 		return
-	
+
 	if not _chunk.cell_geometry:
 		push_error("Couldn't find a reference to cell_geometry")
 		return
-	
+
 	if not _chunk.cell_geometry.has(cell_coords):
 		push_error("Couldn't find a reference to cell_coords")
 		return
-	
+
 	var cell_geometry = _chunk.cell_geometry[cell_coords]
-	
+
 	if not cell_geometry.has("verts") or not cell_geometry.has("uvs") or not cell_geometry.has("color_1s") or not cell_geometry.has("custom_1_values") or not cell_geometry.has("mat_blend") or not cell_geometry.has("is_floor"):
 		push_error("cell_geometry missing required data: verts, uvs, color_1s (CUSTOM0), custom_1_values (CUSTOM1), mat_blend (CUSTOM2), is_floor")
 		return
-	
+
 	ensure_multimesh_count()
-	
-	var points : PackedVector2Array = []
+
+	var points: Array[Vector2] = []
 	var count := terrain_system.grass_subdivisions * terrain_system.grass_subdivisions
-	
+
 	for sz in range(terrain_system.grass_subdivisions):
 		for sx in range(terrain_system.grass_subdivisions):
 			# Edge detection so grass doesn't bleed through other textures
@@ -181,92 +180,91 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 				(cell_coords.x + (sx + slotx) / terrain_system.grass_subdivisions) * terrain_system.cell_size.x,
 				(cell_coords.y + (sz + slotz) / terrain_system.grass_subdivisions) * terrain_system.cell_size.y
 			))
-	
+
 	var index : int = (cell_coords.y * (_chunk.dimensions.x - 1) + cell_coords.x) * count
 	var end_index : int = index + count
-	
+
 	for slot in range(index, end_index):
 		if slot >=  multimesh.instance_count:
 			break
 		_hide_grass_instance(slot)
-	
+
 	var verts : PackedVector3Array = cell_geometry["verts"]
 	var uvs : PackedVector2Array = cell_geometry["uvs"]
 	var custom_0_values : PackedColorArray = cell_geometry["color_1s"] # CUSTOM0
 	var custom_1_values : PackedColorArray = cell_geometry["custom_1_values"] # CUSTOM1
 	var mat_blend : PackedColorArray = cell_geometry["mat_blend"] # CUSTOM2
 	var is_floor : Array = cell_geometry["is_floor"]
-	
+
 	for i in range(0, len(verts), 3):
 		if i + 2 >=  len(verts):
 			continue # Skip incomplete triangle
-		
+
 		# Only place grass on floors
 		if not is_floor[i]:
 			continue
-		
+
 		var a := verts[i]
 		var b := verts[i + 1]
 		var c := verts[i + 2]
-		
+
 		var v0 := Vector2(c.x - a.x, c.z - a.z)
 		var v1 := Vector2(b.x - a.x, b.z - a.z)
-		
+
 		var dot00 := v0.dot(v0)
 		var dot01 := v0.dot(v1)
 		var dot11 := v1.dot(v1)
 		var invDenom := 1.0 / (dot00 * dot11 - dot01 * dot01)
-		
+
 		var point_index := 0
 		while point_index < len(points):
 			var v2 := Vector2(points[point_index].x - a.x, points[point_index].y - a.z)
 			var dot02 := v0.dot(v2)
 			var dot12 := v1.dot(v2)
-			
+
 			var u := (dot11 * dot02 - dot01 * dot12) * invDenom
 			if u < 0:
 				point_index += 1
 				continue
-			
+
 			var v := (dot00 * dot12 - dot01 * dot02) * invDenom
 			if v < 0:
 				point_index += 1
 				continue
-			
+
 			if u + v <=  1:
 				# Barycentric weights: wa for vertex a, wb for b, wc for c
 				var wa := 1.0 - u - v
 				var wb := u
 				var wc := v
 
-				points.remove_at(point_index) 
+				# Order is irrelevant here, so use swap-remove to avoid O(n) PackedArray shifts
+				# for every accepted blade during full chunk grass generation.
+				var last_idx := points.size() - 1
+				points[point_index] = points[last_idx]
+				points.pop_back()
 				var p := a * (1 - u - v) + b * u + c * v
-				
-				# Detect ledge/ridge tags (UV encodes terrace proximity for edge logic)
-				var uv := uvs[i] * wa + uvs[i + 1] * wb + uvs[i + 2] * wc
-				var on_ledge_or_ridge : bool = uv.y > 0.0 or uv.x > 0.5
-				
+
 				# If we're near a steep wall drop, nudge grass points inward so blades don't clip the wall.
 				var push := _wall_push_offset(p)
 				p += push
-				var allow_ledge_grass := push.length() > 0.0001
-				
+
 				# Interpolated material blend payload (CUSTOM2) + extra weight (CUSTOM0.r)
 				var raw_blend := mat_blend[i] * wa + mat_blend[i + 1] * wb + mat_blend[i + 2] * wc
 				var raw_custom0 := custom_0_values[i] * wa + custom_0_values[i + 1] * wb + custom_0_values[i + 2] * wc
-				
+
 				# Check grass mask first - green channel forces grass ON, red channel masks grass OFF
 				var mask := custom_1_values[i] * wa + custom_1_values[i + 1] * wb + custom_1_values[i + 2] * wc
 				var is_masked : bool = mask.r < 0.9999
 				var force_grass_on : bool = mask.g >= 0.9999
-				
+
 				var mat_a := clampi(int(round(raw_blend.r)), 0, 255)
 				var mat_b := clampi(int(round(raw_blend.g)), 0, 255)
 				var mat_c := clampi(int(round(raw_blend.b)), 0, 255)
 				var w_a := clamp(raw_blend.a, 0.0, 1.0)
 				var w_b := clamp(raw_custom0.r, 0.0, 1.0)
 				var w_c := clamp(1.0 - w_a - w_b, 0.0, 1.0)
-				
+
 				# Only spawn grass when we're mostly on a single material (prevents edge bleed).
 				var dominant_mat := mat_a
 				var confidence := w_a
@@ -276,25 +274,21 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 				if w_c > confidence:
 					dominant_mat = mat_c
 					confidence = w_c
-				
-				if not force_grass_on and confidence < 0.65:
-					_hide_grass_instance(index)
-					index += 1
-					continue
-				
+
 				var texture_id := dominant_mat + 1
 				var on_grass_tex := _has_grass_for_texture(texture_id, force_grass_on)
-				
-				# Keep the old behavior (no ledge/ridge grass) unless we're actually next to a wall.
-				if on_grass_tex and not is_masked and (allow_ledge_grass or not on_ledge_or_ridge):
-					_create_grass_instance(index, p, a, b, c, texture_id)
+
+				var ground_uv := uvs[i] * wa + uvs[i + 1] * wb + uvs[i + 2] * wc
+
+				if on_grass_tex and not is_masked:
+					_create_grass_instance(index, p, a, b, c, texture_id, ground_uv)
 				else:
 					_hide_grass_instance(index)
-				
+
 				index += 1
 			else:
 				point_index += 1
-	
+
 	# Fill remaining points with hidden instances
 	while index < end_index:
 		if index >=  multimesh.instance_count:
@@ -308,15 +302,15 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 func _get_terrain_image(texture_id: int) -> Image:
 	var slot_idx := clampi(texture_id - 1, 0, 255)
 	var terrain_texture : Texture2D = null
-	
+
 	if terrain_system and terrain_system.texture_slots.size() > slot_idx and terrain_system.texture_slots[slot_idx] !=  null:
 		terrain_texture = terrain_system.texture_slots[slot_idx].texture
 	if not _is_valid_texture2d(terrain_texture):
 		terrain_texture = _get_library_albedo_texture(slot_idx)
-	
+
 	if not _is_valid_texture2d(terrain_texture):
 		return null
-	
+
 	var img : Image = terrain_texture.get_image()
 	if img:
 		img.decompress()
@@ -409,7 +403,7 @@ func _has_grass_for_texture(texture_id: int, force_grass_on: bool) -> bool:
 		return bool(terrain_system.tex1_has_grass) if terrain_system.get("tex1_has_grass") != null else true
 	if texture_id < 2 or texture_id > 6:
 		return false
-	
+
 	var has_grass_flags := [
 		terrain_system.tex2_has_grass,
 		terrain_system.tex3_has_grass,
@@ -452,13 +446,13 @@ func _sample_terrain_texture_color(world_pos: Vector3, texture_id: int, tex_scal
 	var terrain_image := _get_terrain_image(texture_id)
 	if not terrain_image:
 		return Color.WHITE
-	
+
 	var uv_x : float = clamp(world_pos.x / ((terrain_system.dimensions.x - 1) * terrain_system.cell_size.x), 0.0, 1.0)
 	var uv_y : float = clamp(world_pos.z / ((terrain_system.dimensions.z - 1) * terrain_system.cell_size.y), 0.0, 1.0)
-	
+
 	uv_x = abs(fmod(uv_x * tex_scale, 1.0))
 	uv_y = abs(fmod(uv_y * tex_scale, 1.0))
-	
+
 	var px := int(uv_x * (terrain_image.get_width() - 1))
 	var py := int(uv_y * (terrain_image.get_height() - 1))
 	var color := terrain_image.get_pixelv(Vector2(px, py))
@@ -487,10 +481,10 @@ func _format_needs_conversion(fmt: Image.Format) -> bool:
 #region grass placement helpers
 
 ## Creates a grass instance at the given position with proper transform and color.
-func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vector3, c: Vector3, texture_id: int) -> void:
+func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vector3, c: Vector3, texture_id: int, ground_uv: Vector2) -> void:
 	var edge1 := b - a
 	var edge2 := c - a
-	
+
 	var normal : Vector3
 	var use_flat := false
 	if terrain_system !=  null:
@@ -502,31 +496,20 @@ func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vecto
 		normal = -Vector3.UP
 	else:
 		normal = edge1.cross(edge2).normalized()
-	
+
 	var right := Vector3.FORWARD.cross(normal).normalized()
 	var forward := normal.cross(Vector3.RIGHT).normalized()
 	var instance_basis := Basis(right, forward, -normal)
 
-	# --- Per-instance random scale ---
-	var rng := RandomNumberGenerator.new()
-	var seed := (
-		int(floor(world_pos.x * 10.0)) * 73856093
-		^ int(floor(world_pos.z * 10.0)) * 19349663
-		^ (index * 83492791)
-	)
-	rng.seed = seed
-	
 	# PR1: no per-blade size variation (kept for PR2/PR4 scope).
 	var height_s := 1.0
 	var width_s := 1.0
-	
+
 	var scaled_basis := instance_basis.scaled(Vector3(width_s, height_s, width_s))
 	multimesh.set_instance_transform(index, Transform3D(scaled_basis, world_pos))
 
-	var tex_scale := _get_texture_scale(texture_id)
-	var instance_color := _sample_terrain_texture_color(world_pos, texture_id, tex_scale)
-	instance_color.a = _encode_grass_slot_id(texture_id)
-	multimesh.set_instance_custom_data(index, instance_color)
+	var packed_uv := Vector2(clampf(ground_uv.x, 0.0, 1.0), clampf(ground_uv.y, 0.0, 1.0))
+	multimesh.set_instance_custom_data(index, Color(packed_uv.x, packed_uv.y, 1.0, _encode_grass_slot_id(texture_id)))
 
 
 ## Hides a grass instance by scaling it to zero.

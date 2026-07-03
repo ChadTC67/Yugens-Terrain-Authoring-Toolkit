@@ -7,19 +7,19 @@ extends Resource
 ## Chunk coordinates in the terrain grid
 @export var chunk_coords : Vector2i
 
-## Merge mode setting 
+## Merge mode setting
 @export var merge_mode : int
 
-## Height values as 2D array 
+## Height values as 2D array
 @export var height_map : Array
 
-## Ground texture indices 
+## Ground texture indices
 @export var ground_texture_idx : PackedByteArray
 
-## Wall texture indices 
+## Wall texture indices
 @export var wall_texture_idx : PackedByteArray
 
-## Grass mask 
+## Grass mask
 @export var grass_mask : PackedByteArray
 
 # Legacy format (V1.1) for backward compatibility during migration
@@ -57,7 +57,3 @@ func get_collision_shape() -> ConcavePolygonShape3D:
 ## Check if this is V2 compact format (has byte arrays) vs V1 legacy (has color arrays)
 func is_v2_format() -> bool:
 	return not ground_texture_idx.is_empty()
-
-
-
-

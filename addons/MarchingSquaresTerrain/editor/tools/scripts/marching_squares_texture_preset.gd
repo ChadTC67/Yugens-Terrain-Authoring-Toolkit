@@ -44,8 +44,9 @@ class_name MarchingSquaresTexturePreset
 @export var slot_wet_enabled: Array[bool] = [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]
 @export var slot_wet_modes: Array[int] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-# Roughness per texture slot (0 = shiny/wet, 1 = matte/dry)
+# Terrain wetness target roughness per texture slot (0 = shiny/wet, 1 = matte/dry)
 @export var slot_roughnesses: Array[float] = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+@export var slot_grass_wetnesses: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 # Shared global-noise controls per texture slot.
 @export var slot_floor_noise_enabled: Array = []
@@ -63,5 +64,3 @@ func has_baked_arrays() -> bool:
 		and ResourceLoader.exists(baked_albedo_array_path)
 		and ResourceLoader.exists(baked_normal_array_path)
 	)
-
-
