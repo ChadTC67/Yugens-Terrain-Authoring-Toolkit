@@ -110,17 +110,20 @@ var _data_directory : String = ""
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var prefab_set : MarchingSquaresPrefabSet:
 	set(value):
 		prefab_set = value
-		var use_threads := not EngineWrapper.instance.is_editor()
 		_sync_prefab_material_state()
 		refresh_chunk_surface_materials()
+		if not is_inside_tree():
+			return
 		if not is_batch_updating:
 			rebuild_grass_texture_array()
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
 			if is_instance_valid(chunk):
-				chunk.regenerate_all_cells(use_threads)
-				if not is_batch_updating and chunk.grass_planter:
-					chunk.grass_planter.regenerate_all_cells()
 				chunk.mark_dirty()
+				# Prefab swaps touch the whole chunk, so queue the expensive rebuild
+				# onto the deferred path and thread the geometry work to reduce editor stalls.
+				chunk.queue_mesh_regen(true)
+		if not is_batch_updating:
+			_request_grass_regen()
 
 @export_group("Legacy Runtime Baking")
 ## Legacy fallback: bakes generated geometry into per-polygon texture atlases at runtime.

@@ -22,3 +22,8 @@ static func get_directory_size_recursive(dir_path: String) -> int:
 	dir.list_dir_end()
 
 	return total_size
+
+
+
+
+
