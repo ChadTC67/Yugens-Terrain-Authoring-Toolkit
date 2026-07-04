@@ -614,7 +614,7 @@ func _create_terrain_settings_tabs() -> Control:
 	tabs.set_custom_minimum_size(Vector2(0, TERRAIN_TAB_VISIBLE_HEIGHT + 36))
 
 	tabs.add_child(_create_chunk_tab())
-	tabs.set_tab_title(tabs.get_tab_count() - 1, "Chunk")
+	tabs.set_tab_title(tabs.get_tab_count() - 1, "Chunks")
 
 	tabs.add_child(_create_vertex_painter_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Vertex Painter")
@@ -622,8 +622,11 @@ func _create_terrain_settings_tabs() -> Control:
 	tabs.add_child(_create_environment_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Environment")
 
-	tabs.add_child(_create_shader_tab())
-	tabs.set_tab_title(tabs.get_tab_count() - 1, "Shader")
+	tabs.add_child(_create_empty_tab("Wind"))
+	tabs.set_tab_title(tabs.get_tab_count() - 1, "Wind")
+
+	tabs.add_child(_create_empty_tab("Post-Processing"))
+	tabs.set_tab_title(tabs.get_tab_count() - 1, "Post-Processing")
 
 	tabs.current_tab = clampi(_terrain_settings_selected_tab, 0, max(tabs.get_tab_count() - 1, 0))
 	tabs.tab_changed.connect(func(tab_idx: int): _terrain_settings_selected_tab = tab_idx)
@@ -655,9 +658,9 @@ func _create_environment_tab() -> Control:
 	return page
 
 
-func _create_shader_tab() -> Control:
+func _create_empty_tab(tab_name: String) -> Control:
 	var page := VBoxContainer.new()
-	page.name = "Shader"
+	page.name = tab_name
 	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	page.size_flags_vertical = Control.SIZE_FILL
 
@@ -666,7 +669,7 @@ func _create_shader_tab() -> Control:
 	page.add_child(spacer, true)
 
 	var label := Label.new()
-	label.text = "Shader settings coming soon."
+	label.text = tab_name + " settings coming soon."
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -967,6 +970,8 @@ func _get_setting_value(p_setting_name: String) -> Variant:
 			return plugin.flatten
 		"falloff":
 			return plugin.falloff
+		"curve3d_mode":
+			return plugin.curve3d_mode
 		"mask_mode":
 			return plugin.should_mask_grass
 		"material":
@@ -982,7 +987,7 @@ func _get_setting_value(p_setting_name: String) -> Variant:
 		"terrain_settings":
 			pass
 		_:
-			push_error("Couldn't find tool attributes setting name")
+			push_error("Couldn't find tool attributes setting name: " + p_setting_name)
 	return "ERROR"
 
 

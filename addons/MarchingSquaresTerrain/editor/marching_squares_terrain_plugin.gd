@@ -661,7 +661,7 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 			if mode == TerrainToolMode.VERTEX_PAINTING and paint_walls_mode and (is_drawing or is_setting):
 				if _should_sample_wall_paint_stroke(brush_position):
 					_sample_wall_paint_stroke(terrain)
-			elif is_drawing and mode in [TerrainToolMode.SMOOTH, TerrainToolMode.GRASS_MASK]:
+			elif is_drawing and mode in [TerrainToolMode.SMOOTH]:
 				draw_pattern(terrain)
 				current_draw_pattern.clear()
 
@@ -1153,7 +1153,7 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 			elif mode == TerrainToolMode.DEBUG_BRUSH:
 				var g_pos := chunk.to_global(Vector3(float(draw_cell_coords.x), chunk.get_height(draw_cell_coords), float(draw_cell_coords.y)))
 				var normal := get_cell_normal(chunk, draw_cell_coords)
-				print_verbose("MST debug brush: global pos = " + str(g_pos) +
+				print("MST debug brush: global pos = " + str(g_pos) +
 					", color id = " + str(chunk.get_color_0(draw_cell_coords)) + " " + str(chunk.get_color_1(draw_cell_coords)) +
 					", normal = " + str(normal))
 				continue

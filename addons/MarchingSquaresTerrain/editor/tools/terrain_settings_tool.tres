@@ -18,7 +18,6 @@ tooltip = "Terrain Settings Tool
 Used to tweak global terrain settings.
 
 [INFO]
-• The \"Blend Mode\" dropdown uses the smoothed workflow.
 • \"Smoothness\" controls how soft or sharp the smoothed material transitions appear.
 • \"Blend Noise Enabled\" toggles subtle boundary waviness (on) vs clean/flat blending (off).
 • Setting a \"Noise Hmap\" makes the base chunk height generation procedural instead of flat.
