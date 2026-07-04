@@ -312,9 +312,10 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 				terrain.extra_collision_layer = p_value + 9
 		"prefab_set":
 			if p_value is MarchingSquaresPrefabSet:
-				terrain.prefab_set = p_value
-				if p_value.flats.is_empty() or p_value.orthogonals.is_empty() or p_value.diagonals.is_empty() or p_value.fillers.is_empty():
-					push_warning("This prefab set lacks pieces, the geometry will appear empty or have holes! Make sure to complete the prefab set before assigning it. You can clear the prefab set to revert the changes.")
+				if p_value.has_method("has_required_pieces") and not p_value.has_required_pieces():
+					push_warning("This prefab set lacks pieces, the geometry will appear empty or have holes! Make sure to complete the prefab set before assigning it. The previous prefab setup was kept unchanged.")
+				else:
+					terrain.prefab_set = p_value
 			elif p_value == null:
 				terrain.prefab_set = null
 

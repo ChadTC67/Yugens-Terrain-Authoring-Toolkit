@@ -161,6 +161,8 @@ var current_texture_preset : MarchingSquaresTexturePreset:
 	get():
 		return _current_texture_preset
 	set(value):
+		if value == null:
+			value = EMPTY_TEXTURE_PRESET
 		_current_texture_preset = value
 		current_quick_paint = null
 		if not _syncing_from_terrain:
@@ -439,6 +441,9 @@ func _edit(object: Object) -> void:
 			var cb := Callable(self, "_on_chunk_dimensions_changed")
 			if current_terrain_node.has_signal("chunk_dimensions_changed") and not current_terrain_node.is_connected("chunk_dimensions_changed", cb):
 				current_terrain_node.connect("chunk_dimensions_changed", cb)
+
+			if current_terrain_node.current_texture_preset == null:
+				current_terrain_node.current_texture_preset = EMPTY_TEXTURE_PRESET
 
 			# Sync plugin's preset from the selected terrain's saved preset
 			# This ensures each terrain keeps its own preset on selection/reload
@@ -1666,7 +1671,7 @@ func _set_new_textures(_preset: MarchingSquaresTexturePreset) -> void:
 		return
 
 	if _preset == null:
-		_preset = EMPTY_TEXTURE_PRESET.duplicate()
+		_preset = EMPTY_TEXTURE_PRESET
 
 	# Apply via terrain API (handles palette/slots/grass + internal batching).
 	current_terrain_node.load_from_preset(_preset)

@@ -4,6 +4,7 @@ class_name MarchingSquaresTerrain
 
 const MSTVertexColorHelper := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_vertex_color_helper.gd")
 const MarchingSquaresTerrainHelpers := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_helpers.gd")
+const DEFAULT_TEXTURE_PRESET_PATH := "res://addons/MarchingSquaresTerrain/resources/empty_project.tres"
 
 # Uses global class_name MSTDataHandler (static utility).
 
@@ -22,11 +23,7 @@ enum StorageMode {
 
 @export_category("Storage Options")
 ## The storage mode for terrain data.
-@export var _storage_mode_internal : StorageMode = StorageMode.BAKED:
-	get():
-		return _storage_mode_internal
-	set(value):
-		_set_storage_mode_internal(value)
+@export_storage var _storage_mode_internal : StorageMode = StorageMode.BAKED
 var storage_mode : StorageMode:
 	get():
 		return _storage_mode_internal
@@ -110,6 +107,9 @@ var _data_directory : String = ""
 
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var prefab_set : MarchingSquaresPrefabSet:
 	set(value):
+		if value != null and value.has_method("has_required_pieces") and not value.has_required_pieces():
+			push_warning("This prefab set lacks pieces, the geometry will appear empty or have holes! Make sure to complete the prefab set before assigning it. The previous prefab setup was kept unchanged.")
+			return
 		prefab_set = value
 		_sync_prefab_material_state()
 		refresh_chunk_surface_materials()
@@ -1051,6 +1051,17 @@ func _restore_runtime_texture_arrays_after_scene_save() -> void:
 	rebuild_grass_texture_array()
 
 
+func _ensure_default_texture_preset_bound() -> void:
+	if current_texture_preset != null:
+		return
+	var default_preset := ResourceLoader.load(DEFAULT_TEXTURE_PRESET_PATH) as MarchingSquaresTexturePreset
+	if default_preset == null:
+		push_warning("[MST] Failed to load default texture preset from %s." % DEFAULT_TEXTURE_PRESET_PATH)
+		return
+	current_texture_preset = default_preset
+	load_from_preset(default_preset)
+
+
 func _notification(what: int) -> void:
 	# Save all dirty chunks externally and keep generated runtime arrays out of .tscn files.
 	if what == NOTIFICATION_EDITOR_PRE_SAVE:
@@ -1083,6 +1094,8 @@ func _deferred_enter_tree() -> void:
 	_initialize_data_directory()
 	if blend_mode != 0:
 		blend_mode = 0
+
+	_ensure_default_texture_preset_bound()
 
 	print_verbose("Terrain data dir: ", data_directory)
 

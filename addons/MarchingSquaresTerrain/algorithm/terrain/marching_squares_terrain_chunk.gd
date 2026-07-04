@@ -343,8 +343,9 @@ func _exit_tree() -> void:
 
 func regenerate_mesh(use_threads: bool =  false):
 	_apply_shadow_visibility_settings()
+	var previous_mesh := mesh
 	st = SurfaceTool.new()
-	if mesh:
+	if mesh and mesh.get_surface_count() > 0:
 		st.create_from(mesh, 0)
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA_FLOAT)
@@ -358,7 +359,16 @@ func regenerate_mesh(use_threads: bool =  false):
 	st.generate_normals()
 	st.index()
 	# Create a new mesh out of floor, and add the wall surface to it
-	mesh = st.commit()
+	var committed_mesh := st.commit()
+	var has_valid_surface := committed_mesh != null and committed_mesh.get_surface_count() > 0
+	if not has_valid_surface:
+		if previous_mesh != null and previous_mesh.get_surface_count() > 0:
+			mesh = previous_mesh
+			push_warning("[MST] Skipped replacing chunk mesh with an empty surface set. The previous mesh was preserved.")
+		else:
+			mesh = null
+	else:
+		mesh = committed_mesh
 
 	if mesh and terrain_system and mesh.get_surface_count() > 0:
 		_apply_chunk_surface_material()
@@ -366,8 +376,9 @@ func regenerate_mesh(use_threads: bool =  false):
 	for child in get_children():
 		if child is StaticBody3D:
 			child.free()
-	create_trimesh_collision()
-	_apply_collision_layers()
+	if mesh != null and mesh.get_surface_count() > 0:
+		create_trimesh_collision()
+		_apply_collision_layers()
 
 	var elapsed_time : int = Time.get_ticks_msec() - start_time
 	print_verbose("Generated terrain in "+str(elapsed_time)+"ms")
