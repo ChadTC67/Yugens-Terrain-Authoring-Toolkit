@@ -22,3 +22,4 @@ script = ExtResource("6_47oyh")
 preset_name = "Empty Project"
 new_tex_names = SubResource("Resource_38l2j")
 new_textures = SubResource("Resource_658wv")
+slot_blend_modes = Array[int]([3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3])

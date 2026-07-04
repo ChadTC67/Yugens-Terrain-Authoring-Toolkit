@@ -31,6 +31,8 @@ group_uniforms;
 group_uniforms Visuals.Vertex_Painting;
 uniform sampler2DArray vc_tex_array : source_color, filter_nearest;
 uniform sampler2DArray vc_normal_array : filter_linear;
+uniform sampler2D vc_slot_layer_lookup_tex : filter_nearest;
+uniform bool use_slot_layer_lookup = false;
 uniform bool use_normal_array = false;
 uniform float normal_map_strength : hint_range(0.0, 2.0, 0.01) = 1.0;
 group_uniforms;
@@ -548,10 +550,31 @@ vec4 get_palette_color(int tex_idx, vec2 surface_coords) {
 	}
 }
 
+vec4 _sample_slot_layer_lookup(int slot) {
+	slot = clamp(slot, 0, 255);
+	float v = (float(slot) + 0.5) / 256.0;
+	return texture(vc_slot_layer_lookup_tex, vec2(0.5, v));
+}
+
+int _dense_texture_layer(int slot) {
+	vec4 lookup = _sample_slot_layer_lookup(slot);
+	if (lookup.a < 0.5) {
+		return -1;
+	}
+	return int(round(lookup.r * 255.0));
+}
+
 vec4 sample_texture_layer(int slot, vec2 uv) {
 	slot = clamp(slot, 0, 255);
 	uv = fract(uv);
-	// New behavior: sample the Texture2DArray directly using the slot as the layer index.
+	if (use_slot_layer_lookup) {
+		int dense_layer = _dense_texture_layer(slot);
+		if (dense_layer < 0) {
+			return (slot == 15) ? vec4(0.0) : vec4(1.0);
+		}
+		return texture(vc_tex_array, vec3(uv, float(dense_layer)));
+	}
+	// Legacy behavior: sample the Texture2DArray directly using the slot as the layer index.
 	// Keep legacy VOID slot behavior intact.
 	if (slot == 15) return texture(vc_tex_array, vec3(uv, 15.0));
 	return texture(vc_tex_array, vec3(uv, float(slot)));
@@ -614,7 +637,14 @@ vec4 sample_wall_material_by_index(int index) {
 vec3 sample_normal_by_index(int index, vec2 base_uv) {
 	float scale = get_texture_scale(index);
 	vec2 uv = fract(base_uv * scale);
-	vec3 n = texture(vc_normal_array, vec3(uv, float(clamp(index, 0, 255)))).rgb * 2.0 - 1.0;
+	int layer_index = clamp(index, 0, 255);
+	if (use_slot_layer_lookup) {
+		layer_index = _dense_texture_layer(layer_index);
+		if (layer_index < 0) {
+			return vec3(0.0, 0.0, 1.0);
+		}
+	}
+	vec3 n = texture(vc_normal_array, vec3(uv, float(layer_index))).rgb * 2.0 - 1.0;
 	if (dot(n, n) < 0.001) {
 		return vec3(0.0, 0.0, 1.0);
 	}
@@ -826,16 +856,14 @@ void fragment() {
 				if (total > 0.001) { weight_a /= total; weight_b /= total; weight_c /= total; }
 			}
 
-			if (blend_sharpness > 0.0) {
-				// Lower values keep the dominant material sharper, higher values keep blends softer.
-				float power = mix(5.0, 0.45, clamp(blend_sharpness, 0.0, 1.0));
-				weight_a = pow(weight_a, power);
-				weight_b = pow(weight_b, power);
-				weight_c = pow(weight_c, power);
-				float total = weight_a + weight_b + weight_c;
-				if (total > 0.001) { weight_a /= total; weight_b /= total; weight_c /= total; }
-
-			}
+			// Always apply the response curve so 0.0 is the crispest endpoint
+			// instead of accidentally bypassing sharpening and becoming softer again.
+			float power = mix(5.0, 0.45, clamp(blend_sharpness, 0.0, 1.0));
+			weight_a = pow(weight_a, power);
+			weight_b = pow(weight_b, power);
+			weight_c = pow(weight_c, power);
+			float total = weight_a + weight_b + weight_c;
+			if (total > 0.001) { weight_a /= total; weight_b /= total; weight_c /= total; }
 			if (use_stylized_texture_edges) {
 				vec3 styled_weights = stylized_texture_weights(vec3(weight_a, weight_b, weight_c));
 				weight_a = styled_weights.x;
@@ -910,15 +938,14 @@ void fragment() {
 			if (total > 0.001) { weight_a /= total; weight_b /= total; weight_c /= total; }
 		}
 
-		if (blend_sharpness > 0.0) {
-			// Lower values keep the dominant material sharper, higher values keep blends softer.
-			float power = mix(5.0, 0.45, clamp(blend_sharpness, 0.0, 1.0));
-			weight_a = pow(weight_a, power);
-			weight_b = pow(weight_b, power);
-			weight_c = pow(weight_c, power);
-			float total = weight_a + weight_b + weight_c;
-			if (total > 0.001) { weight_a /= total; weight_b /= total; weight_c /= total; }
-		}
+		// Always apply the response curve so 0.0 is the crispest endpoint
+		// instead of accidentally bypassing sharpening and becoming softer again.
+		float power = mix(5.0, 0.45, clamp(blend_sharpness, 0.0, 1.0));
+		weight_a = pow(weight_a, power);
+		weight_b = pow(weight_b, power);
+		weight_c = pow(weight_c, power);
+		float total = weight_a + weight_b + weight_c;
+		if (total > 0.001) { weight_a /= total; weight_b /= total; weight_c /= total; }
 
 		out_roughness = _palette_roughness(mat_a) * weight_a
 					+ _palette_roughness(mat_b) * weight_b

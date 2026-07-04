@@ -162,6 +162,9 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 				plugin.falloff = p_value
 				if plugin.BRUSH_RADIUS_MATERIAL and plugin.mode !=  plugin.TerrainToolMode.VERTEX_PAINTING:
 					plugin.BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", p_value)
+		"curve3d_mode":
+			if p_value is bool:
+				plugin.curve3d_mode = p_value
 		"strength":
 			if p_value is float or p_value is int:
 				plugin.strength = float(p_value)

@@ -368,6 +368,8 @@ func _copy_baked_arrays_to_preset(preset: MarchingSquaresTexturePreset, preset_p
 		preset.baked_normal_array_path = normal_dst
 	if _copy_resource_file(paths["grass"], grass_dst):
 		preset.baked_grass_array_path = grass_dst
+	if current_terrain_node.get("baked_dense_slot_lookup") != null:
+		preset.baked_dense_slot_lookup = current_terrain_node.baked_dense_slot_lookup
 
 
 func _save_texture_library_snapshot(preset: MarchingSquaresTexturePreset, preset_path: String) -> void:

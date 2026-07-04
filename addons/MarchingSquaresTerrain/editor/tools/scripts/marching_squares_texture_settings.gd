@@ -317,10 +317,12 @@ func _refresh_slot_runtime(
 		return
 	terrain.set("baked_albedo_array_path", "")
 	terrain.set("baked_normal_array_path", "")
+	terrain.set("baked_dense_slot_lookup", PackedInt32Array())
 	if terrain.has_method("invalidate_grass_bake_state"):
 		terrain.invalidate_grass_bake_state()
 	else:
 		terrain.set("baked_grass_array_path", "")
+		terrain.set("baked_dense_slot_lookup", PackedInt32Array())
 	if terrain.has_method("rebuild_texture_array"):
 		terrain.rebuild_texture_array()
 	if p_rebuild_grass_array and terrain.has_method("rebuild_grass_texture_array"):
@@ -729,6 +731,7 @@ func add_texture_settings() -> void:
 	var grid := GridContainer.new()
 	grid.columns = 1
 	grid.set_h_size_flags(Control.SIZE_EXPAND_FILL)
+	var rendered_slot_count := 0
 	for i in range(visible_count):
 		var slot_idx := i
 		if slot_idx == 15:
@@ -737,9 +740,13 @@ func add_texture_settings() -> void:
 		# Hide inactive slots; slot 0 remains always visible.
 		if slot_idx != 0 and _is_slot_inactive(slot_obj):
 			continue
+		if rendered_slot_count > 0:
+			var divider := HSeparator.new()
+			divider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			grid.add_child(divider)
 		var __si := slot_idx
 		var tile := VBoxContainer.new()
-		tile.set_custom_minimum_size(Vector2(136, 156))
+		tile.set_custom_minimum_size(Vector2(176, 156))
 		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var tex_var : Texture2D = _get_slot_albedo_texture(terrain, slot_idx)
 		var thumb := _make_slot_preview(tex_var, 96)
@@ -747,7 +754,7 @@ func add_texture_settings() -> void:
 		thumb_center.add_child(thumb)
 		tile.add_child(thumb_center)
 		var nameplate := PanelContainer.new()
-		nameplate.set_custom_minimum_size(Vector2(132, 24))
+		nameplate.set_custom_minimum_size(Vector2(168, 24))
 		nameplate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		var lbl := Label.new()
 		lbl.text = names[slot_idx] if slot_idx < names.size() else ("Texture " + str(slot_idx + 1))
@@ -755,7 +762,7 @@ func add_texture_settings() -> void:
 		lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		lbl.clip_text = true
 		lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		lbl.set_custom_minimum_size(Vector2(124, 20))
+		lbl.set_custom_minimum_size(Vector2(160, 20))
 		nameplate.add_child(lbl)
 		var nameplate_center := CenterContainer.new()
 		nameplate_center.add_child(nameplate)
@@ -777,6 +784,7 @@ func add_texture_settings() -> void:
 		btn_center.add_child(btn_h)
 		tile.add_child(btn_center)
 		grid.add_child(tile)
+		rendered_slot_count += 1
 	vbox.add_child(grid, true)
 	vbox.add_child(actions_v, true)
 	add_child(vbox, true)
@@ -1444,6 +1452,7 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 				terrain.invalidate_grass_bake_state()
 			else:
 				terrain.set("baked_grass_array_path", "")
+				terrain.set("baked_dense_slot_lookup", PackedInt32Array())
 			if terrain.has_method("rebuild_grass_texture_array"):
 				terrain.rebuild_grass_texture_array()
 
@@ -1471,6 +1480,7 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 			terrain.invalidate_grass_bake_state()
 		else:
 			terrain.set("baked_grass_array_path", "")
+			terrain.set("baked_dense_slot_lookup", PackedInt32Array())
 		# Always rebuild grass arrays + request regen so scene updates immediately when a grass texture is changed
 		if terrain.has_method("rebuild_grass_texture_array"):
 			terrain.rebuild_grass_texture_array()
@@ -1718,6 +1728,8 @@ func _on_bake_pressed() -> void:
 		terrain.set("baked_normal_array_path", results["normal_path"])
 	if results.has("grass_path") and results["grass_path"] != "":
 		terrain.set("baked_grass_array_path", results["grass_path"])
+	if results.has("dense_slot_lookup"):
+		terrain.set("baked_dense_slot_lookup", results["dense_slot_lookup"])
 
 	# Rebuild runtime arrays so material uses the newly baked resources.
 	MarchingSquaresTerrainHelpers.rebuild_texture_array(terrain)

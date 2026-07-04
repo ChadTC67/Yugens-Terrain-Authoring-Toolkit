@@ -185,6 +185,8 @@ var settings : Dictionary = {}
 var last_setting_type : SettingType = SettingType.ERROR
 var selected_chunk : MarchingSquaresTerrainChunk
 var current_available_chunks : Array[MarchingSquaresTerrainChunk] = []
+var _terrain_settings_selected_tab: int = 0
+var _terrain_settings_scroll_positions: Dictionary = {}
 
 var hbox_container
 
@@ -197,6 +199,7 @@ func _ready() -> void:
 
 
 func show_tool_attributes(tool_index: int) -> void:
+	_cache_terrain_settings_ui_state()
 	hbox_container = HBoxContainer.new()
 	hbox_container.add_theme_constant_override("separation", 5)
 	hbox_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -242,6 +245,8 @@ func show_tool_attributes(tool_index: int) -> void:
 		new_attributes.append(attribute_list.flatten)
 	if tool_attributes.falloff:
 		new_attributes.append(attribute_list.falloff)
+	if tool_attributes.curve3d_mode:
+		new_attributes.append(attribute_list.curve3d_mode)
 	if tool_attributes.mask_mode:
 		new_attributes.append(attribute_list.mask_mode)
 	if tool_attributes.material:
@@ -528,9 +533,17 @@ func add_setting(p_params: Dictionary) -> void:
 				if child is MarchingSquaresTerrainChunk:
 					chunk_button.add_item("Chunk " + str(child.chunk_coords))
 					current_available_chunks.append(child)
-			chunk_button.selected = current_available_chunks.find(plugin.selected_chunk) if not current_available_chunks.is_empty() and plugin.selected_chunk else -1
-			if not current_available_chunks.is_empty() and plugin.selected_chunk:
-				selected_chunk = plugin.selected_chunk
+			if not current_available_chunks.is_empty():
+				var preferred_chunk: MarchingSquaresTerrainChunk = plugin.selected_chunk
+				if preferred_chunk == null and plugin.current_terrain_node.chunks.has(plugin.current_hovered_chunk):
+					preferred_chunk = plugin.current_terrain_node.chunks[plugin.current_hovered_chunk]
+				if preferred_chunk == null:
+					preferred_chunk = current_available_chunks[0]
+				plugin.selected_chunk = preferred_chunk
+				selected_chunk = preferred_chunk
+				chunk_button.selected = current_available_chunks.find(preferred_chunk)
+			else:
+				chunk_button.selected = -1
 
 			var option_button := OptionButton.new()
 			option_button.set_flat(true)
@@ -596,6 +609,9 @@ func _create_terrain_settings_tabs() -> Control:
 	tabs.add_child(_create_shader_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Shader")
 
+	tabs.current_tab = clampi(_terrain_settings_selected_tab, 0, max(tabs.get_tab_count() - 1, 0))
+	tabs.tab_changed.connect(func(tab_idx: int): _terrain_settings_selected_tab = tab_idx)
+
 	return tabs
 
 
@@ -603,7 +619,7 @@ func _create_chunk_tab() -> Control:
 	var page := VBoxContainer.new()
 	page.name = "Chunk"
 	page.add_theme_constant_override("separation", 8)
-	page.add_child(_create_tab_scroll(_create_terrain_settings_list(TERRAIN_SETTINGS_CHUNK_TAB)), true)
+	page.add_child(_create_tab_scroll(page.name, _create_terrain_settings_list(TERRAIN_SETTINGS_CHUNK_TAB)), true)
 	return page
 
 
@@ -611,7 +627,7 @@ func _create_vertex_painter_tab() -> Control:
 	var page := VBoxContainer.new()
 	page.name = "VertexPainter"
 	page.add_theme_constant_override("separation", 8)
-	page.add_child(_create_tab_scroll(_create_terrain_settings_list(TERRAIN_SETTINGS_VERTEX_PAINTER_TAB)), true)
+	page.add_child(_create_tab_scroll(page.name, _create_terrain_settings_list(TERRAIN_SETTINGS_VERTEX_PAINTER_TAB)), true)
 	return page
 
 
@@ -619,7 +635,7 @@ func _create_environment_tab() -> Control:
 	var page := VBoxContainer.new()
 	page.name = "Environment"
 	page.add_theme_constant_override("separation", 8)
-	page.add_child(_create_tab_scroll(_create_terrain_settings_list(TERRAIN_SETTINGS_ENVIRONMENT_TAB)), true)
+	page.add_child(_create_tab_scroll(page.name, _create_terrain_settings_list(TERRAIN_SETTINGS_ENVIRONMENT_TAB)), true)
 	return page
 
 
@@ -647,7 +663,7 @@ func _create_shader_tab() -> Control:
 	return page
 
 
-func _create_tab_scroll(content: Control) -> Control:
+func _create_tab_scroll(tab_name: String, content: Control) -> Control:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_FILL
@@ -656,8 +672,55 @@ func _create_tab_scroll(content: Control) -> Control:
 	scroll.set_custom_minimum_size(Vector2(0, TERRAIN_TAB_VISIBLE_HEIGHT))
 	scroll.custom_minimum_size.y = TERRAIN_TAB_VISIBLE_HEIGHT
 	scroll.add_child(content, true)
-	scroll.set_deferred("scroll_vertical", 0)
+	if _terrain_settings_scroll_positions.has(tab_name):
+		scroll.set_deferred("scroll_vertical", int(_terrain_settings_scroll_positions[tab_name]))
+	else:
+		scroll.set_deferred("scroll_vertical", 0)
+	scroll.gui_input.connect(func(_event: InputEvent):
+		_terrain_settings_scroll_positions[tab_name] = scroll.scroll_vertical
+	)
 	return scroll
+
+
+func _cache_terrain_settings_ui_state() -> void:
+	var tabs := _find_terrain_settings_tabs()
+	if tabs == null:
+		return
+
+	_terrain_settings_selected_tab = tabs.current_tab
+	for page in tabs.get_children():
+		if page is Control:
+			var scroll := _find_first_scroll_container(page)
+			if scroll != null:
+				_terrain_settings_scroll_positions[String(page.name)] = scroll.scroll_vertical
+
+
+func _find_terrain_settings_tabs() -> TabContainer:
+	for child in get_children():
+		var tabs := _find_first_tab_container(child)
+		if tabs != null:
+			return tabs
+	return null
+
+
+func _find_first_tab_container(node: Node) -> TabContainer:
+	if node is TabContainer:
+		return node as TabContainer
+	for child in node.get_children():
+		var found := _find_first_tab_container(child)
+		if found != null:
+			return found
+	return null
+
+
+func _find_first_scroll_container(node: Node) -> ScrollContainer:
+	if node is ScrollContainer:
+		return node as ScrollContainer
+	for child in node.get_children():
+		var found := _find_first_scroll_container(child)
+		if found != null:
+			return found
+	return null
 
 
 func _create_terrain_settings_list(setting_names: Array) -> Control:

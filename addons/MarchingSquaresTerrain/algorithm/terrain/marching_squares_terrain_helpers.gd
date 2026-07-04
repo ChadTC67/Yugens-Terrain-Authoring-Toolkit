@@ -222,6 +222,75 @@ static func is_valid_texture2d(tex) -> bool:
 	return tex.get_class() != "Texture2D"
 
 
+static func _normalize_dense_slot_lookup(lookup: PackedInt32Array) -> PackedInt32Array:
+	var normalized := PackedInt32Array()
+	normalized.resize(MAX_TEXTURE_SLOTS)
+	for i in range(MAX_TEXTURE_SLOTS):
+		normalized[i] = -1
+	for i in range(mini(lookup.size(), MAX_TEXTURE_SLOTS)):
+		normalized[i] = int(lookup[i])
+	return normalized
+
+
+static func _build_dense_slot_lookup(albedo_textures: Array, normal_textures: Array, grass_textures: Array) -> PackedInt32Array:
+	var lookup := PackedInt32Array()
+	lookup.resize(MAX_TEXTURE_SLOTS)
+	for i in range(MAX_TEXTURE_SLOTS):
+		lookup[i] = -1
+
+	var dense_layer := 0
+	for slot_idx in range(MAX_TEXTURE_SLOTS):
+		var has_albedo := slot_idx < albedo_textures.size() and is_valid_texture2d(albedo_textures[slot_idx])
+		var has_normal := slot_idx < normal_textures.size() and is_valid_texture2d(normal_textures[slot_idx])
+		var has_grass := slot_idx < grass_textures.size() and is_valid_texture2d(grass_textures[slot_idx])
+		if has_albedo or has_normal or has_grass:
+			lookup[slot_idx] = dense_layer
+			dense_layer += 1
+	return lookup
+
+
+static func _dense_slot_lookup_has_entries(lookup: PackedInt32Array) -> bool:
+	for i in range(mini(lookup.size(), MAX_TEXTURE_SLOTS)):
+		if int(lookup[i]) >= 0:
+			return true
+	return false
+
+
+static func _dense_layer_count_from_lookup(lookup: PackedInt32Array) -> int:
+	var max_layer := -1
+	for i in range(mini(lookup.size(), MAX_TEXTURE_SLOTS)):
+		max_layer = maxi(max_layer, int(lookup[i]))
+	return max_layer + 1
+
+
+static func _build_slot_layer_lookup_texture(lookup: PackedInt32Array) -> Texture2D:
+	var normalized := _normalize_dense_slot_lookup(lookup)
+	var img := Image.create(1, MAX_TEXTURE_SLOTS, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	for slot_idx in range(MAX_TEXTURE_SLOTS):
+		var layer := int(normalized[slot_idx])
+		if layer < 0:
+			continue
+		var encoded := float(clampi(layer, 0, 255)) / 255.0
+		img.set_pixel(0, slot_idx, Color(encoded, 0.0, 0.0, 1.0))
+	return ImageTexture.create_from_image(img)
+
+
+static func _apply_slot_layer_lookup(terrain, lookup: PackedInt32Array) -> void:
+	var normalized := _normalize_dense_slot_lookup(lookup)
+	var has_lookup := _dense_slot_lookup_has_entries(normalized)
+	var lookup_texture: Texture2D = null
+	if has_lookup:
+		lookup_texture = _build_slot_layer_lookup_texture(normalized)
+	terrain._runtime_slot_layer_lookup_tex = lookup_texture
+	terrain.terrain_material.set_shader_parameter("vc_slot_layer_lookup_tex", lookup_texture)
+	terrain.terrain_material.set_shader_parameter("use_slot_layer_lookup", has_lookup)
+	if terrain.grass_mesh != null and terrain.grass_mesh.material is ShaderMaterial:
+		var grass_mat := terrain.grass_mesh.material as ShaderMaterial
+		grass_mat.set_shader_parameter("vc_slot_layer_lookup_tex", lookup_texture)
+		grass_mat.set_shader_parameter("use_slot_layer_lookup", has_lookup)
+
+
 static func _required_texture_layer_count(albedo_textures: Array, normal_textures: Array, grass_textures: Array) -> int:
 	var highest := max(
 		_highest_texture_slot(albedo_textures),
@@ -249,11 +318,73 @@ static func _build_texture_array_from_textures(textures: Array, target_size: int
 	return arr
 
 
+static func _build_texture_array_from_lookup(textures: Array, target_size: int, placeholder_color: Color, lookup: PackedInt32Array) -> Texture2DArray:
+	var normalized := _normalize_dense_slot_lookup(lookup)
+	var layer_count := _dense_layer_count_from_lookup(normalized)
+	if layer_count <= 0:
+		return null
+
+	var images := []
+	images.resize(layer_count)
+	for slot_idx in range(mini(textures.size(), MAX_TEXTURE_SLOTS)):
+		var layer := int(normalized[slot_idx])
+		if layer < 0:
+			continue
+		var tex = textures[slot_idx]
+		var img: Image = null
+		if is_valid_texture2d(tex):
+			img = MSTVertexColorHelper.get_decompressed_image(tex)
+			img = MSTVertexColorHelper.normalize_image_for_texture_array(img, target_size, target_size)
+		if img == null:
+			img = Image.create(target_size, target_size, false, Image.FORMAT_RGBA8)
+			img.fill(placeholder_color)
+		images[layer] = img
+	for layer_idx in range(layer_count):
+		if images[layer_idx] != null:
+			continue
+		var placeholder := Image.create(target_size, target_size, false, Image.FORMAT_RGBA8)
+		placeholder.fill(placeholder_color)
+		images[layer_idx] = placeholder
+	var arr := Texture2DArray.new()
+	var err := arr.create_from_images(images)
+	if err != OK:
+		return null
+	return arr
+
+
 static func _has_texture2d(textures: Array) -> bool:
 	for tex in textures:
 		if is_valid_texture2d(tex):
 			return true
 	return false
+
+
+static func _collect_runtime_grass_textures(terrain) -> Array:
+	var grass_textures := []
+	grass_textures.resize(MAX_TEXTURE_SLOTS)
+	var default_grass_texture: Texture2D = null
+	if terrain.texture_slots.size() > 0:
+		var base_slot = terrain.texture_slots[0]
+		if base_slot != null and base_slot.get("grass_texture") != null and is_valid_texture2d(base_slot.grass_texture):
+			default_grass_texture = base_slot.grass_texture
+	if default_grass_texture == null and is_valid_texture2d(terrain.grass_sprite_tex_1):
+		default_grass_texture = terrain.grass_sprite_tex_1
+
+	for i in range(mini(terrain.texture_slots.size(), MAX_TEXTURE_SLOTS)):
+		var slot = terrain.texture_slots[i]
+		var slot_has_grass := slot != null and slot.get("has_grass") != null and bool(slot.has_grass)
+		if slot_has_grass and slot != null and slot.get("grass_texture") != null and is_valid_texture2d(slot.grass_texture):
+			grass_textures[i] = slot.grass_texture
+		elif slot_has_grass and default_grass_texture != null:
+			grass_textures[i] = default_grass_texture
+
+	if grass_textures[0] == null and bool(terrain.tex1_has_grass): grass_textures[0] = terrain.grass_sprite_tex_1
+	if grass_textures[1] == null and bool(terrain.tex2_has_grass): grass_textures[1] = terrain.grass_sprite_tex_2
+	if grass_textures[2] == null and bool(terrain.tex3_has_grass): grass_textures[2] = terrain.grass_sprite_tex_3
+	if grass_textures[3] == null and bool(terrain.tex4_has_grass): grass_textures[3] = terrain.grass_sprite_tex_4
+	if grass_textures[4] == null and bool(terrain.tex5_has_grass): grass_textures[4] = terrain.grass_sprite_tex_5
+	if grass_textures[5] == null and bool(terrain.tex6_has_grass): grass_textures[5] = terrain.grass_sprite_tex_6
+	return grass_textures
 
 
 static func rebuild_texture_array(terrain) -> void:
@@ -266,6 +397,7 @@ static func rebuild_texture_array(terrain) -> void:
 	if baked !=  null:
 		terrain._runtime_texture_array = baked
 		terrain.terrain_material.set_shader_parameter("vc_tex_array", terrain._runtime_texture_array)
+		_apply_slot_layer_lookup(terrain, terrain.baked_dense_slot_lookup if terrain.get("baked_dense_slot_lookup") != null else PackedInt32Array())
 		if terrain.grass_mesh != null and terrain.grass_mesh.material is ShaderMaterial:
 			var grass_mat := terrain.grass_mesh.material as ShaderMaterial
 			grass_mat.set_shader_parameter("vc_floor_tex_array", terrain._runtime_texture_array)
@@ -298,18 +430,20 @@ static func rebuild_texture_array(terrain) -> void:
 			var target_size := int(terrain.get("runtime_baked_texture_size")) if terrain.get("runtime_baked_texture_size") != null else 512
 			if Engine.is_editor_hint():
 				target_size = int(terrain.get("editor_preview_texture_size")) if terrain.get("editor_preview_texture_size") != null else 128
-			var layer_count := _required_texture_layer_count(lib.albedo_textures, lib.normal_textures, lib.grass_textures)
-			if terrain.has_method("get") and terrain.get("visible_texture_slot_count") != null:
-				layer_count = max(layer_count, clampi(int(terrain.get("visible_texture_slot_count")), 1, MAX_TEXTURE_SLOTS))
-			var arr := _build_texture_array_from_textures(lib.albedo_textures, target_size, Color(1, 1, 1, 1), layer_count)
+			var grass_textures := _collect_runtime_grass_textures(terrain)
+			var dense_lookup := _build_dense_slot_lookup(lib.albedo_textures, lib.normal_textures, grass_textures)
+			if lib.get("dense_slot_lookup") != null:
+				lib.dense_slot_lookup = dense_lookup
+			var arr := _build_texture_array_from_lookup(lib.albedo_textures, target_size, Color(1, 1, 1, 1), dense_lookup)
 			if arr == null:
 				push_warning("[MST] Failed to build runtime Texture2DArray from MSTextureLibrary.")
 				return
 			var has_normal_maps := _has_texture2d(lib.normal_textures)
-			var normal_arr := _build_texture_array_from_textures(lib.normal_textures, target_size, Color(0.5, 0.5, 1.0, 1.0), layer_count) if has_normal_maps else null
+			var normal_arr := _build_texture_array_from_lookup(lib.normal_textures, target_size, Color(0.5, 0.5, 1.0, 1.0), dense_lookup) if has_normal_maps else null
 			terrain._runtime_texture_array = arr
 			terrain._runtime_normal_texture_array = normal_arr
 			terrain.terrain_material.set_shader_parameter("vc_tex_array", terrain._runtime_texture_array)
+			_apply_slot_layer_lookup(terrain, dense_lookup)
 			if terrain.grass_mesh != null and terrain.grass_mesh.material is ShaderMaterial:
 				var grass_mat := terrain.grass_mesh.material as ShaderMaterial
 				grass_mat.set_shader_parameter("vc_floor_tex_array", terrain._runtime_texture_array)
@@ -376,6 +510,7 @@ static func rebuild_texture_array(terrain) -> void:
 
 	terrain._runtime_texture_array = arr
 	terrain.terrain_material.set_shader_parameter("vc_tex_array", terrain._runtime_texture_array)
+	_apply_slot_layer_lookup(terrain, PackedInt32Array())
 	if terrain.grass_mesh != null and terrain.grass_mesh.material is ShaderMaterial:
 		var grass_mat := terrain.grass_mesh.material as ShaderMaterial
 		grass_mat.set_shader_parameter("vc_floor_tex_array", terrain._runtime_texture_array)
@@ -406,47 +541,48 @@ static func rebuild_grass_texture_array(terrain) -> void:
 		terrain._runtime_grass_texture_array = baked
 		grass_mat.set_shader_parameter("vc_grass_tex_array", terrain._runtime_grass_texture_array)
 		grass_mat.set_shader_parameter("use_grass_tex_array", true)
+		_apply_slot_layer_lookup(terrain, terrain.baked_dense_slot_lookup if terrain.get("baked_dense_slot_lookup") != null else PackedInt32Array())
 		return
 
 	var targetsz := int(terrain.get("baked_grass_texture_size")) if terrain.get("baked_grass_texture_size") != null else 64
-	var grass_textures := []
-	grass_textures.resize(MAX_TEXTURE_SLOTS)
-	var default_grass_texture: Texture2D = null
-	if terrain.texture_slots.size() > 0:
-		var base_slot = terrain.texture_slots[0]
-		if base_slot != null and base_slot.get("grass_texture") != null and is_valid_texture2d(base_slot.grass_texture):
-			default_grass_texture = base_slot.grass_texture
-	if default_grass_texture == null and is_valid_texture2d(terrain.grass_sprite_tex_1):
-		default_grass_texture = terrain.grass_sprite_tex_1
-	for i in range(mini(terrain.texture_slots.size(), MAX_TEXTURE_SLOTS)):
-		var slot = terrain.texture_slots[i]
-		var slot_has_grass := slot != null and slot.get("has_grass") != null and bool(slot.has_grass)
-		if slot_has_grass and slot != null and slot.get("grass_texture") != null and is_valid_texture2d(slot.grass_texture):
-			grass_textures[i] = terrain.texture_slots[i].grass_texture
-		elif slot_has_grass and default_grass_texture != null:
-			grass_textures[i] = default_grass_texture
-
-	# Keep legacy sprite exports wired into the first 6 slots if slot data is missing.
-	if grass_textures[0] == null and bool(terrain.tex1_has_grass): grass_textures[0] = terrain.grass_sprite_tex_1
-	if grass_textures[1] == null and bool(terrain.tex2_has_grass): grass_textures[1] = terrain.grass_sprite_tex_2
-	if grass_textures[2] == null and bool(terrain.tex3_has_grass): grass_textures[2] = terrain.grass_sprite_tex_3
-	if grass_textures[3] == null and bool(terrain.tex4_has_grass): grass_textures[3] = terrain.grass_sprite_tex_4
-	if grass_textures[4] == null and bool(terrain.tex5_has_grass): grass_textures[4] = terrain.grass_sprite_tex_5
-	if grass_textures[5] == null and bool(terrain.tex6_has_grass): grass_textures[5] = terrain.grass_sprite_tex_6
-
-	var highest_grass_slot := _highest_texture_slot(grass_textures)
-	var layer_count := clampi(max(highest_grass_slot + 1, 6), 1, MAX_TEXTURE_SLOTS)
-	var arr := _build_texture_array_from_textures(grass_textures, targetsz, Color(0, 0, 0, 0), layer_count)
-	if arr != null:
-		terrain._runtime_grass_texture_array = arr
-		# Expose to grass shader and enable array usage
-		grass_mat.set_shader_parameter("vc_grass_tex_array", terrain._runtime_grass_texture_array)
-		grass_mat.set_shader_parameter("use_grass_tex_array", true)
+	var grass_textures := _collect_runtime_grass_textures(terrain)
+	var dense_lookup := PackedInt32Array()
+	if terrain.texture_library != null:
+		var lib = terrain.texture_library
+		if not (lib is MSTextureLibraryScript) and lib is Resource and lib.resource_path and str(lib.resource_path) != "":
+			var loaded_lib = ResourceLoader.load(str(lib.resource_path))
+			if loaded_lib and loaded_lib is MSTextureLibraryScript:
+				lib = loaded_lib
+		if lib and lib is MSTextureLibraryScript:
+			lib.ensure_length()
+			dense_lookup = _build_dense_slot_lookup(lib.albedo_textures, lib.normal_textures, grass_textures)
+		else:
+			dense_lookup = terrain.baked_dense_slot_lookup if terrain.get("baked_dense_slot_lookup") != null else PackedInt32Array()
 	else:
-		# Fallback: clear array and disable array usage so shader uses individual textures
-		terrain._runtime_grass_texture_array = null
-		grass_mat.set_shader_parameter("vc_grass_tex_array", null)
-		grass_mat.set_shader_parameter("use_grass_tex_array", false)
+		dense_lookup = terrain.baked_dense_slot_lookup if terrain.get("baked_dense_slot_lookup") != null else PackedInt32Array()
+	if not _dense_slot_lookup_has_entries(dense_lookup):
+		var highest_grass_slot := _highest_texture_slot(grass_textures)
+		var layer_count := clampi(max(highest_grass_slot + 1, 6), 1, MAX_TEXTURE_SLOTS)
+		var legacy_arr := _build_texture_array_from_textures(grass_textures, targetsz, Color(0, 0, 0, 0), layer_count)
+		if legacy_arr != null:
+			terrain._runtime_grass_texture_array = legacy_arr
+			grass_mat.set_shader_parameter("vc_grass_tex_array", terrain._runtime_grass_texture_array)
+			grass_mat.set_shader_parameter("use_grass_tex_array", true)
+		else:
+			terrain._runtime_grass_texture_array = null
+			grass_mat.set_shader_parameter("vc_grass_tex_array", null)
+			grass_mat.set_shader_parameter("use_grass_tex_array", false)
+	else:
+		var arr := _build_texture_array_from_lookup(grass_textures, targetsz, Color(0, 0, 0, 0), dense_lookup)
+		if arr != null:
+			terrain._runtime_grass_texture_array = arr
+			grass_mat.set_shader_parameter("vc_grass_tex_array", terrain._runtime_grass_texture_array)
+			grass_mat.set_shader_parameter("use_grass_tex_array", true)
+			_apply_slot_layer_lookup(terrain, dense_lookup)
+		else:
+			terrain._runtime_grass_texture_array = null
+			grass_mat.set_shader_parameter("vc_grass_tex_array", null)
+			grass_mat.set_shader_parameter("use_grass_tex_array", false)
 
 	# Still set legacy uniforms for compatibility/fallback
 	var t1: Texture2D = terrain.grass_sprite_tex_1

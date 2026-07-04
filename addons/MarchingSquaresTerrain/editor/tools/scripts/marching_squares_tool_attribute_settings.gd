@@ -15,6 +15,7 @@ class_name MarchingSquaresToolAttributeSettings
 @export var vp_falloff_mode : bool = false
 
 # Brush specific attributes
+@export var curve3d_mode : bool = false
 @export var mask_mode : bool = false
 @export var material : bool = false
 @export var texture_name : bool = false

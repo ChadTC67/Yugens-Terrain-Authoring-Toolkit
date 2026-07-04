@@ -16,6 +16,8 @@ group_uniforms;
 group_uniforms Visuals.Textures;
 uniform sampler2DArray vc_floor_tex_array : source_color, filter_nearest;
 uniform bool use_floor_tex_array = false;
+uniform sampler2D vc_slot_layer_lookup_tex : filter_nearest;
+uniform bool use_slot_layer_lookup = false;
 uniform float tex_scales[256];
 uniform ivec3 chunk_size = ivec3(33, 32, 33);
 uniform vec2 cell_size = vec2(2.0, 2.0);
@@ -48,6 +50,10 @@ uniform bool use_base_color_5 = false;
 uniform bool use_base_color_6 = false;
 group_uniforms;
 
+group_uniforms Animations.Settings;
+uniform bool animate_active = true;
+uniform float fps : hint_range(0.0, 30.0, 1.0) = 0.0;
+group_uniforms;
 
 group_uniforms Effects.Experimental;
 uniform bool is_merge_round = false;
@@ -309,9 +315,30 @@ float get_texture_scale(int slot) {
 	return max(tex_scales[slot], 0.0001);
 }
 
+vec4 sample_slot_layer_lookup(int slot) {
+	slot = clamp(slot, 0, 255);
+	float v = (float(slot) + 0.5) / 256.0;
+	return texture(vc_slot_layer_lookup_tex, vec2(0.5, v));
+}
+
+int dense_texture_layer(int slot) {
+	vec4 lookup = sample_slot_layer_lookup(slot);
+	if (lookup.a < 0.5) {
+		return -1;
+	}
+	return int(round(lookup.r * 255.0));
+}
+
 vec4 sample_floor_texture_layer(int slot, vec2 base_uv) {
 	slot = clamp(slot, 0, 255);
 	vec2 uv = fract(base_uv * get_texture_scale(slot));
+	if (use_slot_layer_lookup) {
+		int dense_layer = dense_texture_layer(slot);
+		if (dense_layer < 0) {
+			return (slot == 15) ? vec4(0.0) : vec4(1.0);
+		}
+		return texture(vc_floor_tex_array, vec3(uv, float(dense_layer)));
+	}
 	if (slot == 15) return texture(vc_floor_tex_array, vec3(uv, 15.0));
 	return texture(vc_floor_tex_array, vec3(uv, float(slot)));
 }
@@ -355,6 +382,25 @@ void vertex() {
 	sloty *= mix(1.0, height_mult, blade_variation);
 
 	vec3 scaled_local = vec3(VERTEX.x * slotx, VERTEX.y * sloty, VERTEX.z * slotz);
+	if (animate_active && scaled_local.y > 0.0) {
+		float bend_factor = clamp(scaled_local.y / max(sloty, 0.0001), 0.0, 1.0);
+		float sway_strength = 0.18;
+		float seed = fract(sin(float(INSTANCE_ID) * 91.137 + slotx * 17.0 + slotz * 7.0) * 43758.5453);
+		if (fps > 0.0) {
+			float stepped_time = floor((TIME + seed) * fps) / fps;
+			float sway = sin(stepped_time * 2.6 + seed * 6.28318) * sway_strength;
+			scaled_local.x += sway * bend_factor;
+		} else {
+			float wind_time = TIME * wind_speed;
+			vec2 wind_uv = fract(
+				instance_origin.xz * max(global_noise_scale, 0.001) +
+				(wind_direction * wind_time) +
+				vec2(seed, seed * 0.73)
+			);
+			float wind_value = texture(global_noise_texture, wind_uv).r * 2.0 - 1.0;
+			scaled_local.x += wind_value * sway_strength * bend_factor;
+		}
+	}
 	vec3 billboarded_vertex = spherical_billboard * scaled_local;
 	vec3 world_position = instance_origin + billboarded_vertex;
 	POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(world_position, 1.0);
@@ -418,7 +464,12 @@ void fragment() {
 	// Sample the appropriate grass texture. Prefer Texture2DArray if available.
 	vec4 grass_tex = vec4(0.0);
 	if (use_grass_tex_array) {
-		grass_tex = textureLod(vc_grass_tex_array, vec3(UV, float(slot)), 0.0);
+		if (use_slot_layer_lookup) {
+			int dense_layer = dense_texture_layer(slot);
+			grass_tex = (dense_layer < 0) ? vec4(0.0) : textureLod(vc_grass_tex_array, vec3(UV, float(dense_layer)), 0.0);
+		} else {
+			grass_tex = textureLod(vc_grass_tex_array, vec3(UV, float(slot)), 0.0);
+		}
 	} else {
 		if (legacy_tex_id == 1) grass_tex = textureLod(grass_texture_1, UV, 0.0);
 		else if (legacy_tex_id == 2) grass_tex = textureLod(grass_texture_2, UV, 0.0);

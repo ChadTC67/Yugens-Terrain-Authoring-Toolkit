@@ -31,35 +31,23 @@ func _normalize_array_image(source: Image, size: int, fill_color: Color) -> Imag
 	img.blit_rect(src, Rect2i(0, 0, size, size), Vector2i(0, 0))
 	return img
 
-func _highest_texture_slot(textures: Array) -> int:
-	var highest := -1
-	for i in range(textures.size()):
-		if MarchingSquaresTerrainHelpers.is_valid_texture2d(textures[i]):
-			highest = i
-	return highest
-
-
-func _required_layer_count(lib) -> int:
-	var highest := max(
-		_highest_texture_slot(lib.albedo_textures),
-		max(_highest_texture_slot(lib.normal_textures), _highest_texture_slot(lib.grass_textures))
-	)
-	# Slot 15 is reserved for VOID, and the shader samples by slot index.
-	return clampi(max(highest + 1, 16), 1, lib.max_slots)
-
-
 ## Returns paths for the baked albedo, normal, and grass Texture2DArray resources.
-func _bake_array(lib, textures: Array, out_dir: String, filename: String, size: int, layer_count: int) -> String:
+func _bake_array(lib, textures: Array, out_dir: String, filename: String, size: int, dense_lookup: PackedInt32Array) -> String:
+	var layer_count := MarchingSquaresTerrainHelpers._dense_layer_count_from_lookup(dense_lookup)
+	if layer_count <= 0:
+		return ""
 	var images := []
+	images.resize(layer_count)
 	var fill_color := PLACEHOLDER_ALBEDO
 	if filename.find("normal") != -1:
 		fill_color = PLACEHOLDER_NORMAL
 	elif filename.find("grass") != -1:
 		fill_color = PLACEHOLDER_GRASS
-	for i in range(layer_count):
-		var tex = null
-		if i < textures.size():
-			tex = textures[i]
+	for slot_idx in range(mini(textures.size(), lib.max_slots)):
+		var layer := int(dense_lookup[slot_idx]) if slot_idx < dense_lookup.size() else -1
+		if layer < 0:
+			continue
+		var tex = textures[slot_idx]
 		var img: Image
 		if MarchingSquaresTerrainHelpers.is_valid_texture2d(tex):
 			var src: Image = MSTVertexColorHelper.get_decompressed_image(tex)
@@ -67,7 +55,13 @@ func _bake_array(lib, textures: Array, out_dir: String, filename: String, size: 
 		else:
 			img = Image.create(size, size, false, Image.FORMAT_RGBA8)
 			img.fill(fill_color)
-		images.append(img)
+		images[layer] = img
+	for layer_idx in range(layer_count):
+		if images[layer_idx] != null:
+			continue
+		var placeholder := Image.create(size, size, false, Image.FORMAT_RGBA8)
+		placeholder.fill(fill_color)
+		images[layer_idx] = placeholder
 	var arr := Texture2DArray.new()
 	var err := arr.create_from_images(images)
 	if err != OK:
@@ -101,16 +95,18 @@ func bake_library(lib, out_dir: String, albedo_size: int = DEFAULT_SIZE, grass_s
 			push_error("MarchingSquaresBaker: texture_library is not a MSTextureLibrary instance.")
 			return {}
 	lib.ensure_length()
-	var layer_count := _required_layer_count(lib)
+	var dense_lookup := MarchingSquaresTerrainHelpers._build_dense_slot_lookup(lib.albedo_textures, lib.normal_textures, lib.grass_textures)
+	lib.dense_slot_lookup = dense_lookup
 
 	var results := {}
 	var out_abs := ProjectSettings.globalize_path(out_dir)
 	if not DirAccess.dir_exists_absolute(out_abs):
 		DirAccess.make_dir_recursive_absolute(out_abs)
 
-	results["albedo_path"] = _bake_array(lib, lib.albedo_textures, out_dir, "baked_albedo_array.res", albedo_size, layer_count)
-	results["normal_path"] = _bake_array(lib, lib.normal_textures, out_dir, "baked_normal_array.res", albedo_size, layer_count)
-	results["grass_path"] = _bake_array(lib, lib.grass_textures, out_dir, "baked_grass_array.res", grass_size, layer_count)
+	results["albedo_path"] = _bake_array(lib, lib.albedo_textures, out_dir, "baked_albedo_array.res", albedo_size, dense_lookup)
+	results["normal_path"] = _bake_array(lib, lib.normal_textures, out_dir, "baked_normal_array.res", albedo_size, dense_lookup)
+	results["grass_path"] = _bake_array(lib, lib.grass_textures, out_dir, "baked_grass_array.res", grass_size, dense_lookup)
+	results["dense_slot_lookup"] = dense_lookup
 	return results
 
 func _run() -> void:

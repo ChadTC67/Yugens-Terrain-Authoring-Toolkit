@@ -16,6 +16,7 @@ class_name MarchingSquaresTexturePreset
 @export var baked_albedo_array_path : String = ""
 @export var baked_normal_array_path : String = ""
 @export var baked_grass_array_path : String = ""
+@export var baked_dense_slot_lookup: PackedInt32Array = PackedInt32Array()
 
 # If enabled, the preset also stores/applies selected global terrain settings (beyond just colors/textures).
 @export_group("Global Settings")

@@ -65,6 +65,13 @@ var falloff : Dictionary = {
 	"default": true,
 }
 
+var curve3d_mode : Dictionary = {
+	"name": "curve3d_mode",
+	"type": "checkbox",
+	"label": "Curve3D Mode",
+	"default": false,
+}
+
 var mask_mode : Dictionary = {
 	"name": "mask_mode",
 	"type": "checkbox",

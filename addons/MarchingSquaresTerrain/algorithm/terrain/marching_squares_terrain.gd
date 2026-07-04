@@ -89,6 +89,7 @@ var _data_directory : String = ""
 @export_storage var baked_albedo_array_path : String = ""
 @export_storage var baked_normal_array_path : String = ""
 @export_storage var baked_grass_array_path : String = ""
+@export_storage var baked_dense_slot_lookup: PackedInt32Array = PackedInt32Array()
 ## Texture size used for live editor preview arrays when no baked array is loaded.
 ## Lower values keep inspector edits responsive and explain the intentionally softer editor preview.
 @export_range(32, 2048, 1) var editor_preview_texture_size : int = 128
@@ -223,9 +224,14 @@ func _apply_blend_noise_settings() -> void:
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_cell_shading : bool = true:
 	set(value):
 		use_cell_shading = value
-		terrain_material.set_shader_parameter("use_cell_shading", value)
+		if terrain_material != null:
+			terrain_material.set_shader_parameter("use_cell_shading", value)
 		var grass_mat := grass_mesh.material as ShaderMaterial
-		grass_mat.set_shader_parameter("use_cell_shading", value)
+		if grass_mat != null:
+			grass_mat.set_shader_parameter("use_cell_shading", value)
+		if not is_inside_tree():
+			return
+		refresh_chunk_surface_materials()
 
 # Backwards/forwards compat: scenes/presets may reference either "use_flat_normals" (shader) or legacy "flat_normals".
 # Default is false (smooth normals).
@@ -313,7 +319,9 @@ var flat_normals : bool = false:
 	set(value):
 		animation_fps = clamp(value, 0, 30)
 		var grass_mat := grass_mesh.material as ShaderMaterial
-		grass_mat.set_shader_parameter("fps", clamp(value, 0, 30))
+		if grass_mat != null:
+			grass_mat.set_shader_parameter("fps", animation_fps)
+			grass_mat.set_shader_parameter("animate_active", true)
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_subdivisions : int = 3:
 	set(value):
 		grass_subdivisions = value
@@ -466,6 +474,7 @@ const _TEXTURE_SLOT_SCRIPT := preload("res://addons/MarchingSquaresTerrain/resou
 var _runtime_texture_array: Texture2DArray = null
 var _runtime_normal_texture_array: Texture2DArray = null
 var _runtime_grass_texture_array: Texture2DArray = null
+var _runtime_slot_layer_lookup_tex: Texture2D = null
 
 var texture_array: Texture2DArray:
 	get:
@@ -836,6 +845,9 @@ func _init() -> void:
 	# Create unique copies of shared resources for this node instance
 	# This prevents texture/material changes from affecting other MarchingSquaresTerrain nodes
 	terrain_material = preload("res://addons/MarchingSquaresTerrain/resources/plugin_materials/mst_terrain_shader.tres").duplicate(true)
+	terrain_material.set_shader_parameter("use_hard_textures", false)
+	terrain_material.set_shader_parameter("blend_mode", 0)
+	terrain_material.set_shader_parameter("blend_sharpness", blend_sharpness)
 	terrain_material.set_shader_parameter("global_noise_texture", global_noise_texture)
 	terrain_material.set_shader_parameter("global_noise_strength", global_noise_strength)
 	terrain_material.set_shader_parameter("global_noise_scale", global_noise_scale)
@@ -875,6 +887,7 @@ var _grass_regen_pending: bool = false
 
 func invalidate_grass_bake_state() -> void:
 	baked_grass_array_path = ""
+	baked_dense_slot_lookup = PackedInt32Array()
 	for chunk: MarchingSquaresTerrainChunk in chunks.values():
 		if not is_instance_valid(chunk):
 			continue
@@ -917,6 +930,8 @@ func _apply_flat_normals(p_enabled: bool) -> void:
 	# Terrain shader expects "use_flat_normals".
 	if terrain_material != null:
 		terrain_material.set_shader_parameter("use_flat_normals", _use_flat_normals)
+	if is_inside_tree():
+		refresh_chunk_surface_materials()
 	# Grass instances use this flag when generating normals.
 	_request_grass_regen()
 
@@ -1012,16 +1027,21 @@ func _clear_runtime_texture_arrays_for_scene_save() -> void:
 	_runtime_texture_array = null
 	_runtime_normal_texture_array = null
 	_runtime_grass_texture_array = null
+	_runtime_slot_layer_lookup_tex = null
 	if terrain_material:
 		terrain_material.set_shader_parameter("vc_tex_array", null)
 		terrain_material.set_shader_parameter("vc_normal_array", null)
 		terrain_material.set_shader_parameter("use_normal_array", false)
+		terrain_material.set_shader_parameter("vc_slot_layer_lookup_tex", null)
+		terrain_material.set_shader_parameter("use_slot_layer_lookup", false)
 	if grass_mesh and grass_mesh.material and grass_mesh.material is ShaderMaterial:
 		var grass_mat := grass_mesh.material as ShaderMaterial
 		grass_mat.set_shader_parameter("vc_grass_tex_array", null)
 		grass_mat.set_shader_parameter("use_grass_tex_array", false)
 		grass_mat.set_shader_parameter("vc_floor_tex_array", null)
 		grass_mat.set_shader_parameter("use_floor_tex_array", false)
+		grass_mat.set_shader_parameter("vc_slot_layer_lookup_tex", null)
+		grass_mat.set_shader_parameter("use_slot_layer_lookup", false)
 
 
 func _restore_runtime_texture_arrays_after_scene_save() -> void:
@@ -1499,6 +1519,8 @@ func save_to_preset() -> void:
 		current_texture_preset.baked_normal_array_path = baked_normal_array_path
 	if preset_owns_texture_resources and current_texture_preset.get("baked_grass_array_path") != null:
 		current_texture_preset.baked_grass_array_path = baked_grass_array_path
+	if preset_owns_texture_resources and current_texture_preset.get("baked_dense_slot_lookup") != null:
+		current_texture_preset.baked_dense_slot_lookup = baked_dense_slot_lookup
 
 	ResourceSaver.save(current_texture_preset)
 
@@ -1532,10 +1554,12 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 		baked_albedo_array_path = preset.baked_albedo_array_path
 		baked_normal_array_path = preset.baked_normal_array_path
 		baked_grass_array_path = preset.baked_grass_array_path
+		baked_dense_slot_lookup = preset.baked_dense_slot_lookup if preset.get("baked_dense_slot_lookup") != null else PackedInt32Array()
 	else:
 		baked_albedo_array_path = ""
 		baked_normal_array_path = ""
 		baked_grass_array_path = ""
+		baked_dense_slot_lookup = PackedInt32Array()
 
 	var has_real_palette_data := false
 	for arr in preset.slot_color_indices:
