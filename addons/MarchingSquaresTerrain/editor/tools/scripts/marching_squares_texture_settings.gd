@@ -1690,8 +1690,12 @@ func _add_slot_noise_column(parent: HBoxContainer, terrain: MarchingSquaresTerra
 func _on_slider_drag_ended(ended: bool) -> void:
 	if plugin == null or plugin.current_terrain_node == null:
 		return
+	if plugin.current_terrain_node.has_method("regenerate_all_chunk_grass"):
+		plugin.current_terrain_node.regenerate_all_chunk_grass()
+		return
 	for chunk: MarchingSquaresTerrainChunk in plugin.current_terrain_node.chunks.values():
-		chunk.grass_planter.regenerate_all_cells()
+		if chunk != null and chunk.grass_planter:
+			chunk.grass_planter.regenerate_all_cells()
 
 func _on_bake_pressed() -> void:
 	var terrain := plugin.current_terrain_node

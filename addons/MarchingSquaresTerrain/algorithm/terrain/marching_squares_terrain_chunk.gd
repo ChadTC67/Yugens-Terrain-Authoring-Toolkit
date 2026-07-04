@@ -10,6 +10,7 @@ const MSTDataHandler := preload("res://addons/MarchingSquaresTerrain/resources/m
 const MAX_WALL_PAINT_STAMPS := 64
 
 enum Mode {CUBIC, POLYHEDRON, ROUNDED_POLYHEDRON, SEMI_ROUND, SPHERICAL}
+enum GrassMode {GRASS, GRASSLESS}
 
 const MERGE_MODE = {
 	Mode.CUBIC: 0.6,
@@ -88,6 +89,7 @@ var _temp_height_map : Array  # Source data - saved to external storage, not sce
 
 var _grass_regen_queued: bool = false
 var _mesh_regen_queued: bool = false
+var _suppress_grass_mode_side_effects: bool = false
 
 #region blend option vars
 # Terrain blend options to allow for smooth color and height blend influence at transitions and at different heights
@@ -95,6 +97,19 @@ var lower_thresh : float = 0.3 # Sharp bands: < 0.3 = lower color
 var upper_thresh : float = 0.7 #, > 0.7 = upper color, middle = blend
 var blend_zone := upper_thresh - lower_thresh
 #endregion
+
+
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_mode : GrassMode = GrassMode.GRASS:
+	set(value):
+		grass_mode = value
+		if _suppress_grass_mode_side_effects:
+			return
+		_temp_grass_multimesh = null
+		if is_inside_tree():
+			_apply_grass_mode()
+			if grass_planter:
+				_queue_grass_regen()
+		mark_dirty()
 
 
 func _apply_shadow_visibility_settings() -> void:
@@ -106,16 +121,18 @@ func _apply_shadow_visibility_settings() -> void:
 	var world_h := float(max(dimensions.y, 1))
 	extra_cull_margin = max(max(world_w, world_d), world_h)
 
-# Called by TerrainSystem parent
-func initialize_terrain(should_regenerate_mesh: bool =  true):
-	_apply_shadow_visibility_settings()
-	needs_update = []
-	# Initally all cells will need to be updated to show the newly loaded height
-	for z in range(dimensions.z - 1):
-		needs_update.append([])
-		for x in range(dimensions.x - 1):
-			needs_update[z].append(true)
 
+func _clear_grass_planter() -> void:
+	_temp_grass_multimesh = null
+	if grass_planter:
+		if grass_planter.multimesh:
+			grass_planter.multimesh = null
+		grass_planter.owner = null
+		grass_planter.free()
+	grass_planter = null
+
+
+func _ensure_grass_planter() -> bool:
 	grass_planter = get_node_or_null("GrassPlanter")
 	if not grass_planter:
 		grass_planter = MarchingSquaresGrassPlanter.new()
@@ -130,14 +147,43 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 	grass_planter.setup(self)
 	EngineWrapper.instance.set_owner_recursive(grass_planter)
 
-	var has_baked_grass_multimesh := _temp_grass_multimesh != null
+	var grass_count_changed := false
 	if _temp_grass_multimesh:
 		grass_planter.multimesh = _temp_grass_multimesh
-	var grass_count_changed := grass_planter.ensure_multimesh_count()
+	if grass_planter.multimesh == null:
+		grass_planter.setup(self)
+		grass_count_changed = true
+	grass_count_changed = grass_planter.ensure_multimesh_count() or grass_count_changed
 	if not grass_planter.multimesh:
 		grass_planter.setup(self)
 		grass_count_changed = true
-	grass_planter.multimesh.mesh = terrain_system.grass_mesh
+	if grass_planter.multimesh:
+		grass_planter.multimesh.mesh = terrain_system.grass_mesh
+	return grass_count_changed
+
+
+func _apply_grass_mode() -> void:
+	if grass_mode == GrassMode.GRASSLESS:
+		_clear_grass_planter()
+	else:
+		_ensure_grass_planter()
+
+# Called by TerrainSystem parent
+func initialize_terrain(should_regenerate_mesh: bool =  true):
+	_apply_shadow_visibility_settings()
+	needs_update = []
+	# Initally all cells will need to be updated to show the newly loaded height
+	for z in range(dimensions.z - 1):
+		needs_update.append([])
+		for x in range(dimensions.x - 1):
+			needs_update[z].append(true)
+
+	var has_baked_grass_multimesh := _temp_grass_multimesh != null and grass_mode == GrassMode.GRASS
+	var grass_count_changed := false
+	if grass_mode == GrassMode.GRASS:
+		grass_count_changed = _ensure_grass_planter()
+	else:
+		_clear_grass_planter()
 
 	# Generate maps if not loaded from external storage (works for both editor and runtime)
 	# Validate height_map shape — serialized scenes may contain empty arrays or malformed rows.
@@ -175,7 +221,7 @@ func initialize_terrain(should_regenerate_mesh: bool =  true):
 	# Respect deferred initialization: chunk creation adds the node first, then paints/seams it,
 	# and only after that should the first full mesh/grass build happen.
 	var can_generate_grass_now := should_regenerate_mesh or mesh != null or has_baked_grass_multimesh
-	if grass_planter and can_generate_grass_now and (not has_baked_grass_multimesh or grass_count_changed):
+	if grass_mode == GrassMode.GRASS and grass_planter and can_generate_grass_now and (not has_baked_grass_multimesh or grass_count_changed):
 		if mesh != null and not has_baked_grass_multimesh:
 			_queue_grass_regen()
 		else:
@@ -860,7 +906,7 @@ func _queue_grass_regen() -> void:
 
 func _run_deferred_grass_regen() -> void:
 	_grass_regen_queued = false
-	if not is_inside_tree() or not is_instance_valid(grass_planter):
+	if grass_mode != GrassMode.GRASS or not is_inside_tree() or not is_instance_valid(grass_planter):
 		return
 	grass_planter.regenerate_all_cells()
 

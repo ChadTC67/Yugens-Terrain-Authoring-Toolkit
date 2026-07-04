@@ -316,6 +316,7 @@ static func export_chunk_data(chunk: MarchingSquaresTerrainChunk) -> MSTChunkDat
 	var data := MSTChunkData.new()
 	data.chunk_coords = chunk.chunk_coords
 	data.merge_mode = chunk.merge_mode
+	data.grass_mode = chunk.grass_mode
 
 	# Source data
 	data.height_map = chunk.height_map.duplicate(true)
@@ -378,6 +379,9 @@ static func import_chunk_data(chunk: MarchingSquaresTerrainChunk, data: MSTChunk
 
 	chunk.chunk_coords = data.chunk_coords
 	chunk.merge_mode = data.merge_mode as MarchingSquaresTerrainChunk.Mode
+	chunk._suppress_grass_mode_side_effects = true
+	chunk.grass_mode = data.grass_mode as MarchingSquaresTerrainChunk.GrassMode
+	chunk._suppress_grass_mode_side_effects = false
 	chunk.height_map = data.height_map.duplicate(true)
 
 	# Restore baked assets if present
@@ -386,13 +390,13 @@ static func import_chunk_data(chunk: MarchingSquaresTerrainChunk, data: MSTChunk
 	elif chunk.terrain_system.storage_mode == MarchingSquaresTerrain.StorageMode.BAKED:
 		push_warning("Baking enabled, but terrain-resource does not contain mesh data")
 
-	if chunk.terrain_system.bake_grass and not data.grass_multimesh:
+	if chunk.terrain_system.bake_grass and chunk.grass_mode == MarchingSquaresTerrainChunk.GrassMode.GRASS and not data.grass_multimesh:
 		push_warning("Grass baking enabled, but terrain-resource does not contain grass data")
 
 	if chunk.terrain_system.bake_collision and data.collision_faces.is_empty():
 		push_warning("Collision baking enabled, but terrain-resource does not contain collision data")
 
-	if data.grass_multimesh:
+	if chunk.grass_mode == MarchingSquaresTerrainChunk.GrassMode.GRASS and data.grass_multimesh:
 		chunk._temp_grass_multimesh = data.grass_multimesh
 	chunk.wall_paint_stamp_positions = data.wall_paint_stamp_positions
 	chunk.wall_paint_stamp_normals = data.wall_paint_stamp_normals

@@ -255,9 +255,7 @@ var flat_normals : bool = false:
 		grass_mat.set_shader_parameter("wall_threshold", value)
 		if not is_inside_tree():
 			return
-		for chunk: MarchingSquaresTerrainChunk in chunks.values():
-			if chunk.grass_planter:
-				chunk.grass_planter.regenerate_all_cells()
+		regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var ridge_threshold: float = 1.0:
 	set(value):
 		ridge_threshold = value
@@ -357,106 +355,91 @@ var flat_normals : bool = false:
 		texture_1 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(0, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_2 : Texture2D = null:
 	set(value):
 		texture_2 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(1, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_3 : Texture2D = null:
 	set(value):
 		texture_3 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(2, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_4 : Texture2D = null:
 	set(value):
 		texture_4 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(3, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_5 : Texture2D = null:
 	set(value):
 		texture_5 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(4, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_6 : Texture2D = null:
 	set(value):
 		texture_6 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(5, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_7 : Texture2D = null:
 	set(value):
 		texture_7 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(6, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_8 : Texture2D = null:
 	set(value):
 		texture_8 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(7, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_9 : Texture2D = null:
 	set(value):
 		texture_9 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(8, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_10 : Texture2D = null:
 	set(value):
 		texture_10 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(9, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_11 : Texture2D = null:
 	set(value):
 		texture_11 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(10, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_12 : Texture2D = null:
 	set(value):
 		texture_12 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(11, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_13 : Texture2D = null:
 	set(value):
 		texture_13 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(12, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_14 : Texture2D = null:
 	set(value):
 		texture_14 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(13, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var texture_15 : Texture2D = null:
 	set(value):
 		texture_15 = value
 		if not is_batch_updating and is_inside_tree():
 			_set_legacy_texture_slot(14, value)
-			for chunk: MarchingSquaresTerrainChunk in chunks.values():
-				chunk.grass_planter.regenerate_all_cells()
+			regenerate_all_chunk_grass()
 #endregion
 
 #region texture slots (256)
@@ -837,6 +820,8 @@ func _validate_property(property: Dictionary) -> void:
 	if property.name in ["bake_grass", "bake_collision"]:
 		if storage_mode != StorageMode.BAKED:
 			property.usage = PROPERTY_USAGE_NO_EDITOR
+	if property.name in ["enable_runtime_texture_baking", "polygon_texture_resolution", "bake_material_override"]:
+		property.usage = PROPERTY_USAGE_NO_EDITOR
 	if property.name == "blend_noise_enabled":
 		property.usage = PROPERTY_USAGE_NO_EDITOR
 
@@ -920,6 +905,12 @@ func _request_grass_regen() -> void:
 
 
 func _apply_grass_regen() -> void:
+	for chunk: MarchingSquaresTerrainChunk in chunks.values():
+		if chunk and chunk.grass_planter:
+			chunk.grass_planter.regenerate_all_cells()
+
+
+func regenerate_all_chunk_grass() -> void:
 	for chunk: MarchingSquaresTerrainChunk in chunks.values():
 		if chunk and chunk.grass_planter:
 			chunk.grass_planter.regenerate_all_cells()

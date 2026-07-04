@@ -9,6 +9,7 @@ extends Resource
 
 ## Merge mode setting
 @export var merge_mode : int
+@export var grass_mode : int = 0
 
 ## Height values as 2D array
 @export var height_map : Array

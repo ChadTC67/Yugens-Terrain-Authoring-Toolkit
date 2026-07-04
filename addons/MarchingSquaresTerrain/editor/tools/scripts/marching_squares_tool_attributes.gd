@@ -553,8 +553,16 @@ func add_setting(p_params: Dictionary) -> void:
 			option_button.selected = plugin.selected_chunk.merge_mode if not current_available_chunks.is_empty() and plugin.selected_chunk else -1
 			option_button.item_selected.connect(_on_chunk_mode_changed)
 
+			var grass_mode_button := OptionButton.new()
+			grass_mode_button.set_flat(true)
+			grass_mode_button.set_custom_minimum_size(Vector2(85, 35))
+			grass_mode_button.add_item("Grass")
+			grass_mode_button.add_item("Grassless")
+			grass_mode_button.selected = plugin.selected_chunk.grass_mode if not current_available_chunks.is_empty() and plugin.selected_chunk else -1
+			grass_mode_button.item_selected.connect(_on_chunk_grass_mode_changed)
+
 			chunk_button.set_flat(true)
-			chunk_button.item_selected.connect(func(chunk): _on_chunk_selected(option_button, chunk_button.get_item_text(chunk)))
+			chunk_button.item_selected.connect(func(chunk): _on_chunk_selected(option_button, grass_mode_button, chunk_button.get_item_text(chunk)))
 			chunk_button.set_custom_minimum_size(Vector2(65, 35))
 
 			var mult_apply_button := Button.new()
@@ -573,6 +581,14 @@ func add_setting(p_params: Dictionary) -> void:
 			cont = CenterContainer.new()
 			cont.set_custom_minimum_size(Vector2(65, 35))
 			cont.add_child(option_button, true)
+			hbox_container.add_child(cont, true)
+
+			v_sep = VSeparator.new()
+			hbox_container.add_child(v_sep, true)
+
+			cont = CenterContainer.new()
+			cont.set_custom_minimum_size(Vector2(85, 35))
+			cont.add_child(grass_mode_button, true)
 			hbox_container.add_child(cont, true)
 
 			v_sep = VSeparator.new()
@@ -1004,12 +1020,13 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 	emit_signal("terrain_setting_changed", p_setting_name, p_value)
 
 
-func _on_chunk_selected(option_button: OptionButton, p_chunk: String) -> void:
+func _on_chunk_selected(option_button: OptionButton, grass_mode_button: OptionButton, p_chunk: String) -> void:
 	var terrain := plugin.current_terrain_node
 	if terrain == null:
 		selected_chunk = null
 		plugin.selected_chunk = null
 		option_button.selected = -1
+		grass_mode_button.selected = -1
 		return
 
 	var chunk := terrain.find_child(p_chunk) as MarchingSquaresTerrainChunk
@@ -1017,9 +1034,11 @@ func _on_chunk_selected(option_button: OptionButton, p_chunk: String) -> void:
 		selected_chunk = null
 		plugin.selected_chunk = null
 		option_button.selected = -1
+		grass_mode_button.selected = -1
 		return
 
 	option_button.selected = int(chunk.merge_mode)
+	grass_mode_button.selected = int(chunk.grass_mode)
 	selected_chunk = chunk
 	plugin.selected_chunk = selected_chunk
 
@@ -1034,10 +1053,15 @@ func _apply_mode_to_all_chunks() -> void:
 	for child in plugin.current_terrain_node.get_children():
 		if child is MarchingSquaresTerrainChunk:
 			_change_chunk_mode(child, int(selected_chunk.merge_mode))
+			_change_chunk_grass_mode(child, int(selected_chunk.grass_mode))
 
 
 func _on_chunk_mode_changed(m_mode: int) -> void:
 	_change_chunk_mode(selected_chunk, m_mode)
+
+
+func _on_chunk_grass_mode_changed(m_mode: int) -> void:
+	_change_chunk_grass_mode(selected_chunk, m_mode)
 
 
 func _change_chunk_mode(_chunk: MarchingSquaresTerrainChunk, m_mode: int) -> void:
@@ -1052,6 +1076,16 @@ func _change_chunk_mode(_chunk: MarchingSquaresTerrainChunk, m_mode: int) -> voi
 			_chunk.merge_mode = MarchingSquaresTerrainChunk.Mode.SEMI_ROUND
 		"SPHERICAL":
 			_chunk.merge_mode = MarchingSquaresTerrainChunk.Mode.SPHERICAL
+
+
+func _change_chunk_grass_mode(_chunk: MarchingSquaresTerrainChunk, m_mode: int) -> void:
+	if _chunk == null:
+		return
+	match MarchingSquaresTerrainChunk.GrassMode.find_key(m_mode):
+		"GRASS":
+			_chunk.grass_mode = MarchingSquaresTerrainChunk.GrassMode.GRASS
+		"GRASSLESS":
+			_chunk.grass_mode = MarchingSquaresTerrainChunk.GrassMode.GRASSLESS
 
 #endregion
 
