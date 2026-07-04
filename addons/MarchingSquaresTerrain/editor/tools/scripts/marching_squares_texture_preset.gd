@@ -29,7 +29,7 @@ class_name MarchingSquaresTexturePreset
 @export var visible_texture_slot_count: int = 6
 @export var slot_color_indices: Array = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
 
-@export var slot_blend_modes: Array[int] = [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+@export var slot_blend_modes: Array[int] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 # Palette weights (per palette index 0-127). Used to control distribution of each palette color.
 # Values are normalized per-slot in the shader (so they behave like percentages).

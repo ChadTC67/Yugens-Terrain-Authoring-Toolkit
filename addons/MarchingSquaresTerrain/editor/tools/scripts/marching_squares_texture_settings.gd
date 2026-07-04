@@ -143,7 +143,7 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 			slot_blend_modes.resize(MAX_TEXTURE_SLOTS)
 		for i in range(MAX_TEXTURE_SLOTS):
 			if slot_blend_modes[i] == null:
-				slot_blend_modes[i] = 3
+				slot_blend_modes[i] = MarchingSquaresTerrainHelpers.default_slot_blend_mode(i)
 
 	var slot_wet_enabled = terrain.get("slot_wet_enabled")
 	if slot_wet_enabled is Array:
@@ -317,7 +317,10 @@ func _refresh_slot_runtime(
 		return
 	terrain.set("baked_albedo_array_path", "")
 	terrain.set("baked_normal_array_path", "")
-	terrain.set("baked_grass_array_path", "")
+	if terrain.has_method("invalidate_grass_bake_state"):
+		terrain.invalidate_grass_bake_state()
+	else:
+		terrain.set("baked_grass_array_path", "")
 	if terrain.has_method("rebuild_texture_array"):
 		terrain.rebuild_texture_array()
 	if p_rebuild_grass_array and terrain.has_method("rebuild_grass_texture_array"):
@@ -1436,6 +1439,13 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 		# Keep legacy properties in sync for slots 1..6 so presets/UI stay compatible.
 		if __s_grass >= 0 and __s_grass < 6:
 			terrain.set("tex%d_has_grass" % (__s_grass + 1), pressed)
+		else:
+			if terrain.has_method("invalidate_grass_bake_state"):
+				terrain.invalidate_grass_bake_state()
+			else:
+				terrain.set("baked_grass_array_path", "")
+			if terrain.has_method("rebuild_grass_texture_array"):
+				terrain.rebuild_grass_texture_array()
 
 		if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
 			terrain.save_to_preset()
@@ -1457,7 +1467,10 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 		if lib_res != null and __s_grass2 < lib_res.grass_textures.size():
 			lib_res.grass_textures[__s_grass2] = resource
 			_save_resource_if_external(lib_res)
-		terrain.set("baked_grass_array_path", "")
+		if terrain.has_method("invalidate_grass_bake_state"):
+			terrain.invalidate_grass_bake_state()
+		else:
+			terrain.set("baked_grass_array_path", "")
 		# Always rebuild grass arrays + request regen so scene updates immediately when a grass texture is changed
 		if terrain.has_method("rebuild_grass_texture_array"):
 			terrain.rebuild_grass_texture_array()

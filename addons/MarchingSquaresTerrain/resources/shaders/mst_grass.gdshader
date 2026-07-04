@@ -84,7 +84,7 @@ varying vec3 v_grass_color;
 varying vec3 model_origin;
 varying vec2 instance_ground_uv;
 varying float instance_has_ground_uv;
-varying float instance_slot_id;
+varying flat int instance_slot_id;
 varying float v_grass_wet_mask;
 varying flat int instance_id;
 
@@ -363,10 +363,10 @@ void vertex() {
 	world_origin = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	instance_ground_uv = INSTANCE_CUSTOM.rg;
 	instance_has_ground_uv = INSTANCE_CUSTOM.b;
-	instance_slot_id = floor(clamp(INSTANCE_CUSTOM.a, 0.0, 1.0) * 255.0 + 0.5);
+	instance_slot_id = int(round(clamp(INSTANCE_CUSTOM.a, 0.0, 1.0) * 255.0));
 	instance_id = INSTANCE_ID;
 
-	int slot = int(instance_slot_id);
+	int slot = instance_slot_id;
 	vec3 _gc;
 	bool use_base = false;
 	if (slot == 0) use_base = use_base_color_1;
@@ -418,15 +418,14 @@ void fragment() {
 	// Sample the appropriate grass texture. Prefer Texture2DArray if available.
 	vec4 grass_tex = vec4(0.0);
 	if (use_grass_tex_array) {
-		float layer = float(slot);
-		grass_tex = texture(vc_grass_tex_array, vec3(UV, layer));
+		grass_tex = textureLod(vc_grass_tex_array, vec3(UV, float(slot)), 0.0);
 	} else {
-		if (legacy_tex_id == 1) grass_tex = texture(grass_texture_1, UV);
-		else if (legacy_tex_id == 2) grass_tex = texture(grass_texture_2, UV);
-		else if (legacy_tex_id == 3) grass_tex = texture(grass_texture_3, UV);
-		else if (legacy_tex_id == 4) grass_tex = texture(grass_texture_4, UV);
-		else if (legacy_tex_id == 5) grass_tex = texture(grass_texture_5, UV);
-		else if (legacy_tex_id == 6) grass_tex = texture(grass_texture_6, UV);
+		if (legacy_tex_id == 1) grass_tex = textureLod(grass_texture_1, UV, 0.0);
+		else if (legacy_tex_id == 2) grass_tex = textureLod(grass_texture_2, UV, 0.0);
+		else if (legacy_tex_id == 3) grass_tex = textureLod(grass_texture_3, UV, 0.0);
+		else if (legacy_tex_id == 4) grass_tex = textureLod(grass_texture_4, UV, 0.0);
+		else if (legacy_tex_id == 5) grass_tex = textureLod(grass_texture_5, UV, 0.0);
+		else if (legacy_tex_id == 6) grass_tex = textureLod(grass_texture_6, UV, 0.0);
 	}
 
 	ALBEDO = grass_color;
@@ -453,15 +452,15 @@ void fragment() {
 			ALPHA = grass_tex.a;
 		} else {
 			if (legacy_tex_id == 2) {
-				ALPHA = use_grass_tex_2 ? texture(grass_texture_2, UV).a : 0.0;
+				ALPHA = use_grass_tex_2 ? grass_tex.a : 0.0;
 			} else if (legacy_tex_id == 3) {
-				ALPHA = use_grass_tex_3 ? texture(grass_texture_3, UV).a : 0.0;
+				ALPHA = use_grass_tex_3 ? grass_tex.a : 0.0;
 			} else if (legacy_tex_id == 4) {
-				ALPHA = use_grass_tex_4 ? texture(grass_texture_4, UV).a : 0.0;
+				ALPHA = use_grass_tex_4 ? grass_tex.a : 0.0;
 			} else if (legacy_tex_id == 5) {
-				ALPHA = use_grass_tex_5 ? texture(grass_texture_5, UV).a : 0.0;
+				ALPHA = use_grass_tex_5 ? grass_tex.a : 0.0;
 			} else if (legacy_tex_id == 6) {
-				ALPHA = use_grass_tex_6 ? texture(grass_texture_6, UV).a : 0.0;
+				ALPHA = use_grass_tex_6 ? grass_tex.a : 0.0;
 			} else {
 				ALPHA = grass_tex.a;
 			}

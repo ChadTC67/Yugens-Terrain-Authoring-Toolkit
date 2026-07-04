@@ -14,6 +14,9 @@ const MSTextureLibraryScript := preload("res://addons/MarchingSquaresTerrain/res
 
 # ---------------- Texture Slots / Texture Arrays ----------------
 
+static func default_slot_blend_mode(_slot_idx: int) -> int:
+	return 0
+
 static func ensure_texture_slots(terrain) -> void:
 	if terrain.texture_slots == null:
 		terrain.texture_slots = []
@@ -408,17 +411,28 @@ static func rebuild_grass_texture_array(terrain) -> void:
 	var targetsz := int(terrain.get("baked_grass_texture_size")) if terrain.get("baked_grass_texture_size") != null else 64
 	var grass_textures := []
 	grass_textures.resize(MAX_TEXTURE_SLOTS)
+	var default_grass_texture: Texture2D = null
+	if terrain.texture_slots.size() > 0:
+		var base_slot = terrain.texture_slots[0]
+		if base_slot != null and base_slot.get("grass_texture") != null and is_valid_texture2d(base_slot.grass_texture):
+			default_grass_texture = base_slot.grass_texture
+	if default_grass_texture == null and is_valid_texture2d(terrain.grass_sprite_tex_1):
+		default_grass_texture = terrain.grass_sprite_tex_1
 	for i in range(mini(terrain.texture_slots.size(), MAX_TEXTURE_SLOTS)):
-		if terrain.texture_slots[i] != null and terrain.texture_slots[i].get("grass_texture") != null and is_valid_texture2d(terrain.texture_slots[i].grass_texture):
+		var slot = terrain.texture_slots[i]
+		var slot_has_grass := slot != null and slot.get("has_grass") != null and bool(slot.has_grass)
+		if slot_has_grass and slot != null and slot.get("grass_texture") != null and is_valid_texture2d(slot.grass_texture):
 			grass_textures[i] = terrain.texture_slots[i].grass_texture
+		elif slot_has_grass and default_grass_texture != null:
+			grass_textures[i] = default_grass_texture
 
 	# Keep legacy sprite exports wired into the first 6 slots if slot data is missing.
-	if grass_textures[0] == null: grass_textures[0] = terrain.grass_sprite_tex_1
-	if grass_textures[1] == null: grass_textures[1] = terrain.grass_sprite_tex_2
-	if grass_textures[2] == null: grass_textures[2] = terrain.grass_sprite_tex_3
-	if grass_textures[3] == null: grass_textures[3] = terrain.grass_sprite_tex_4
-	if grass_textures[4] == null: grass_textures[4] = terrain.grass_sprite_tex_5
-	if grass_textures[5] == null: grass_textures[5] = terrain.grass_sprite_tex_6
+	if grass_textures[0] == null and bool(terrain.tex1_has_grass): grass_textures[0] = terrain.grass_sprite_tex_1
+	if grass_textures[1] == null and bool(terrain.tex2_has_grass): grass_textures[1] = terrain.grass_sprite_tex_2
+	if grass_textures[2] == null and bool(terrain.tex3_has_grass): grass_textures[2] = terrain.grass_sprite_tex_3
+	if grass_textures[3] == null and bool(terrain.tex4_has_grass): grass_textures[3] = terrain.grass_sprite_tex_4
+	if grass_textures[4] == null and bool(terrain.tex5_has_grass): grass_textures[4] = terrain.grass_sprite_tex_5
+	if grass_textures[5] == null and bool(terrain.tex6_has_grass): grass_textures[5] = terrain.grass_sprite_tex_6
 
 	var highest_grass_slot := _highest_texture_slot(grass_textures)
 	var layer_count := clampi(max(highest_grass_slot + 1, 6), 1, MAX_TEXTURE_SLOTS)
@@ -443,23 +457,35 @@ static func rebuild_grass_texture_array(terrain) -> void:
 	var t6: Texture2D = terrain.grass_sprite_tex_6
 	if terrain.texture_slots.size() >=  6:
 		var s0 = terrain.texture_slots[0]
-		if s0 !=  null and s0.get("grass_texture") != null and is_valid_texture2d(s0.grass_texture):
+		if bool(terrain.tex1_has_grass) and s0 !=  null and s0.get("grass_texture") != null and is_valid_texture2d(s0.grass_texture):
 			t1 = s0.grass_texture
+		elif not bool(terrain.tex1_has_grass):
+			t1 = null
 		var s1 = terrain.texture_slots[1]
-		if s1 !=  null and s1.get("grass_texture") != null and is_valid_texture2d(s1.grass_texture):
+		if bool(terrain.tex2_has_grass) and s1 !=  null and s1.get("grass_texture") != null and is_valid_texture2d(s1.grass_texture):
 			t2 = s1.grass_texture
+		elif not bool(terrain.tex2_has_grass):
+			t2 = null
 		var s2 = terrain.texture_slots[2]
-		if s2 !=  null and s2.get("grass_texture") != null and is_valid_texture2d(s2.grass_texture):
+		if bool(terrain.tex3_has_grass) and s2 !=  null and s2.get("grass_texture") != null and is_valid_texture2d(s2.grass_texture):
 			t3 = s2.grass_texture
+		elif not bool(terrain.tex3_has_grass):
+			t3 = null
 		var s3 = terrain.texture_slots[3]
-		if s3 !=  null and s3.get("grass_texture") != null and is_valid_texture2d(s3.grass_texture):
+		if bool(terrain.tex4_has_grass) and s3 !=  null and s3.get("grass_texture") != null and is_valid_texture2d(s3.grass_texture):
 			t4 = s3.grass_texture
+		elif not bool(terrain.tex4_has_grass):
+			t4 = null
 		var s4 = terrain.texture_slots[4]
-		if s4 !=  null and s4.get("grass_texture") != null and is_valid_texture2d(s4.grass_texture):
+		if bool(terrain.tex5_has_grass) and s4 !=  null and s4.get("grass_texture") != null and is_valid_texture2d(s4.grass_texture):
 			t5 = s4.grass_texture
+		elif not bool(terrain.tex5_has_grass):
+			t5 = null
 		var s5 = terrain.texture_slots[5]
-		if s5 !=  null and s5.get("grass_texture") != null and is_valid_texture2d(s5.grass_texture):
+		if bool(terrain.tex6_has_grass) and s5 !=  null and s5.get("grass_texture") != null and is_valid_texture2d(s5.grass_texture):
 			t6 = s5.grass_texture
+		elif not bool(terrain.tex6_has_grass):
+			t6 = null
 	grass_mat.set_shader_parameter("grass_texture_1", t1)
 	grass_mat.set_shader_parameter("grass_texture_2", t2)
 	grass_mat.set_shader_parameter("grass_texture_3", t3)
@@ -482,7 +508,16 @@ static func ensure_palette_settings(terrain) -> void:
 		terrain.slot_blend_modes.resize(MAX_TEXTURE_SLOTS)
 	for i in range(MAX_TEXTURE_SLOTS):
 		if terrain.slot_blend_modes[i] == null:
-			terrain.slot_blend_modes[i] = 3
+			terrain.slot_blend_modes[i] = default_slot_blend_mode(i)
+
+	if terrain.get("_slot_blend_mode_defaults_migrated") != null and not bool(terrain._slot_blend_mode_defaults_migrated):
+		for i in range(6, min(MAX_TEXTURE_SLOTS, terrain.texture_slots.size())):
+			var slot = terrain.texture_slots[i]
+			if slot == null or not is_valid_texture2d(slot.texture):
+				continue
+			if int(terrain.slot_blend_modes[i]) == 3:
+				terrain.slot_blend_modes[i] = default_slot_blend_mode(i)
+		terrain._slot_blend_mode_defaults_migrated = true
 
 	if terrain.slot_wet_enabled.size() !=  MAX_TEXTURE_SLOTS:
 		terrain.slot_wet_enabled.resize(MAX_TEXTURE_SLOTS)

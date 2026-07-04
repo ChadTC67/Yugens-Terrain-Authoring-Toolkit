@@ -154,6 +154,7 @@ var _data_directory : String = ""
 ## One-time data migration flag: older chunks may have wall maps defaulted to Texture 1.
 ## We retarget these unpainted/legacy-initialized wall slots to default_wall_texture.
 @export_storage var _default_wall_texture_migrated : bool = false
+@export_storage var _slot_blend_mode_defaults_migrated : bool = false
 
 #region global terrain settings
 # Terrain Settings
@@ -494,6 +495,7 @@ var _warned_grass_array_slots: Dictionary = {}
 			_ensure_texture_slots()
 			_maybe_migrate_legacy_grass()
 			texture_slots[0].grass_texture = value
+			invalidate_grass_bake_state()
 			rebuild_grass_texture_array()
 			_request_grass_regen()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_sprite_tex_2 : Texture2D = preload("res://addons/MarchingSquaresTerrain/resources/plugin_materials/grass_leaf_sprite.png"):
@@ -503,6 +505,7 @@ var _warned_grass_array_slots: Dictionary = {}
 			_ensure_texture_slots()
 			_maybe_migrate_legacy_grass()
 			texture_slots[1].grass_texture = value
+			invalidate_grass_bake_state()
 			rebuild_grass_texture_array()
 			_request_grass_regen()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_sprite_tex_3 : Texture2D = preload("res://addons/MarchingSquaresTerrain/resources/plugin_materials/grass_leaf_sprite.png"):
@@ -512,6 +515,7 @@ var _warned_grass_array_slots: Dictionary = {}
 			_ensure_texture_slots()
 			_maybe_migrate_legacy_grass()
 			texture_slots[2].grass_texture = value
+			invalidate_grass_bake_state()
 			rebuild_grass_texture_array()
 			_request_grass_regen()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_sprite_tex_4 : Texture2D = preload("res://addons/MarchingSquaresTerrain/resources/plugin_materials/grass_leaf_sprite.png"):
@@ -521,6 +525,7 @@ var _warned_grass_array_slots: Dictionary = {}
 			_ensure_texture_slots()
 			_maybe_migrate_legacy_grass()
 			texture_slots[3].grass_texture = value
+			invalidate_grass_bake_state()
 			rebuild_grass_texture_array()
 			_request_grass_regen()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_sprite_tex_5 : Texture2D = preload("res://addons/MarchingSquaresTerrain/resources/plugin_materials/grass_leaf_sprite.png"):
@@ -530,6 +535,7 @@ var _warned_grass_array_slots: Dictionary = {}
 			_ensure_texture_slots()
 			_maybe_migrate_legacy_grass()
 			texture_slots[4].grass_texture = value
+			invalidate_grass_bake_state()
 			rebuild_grass_texture_array()
 			_request_grass_regen()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_sprite_tex_6 : Texture2D = preload("res://addons/MarchingSquaresTerrain/resources/plugin_materials/grass_leaf_sprite.png"):
@@ -539,6 +545,7 @@ var _warned_grass_array_slots: Dictionary = {}
 			_ensure_texture_slots()
 			_maybe_migrate_legacy_grass()
 			texture_slots[5].grass_texture = value
+			invalidate_grass_bake_state()
 			rebuild_grass_texture_array()
 			_request_grass_regen()
 #endregion
@@ -552,6 +559,8 @@ var _warned_grass_array_slots: Dictionary = {}
 			_ensure_texture_slots()
 			_maybe_migrate_legacy_grass()
 			texture_slots[0].has_grass = tex1_has_grass
+			invalidate_grass_bake_state()
+			rebuild_grass_texture_array()
 			_request_grass_regen()
 
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex2_has_grass : bool = true:
@@ -561,6 +570,8 @@ var _warned_grass_array_slots: Dictionary = {}
 			_ensure_texture_slots()
 			_maybe_migrate_legacy_grass()
 			texture_slots[1].has_grass = tex2_has_grass
+			invalidate_grass_bake_state()
+			rebuild_grass_texture_array()
 			_request_grass_regen()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex3_has_grass : bool = true:
 	set(value):
@@ -569,6 +580,8 @@ var _warned_grass_array_slots: Dictionary = {}
 			_ensure_texture_slots()
 			_maybe_migrate_legacy_grass()
 			texture_slots[2].has_grass = tex3_has_grass
+			invalidate_grass_bake_state()
+			rebuild_grass_texture_array()
 			_request_grass_regen()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex4_has_grass : bool = true:
 	set(value):
@@ -577,6 +590,8 @@ var _warned_grass_array_slots: Dictionary = {}
 			_ensure_texture_slots()
 			_maybe_migrate_legacy_grass()
 			texture_slots[3].has_grass = tex4_has_grass
+			invalidate_grass_bake_state()
+			rebuild_grass_texture_array()
 			_request_grass_regen()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex5_has_grass : bool = true:
 	set(value):
@@ -585,6 +600,8 @@ var _warned_grass_array_slots: Dictionary = {}
 			_ensure_texture_slots()
 			_maybe_migrate_legacy_grass()
 			texture_slots[4].has_grass = tex5_has_grass
+			invalidate_grass_bake_state()
+			rebuild_grass_texture_array()
 			_request_grass_regen()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var tex6_has_grass : bool = true:
 	set(value):
@@ -593,6 +610,8 @@ var _warned_grass_array_slots: Dictionary = {}
 			_ensure_texture_slots()
 			_maybe_migrate_legacy_grass()
 			texture_slots[5].has_grass = tex6_has_grass
+			invalidate_grass_bake_state()
+			rebuild_grass_texture_array()
 			_request_grass_regen()
 #endregion
 
@@ -702,7 +721,7 @@ var _main_visible_texture_slot_count: int = 6
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var slot_color_indices: Array = [
 	[], [], [], [], [], [], [], [], [], [], [], [], [], [], []
 ]
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var slot_blend_modes: Array[int] = [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var slot_blend_modes: Array[int] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 @export_category("Vertex Painter")
 # Wetness controls (per texture slot)
@@ -852,6 +871,15 @@ func refresh_chunk_surface_materials() -> void:
 
 var _grass_regen_timer: Timer = null
 var _grass_regen_pending: bool = false
+
+
+func invalidate_grass_bake_state() -> void:
+	baked_grass_array_path = ""
+	for chunk: MarchingSquaresTerrainChunk in chunks.values():
+		if not is_instance_valid(chunk):
+			continue
+		chunk._temp_grass_multimesh = null
+		chunk.mark_dirty()
 
 
 func _request_grass_regen() -> void:
@@ -1537,7 +1565,7 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 	if preset.slot_blend_modes.size() == 15 or preset.slot_blend_modes.size() == MAX_TEXTURE_SLOTS:
 		slot_blend_modes = preset.slot_blend_modes.duplicate()
 	else:
-		slot_blend_modes = [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+		slot_blend_modes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 	if preset.get("slot_wet_enabled") is Array and (preset.slot_wet_enabled.size() == 15 or preset.slot_wet_enabled.size() == MAX_TEXTURE_SLOTS):
 		slot_wet_enabled = preset.slot_wet_enabled.duplicate()
