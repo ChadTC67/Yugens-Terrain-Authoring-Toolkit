@@ -1053,6 +1053,12 @@ func _ensure_default_texture_preset_bound() -> void:
 	load_from_preset(default_preset)
 
 
+func _is_default_empty_texture_preset(preset: MarchingSquaresTexturePreset) -> bool:
+	if preset == null:
+		return false
+	return str(preset.resource_path) == DEFAULT_TEXTURE_PRESET_PATH
+
+
 func _notification(what: int) -> void:
 	# Save all dirty chunks externally and keep generated runtime arrays out of .tscn files.
 	if what == NOTIFICATION_EDITOR_PRE_SAVE:
@@ -1532,6 +1538,7 @@ func save_to_preset() -> void:
 func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 	if preset == null:
 		return
+	var is_default_empty_preset := _is_default_empty_texture_preset(preset)
 
 	var current_preset_owns_texture_resources := false
 	if current_texture_preset != null:
@@ -1655,7 +1662,7 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 				preset_has_legacy_textures = true
 				break
 	var apply_legacy_texture_resources := preset_has_legacy_textures and not preset_has_texture_library
-	if not preset_has_texture_library and not apply_legacy_texture_resources and not current_preset_owns_texture_resources:
+	if not is_default_empty_preset and not preset_has_texture_library and not apply_legacy_texture_resources and not current_preset_owns_texture_resources:
 		if texture_library != null:
 			_main_texture_library = texture_library
 		_main_visible_texture_slot_count = clampi(int(visible_texture_slot_count), 6, MAX_TEXTURE_SLOTS)
@@ -1797,7 +1804,7 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 	# to exist in the currently linked library. This keeps older/light presets from collapsing down to
 	# only Texture 1 when they mainly carry color-array data.
 	var highest_preset_slot: int = 0
-	var reset_to_empty_layout: bool = preset.resource_path.is_empty() and not preset_has_texture_library and not apply_legacy_texture_resources
+	var reset_to_empty_layout: bool = (preset.resource_path.is_empty() or is_default_empty_preset) and not preset_has_texture_library and not apply_legacy_texture_resources
 	for i in range(MAX_TEXTURE_SLOTS):
 		var slot_palette_indices: Array = slot_color_indices[i] if i < slot_color_indices.size() and slot_color_indices[i] is Array else []
 		var slot_has_palette: bool = slot_palette_indices.size() > 0
@@ -1810,7 +1817,7 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 	var target_visible_slot_count: int = inferred_visible_slot_count
 	if reset_to_empty_layout:
 		target_visible_slot_count = clampi(max(requested_visible_slot_count, 6), 6, MAX_TEXTURE_SLOTS)
-	if not preset_has_texture_library and not apply_legacy_texture_resources and _main_visible_texture_slot_count > 0:
+	if not reset_to_empty_layout and not preset_has_texture_library and not apply_legacy_texture_resources and _main_visible_texture_slot_count > 0:
 		target_visible_slot_count = clampi(max(_main_visible_texture_slot_count, inferred_visible_slot_count), 6, MAX_TEXTURE_SLOTS)
 	if reset_to_empty_layout:
 		target_visible_slot_count = clampi(max(requested_visible_slot_count, 6), 6, MAX_TEXTURE_SLOTS)

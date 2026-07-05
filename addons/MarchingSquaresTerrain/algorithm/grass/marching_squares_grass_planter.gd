@@ -10,6 +10,21 @@ var terrain_system : MarchingSquaresTerrain
 const _WALL_PUSH_SAMPLE_STEP_FRACTION: float = 0.25
 const _WALL_PUSH_MAX_FRACTION: float = 0.18
 const _WALL_PUSH_DROP_TRIGGER_FACTOR: float = 0.6
+const _MIN_NORMAL_LENGTH_SQUARED: float = 0.000001
+
+
+func _safe_normalized(vec: Vector3, fallback: Vector3) -> Vector3:
+	return vec.normalized() if vec.length_squared() > _MIN_NORMAL_LENGTH_SQUARED else fallback
+
+
+func _build_grass_basis(normal: Vector3) -> Basis:
+	var up := _safe_normalized(normal, Vector3.UP)
+	var right := Vector3.FORWARD.cross(up)
+	if right.length_squared() <= _MIN_NORMAL_LENGTH_SQUARED:
+		right = Vector3.RIGHT.cross(up)
+	right = _safe_normalized(right, Vector3.RIGHT)
+	var forward := _safe_normalized(up.cross(right), Vector3.FORWARD)
+	return Basis(right, forward, -up)
 
 
 func _sample_height_local(x: float, z: float) -> float:
@@ -495,11 +510,9 @@ func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vecto
 	if use_flat:
 		normal = -Vector3.UP
 	else:
-		normal = edge1.cross(edge2).normalized()
+		normal = _safe_normalized(edge1.cross(edge2), Vector3.UP)
 
-	var right := Vector3.FORWARD.cross(normal).normalized()
-	var forward := normal.cross(Vector3.RIGHT).normalized()
-	var instance_basis := Basis(right, forward, -normal)
+	var instance_basis := _build_grass_basis(normal)
 
 	# PR1: no per-blade size variation (kept for PR2/PR4 scope).
 	var height_s := 1.0

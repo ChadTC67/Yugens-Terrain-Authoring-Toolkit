@@ -15,7 +15,7 @@ icon = ExtResource("1_ir1w2")
 label = "Chunk Manager"
 tooltip = "Chunk Management Tool
 
-Used to create, delete and change chunk settings.
+Used to create, delete and change individual chunk settings.
 
 [INFO]
 Chunk cell merge modes:

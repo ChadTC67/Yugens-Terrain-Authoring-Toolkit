@@ -10,6 +10,11 @@ var vp_tex_names : MarchingSquaresTextureNames = preload("uid://dd7fens03aosa")
 var _built_for_terrain_id: int = 0
 
 const MAX_TEXTURE_SLOTS := 256
+const TEXTURE_SETTINGS_MIN_WIDTH_SMALL := 205
+const TEXTURE_SETTINGS_MIN_WIDTH_LARGE := 324
+const LARGE_EDITOR_RESOLUTION := Vector2i(1920, 1080)
+const SLOT_PREVIEW_SIZE_SMALL := 96
+const SLOT_PREVIEW_SIZE_LARGE := 128
 
 # Avoid hard class_name dependency in headless/script-cache runs.
 const _TEXTURE_SLOT_SCRIPT := preload("res://addons/MarchingSquaresTerrain/resources/marching_squares_texture_slot.gd")
@@ -93,11 +98,29 @@ const VAR_NAMES : Array[Dictionary] = [
 
 
 func _ready() -> void:
-	# Keep the painter dock narrow; child controls manage their own click targets.
-	set_custom_minimum_size(Vector2(205, 0))
+	# Reserve enough width for slot previews and labels on larger editor layouts.
+	set_custom_minimum_size(Vector2(_get_texture_settings_min_width(), 0))
 	add_theme_constant_override("separation", 5)
 	add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+
+
+func _get_texture_settings_min_width() -> int:
+	var editor_window := get_window()
+	var window_size := editor_window.size if editor_window != null else DisplayServer.screen_get_size()
+	if window_size.x > LARGE_EDITOR_RESOLUTION.x and window_size.y > LARGE_EDITOR_RESOLUTION.y:
+		return TEXTURE_SETTINGS_MIN_WIDTH_LARGE
+	return TEXTURE_SETTINGS_MIN_WIDTH_SMALL
+
+
+func _use_large_editor_layout() -> bool:
+	var editor_window := get_window()
+	var window_size := editor_window.size if editor_window != null else DisplayServer.screen_get_size()
+	return window_size.x > LARGE_EDITOR_RESOLUTION.x and window_size.y > LARGE_EDITOR_RESOLUTION.y
+
+
+func _get_slot_preview_size() -> int:
+	return SLOT_PREVIEW_SIZE_LARGE if _use_large_editor_layout() else SLOT_PREVIEW_SIZE_SMALL
 
 
 func _ensure_terrain_arrays(terrain: Object) -> bool:
@@ -409,6 +432,23 @@ func _apply_slot_normal(terrain, slot_idx: int, resource: Variant) -> void:
 	_refresh_slot_runtime(terrain, false)
 
 
+func _apply_slot_scale(terrain, slot_idx: int, value: Variant) -> void:
+	if terrain == null or slot_idx < 0 or slot_idx >= MAX_TEXTURE_SLOTS or slot_idx == 15:
+		return
+	if not _ensure_terrain_arrays(terrain):
+		return
+	if terrain.texture_slots[slot_idx] == null:
+		terrain.texture_slots[slot_idx] = _TEXTURE_SLOT_SCRIPT.new()
+	terrain.texture_slots[slot_idx].scale = maxf(float(value), 0.001)
+	_sync_slot_legacy_fields(terrain, slot_idx)
+	if terrain.has_method("_push_tex_scales"):
+		terrain._push_tex_scales()
+	if terrain.has_method("refresh_chunk_surface_materials"):
+		terrain.refresh_chunk_surface_materials()
+	if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
+		terrain.save_to_preset()
+
+
 func _is_slot_inactive(slot_obj) -> bool:
 	return slot_obj == null or bool(slot_obj.get("active")) == false
 
@@ -591,8 +631,10 @@ func add_texture_settings() -> void:
 		return
 
 	var vbox := VBoxContainer.new()
-	# Keep the inspector-side painter narrow enough that it does not steal viewport space.
-	vbox.set_custom_minimum_size(Vector2(190, 0))
+	# Match the dock width so slot cards do not collapse into unreadable previews/labels.
+	var texture_settings_min_width := _get_texture_settings_min_width()
+	var slot_preview_size := _get_slot_preview_size()
+	vbox.set_custom_minimum_size(Vector2(texture_settings_min_width, 0))
 
 	# Bake button: create external Texture2DArray resources from a linked MSTextureLibrary.
 	var bake_btn := Button.new()
@@ -746,23 +788,24 @@ func add_texture_settings() -> void:
 			grid.add_child(divider)
 		var __si := slot_idx
 		var tile := VBoxContainer.new()
-		tile.set_custom_minimum_size(Vector2(176, 156))
+		tile.set_custom_minimum_size(Vector2(texture_settings_min_width - 20, slot_preview_size + 60))
 		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var tex_var : Texture2D = _get_slot_albedo_texture(terrain, slot_idx)
-		var thumb := _make_slot_preview(tex_var, 96)
+		var thumb := _make_slot_preview(tex_var, slot_preview_size)
 		var thumb_center := CenterContainer.new()
 		thumb_center.add_child(thumb)
 		tile.add_child(thumb_center)
 		var nameplate := PanelContainer.new()
-		nameplate.set_custom_minimum_size(Vector2(168, 24))
+		nameplate.set_custom_minimum_size(Vector2(texture_settings_min_width - 52, 24))
 		nameplate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		var lbl := Label.new()
 		lbl.text = names[slot_idx] if slot_idx < names.size() else ("Texture " + str(slot_idx + 1))
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		lbl.clip_text = true
 		lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		lbl.set_custom_minimum_size(Vector2(160, 20))
+		lbl.set_custom_minimum_size(Vector2(texture_settings_min_width - 60, 20))
 		nameplate.add_child(lbl)
 		var nameplate_center := CenterContainer.new()
 		nameplate_center.add_child(nameplate)
@@ -963,6 +1006,29 @@ func _open_slot_modal(slot_idx: int) -> void:
 		call_deferred("add_texture_settings")
 	)
 	maps_section.add_child(nrm_picker_modal)
+
+	var scale_hbox := HBoxContainer.new()
+	scale_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var scale_label := Label.new()
+	scale_label.text = "Texture Scale"
+	scale_label.set_custom_minimum_size(Vector2(95, 20))
+	scale_hbox.add_child(scale_label)
+	var scale_slider := EditorSpinSlider.new()
+	scale_slider.set_flat(true)
+	scale_slider.set_min(0.001)
+	scale_slider.set_max(64.0)
+	scale_slider.set_step(0.01)
+	var slot_scale := 1.0
+	if slot_idx < terrain.texture_slots.size() and terrain.texture_slots[slot_idx] != null and terrain.texture_slots[slot_idx].get("scale") != null:
+		slot_scale = maxf(float(terrain.texture_slots[slot_idx].scale), 0.001)
+	scale_slider.set_value(slot_scale)
+	scale_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scale_slider.set_custom_minimum_size(Vector2(120, 25))
+	scale_slider.value_changed.connect(func(value: float):
+		_apply_slot_scale(terrain, slot_idx, value)
+	)
+	scale_hbox.add_child(scale_slider)
+	maps_section.add_child(scale_hbox, true)
 
 	# Advanced collapsible
 	body.add_child(v)
