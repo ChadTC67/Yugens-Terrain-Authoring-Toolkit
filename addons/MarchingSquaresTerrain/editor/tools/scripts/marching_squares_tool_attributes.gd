@@ -421,7 +421,6 @@ func add_setting(p_params: Dictionary) -> void:
 				spin_slider.set_value(default_value)
 				spin_slider.value_changed.connect(func(value): _on_setting_changed(setting_name, value))
 				spin_slider.set_custom_minimum_size(Vector2(110, 35))
-				
 				cont.add_theme_constant_override("margin_top", -5)
 				cont.add_child(spin_slider, true)
 			else:
@@ -2035,3 +2034,4 @@ func _format_constant_string(text: String) -> String:
 	return " ".join(words)
 
 #endregion
+
