@@ -15,6 +15,7 @@ group_uniforms Visuals.Palette;
 uniform sampler2D palette_colors_tex : filter_nearest;
 uniform sampler2D palette_weights_tex : filter_nearest;
 uniform sampler2D palette_meta_tex : filter_nearest;
+uniform sampler2D slot_albedo_tex : filter_nearest;
 // Per-slot surface settings: roughness=.r, wetness_enabled=.g, wetness_mode=.b, grass_wetness=.a.
 uniform sampler2D palette_surface_settings_tex : filter_nearest;
 // Per-slot shared global-noise settings: strength=.r, scale=.g, enabled=.b.
@@ -423,7 +424,7 @@ vec4 get_palette_color(int tex_idx, vec2 surface_coords) {
 	int color_count = _palette_count(tex_idx);
 
 	if (color_count <= 0)
-		return vec4(0.392, 0.471, 0.318, 1.0);
+		return vec4(1.0, 1.0, 1.0, 0.0);
 	if (color_count == 1)
 		return sample_palette_entry(tex_idx, 0);
 
@@ -556,6 +557,12 @@ vec4 _sample_slot_layer_lookup(int slot) {
 	return texture(vc_slot_layer_lookup_tex, vec2(0.5, v));
 }
 
+vec4 get_slot_albedo_color(int slot) {
+	slot = clamp(slot, 0, 255);
+	float v = (float(slot) + 0.5) / 256.0;
+	return texture(slot_albedo_tex, vec2(0.5, v));
+}
+
 int _dense_texture_layer(int slot) {
 	vec4 lookup = _sample_slot_layer_lookup(slot);
 	if (lookup.a < 0.5) {
@@ -598,9 +605,14 @@ vec4 sample_material_by_index_with_palette_coords(int index, vec2 base_uv, vec2 
 	// When a real texture exists, blend the palette additively (tint/multiply) rather than fully replacing the texture.
 	bool tex_has_content = (tex.a > 0.001) && (abs(tex.r - 1.0) > 0.001 || abs(tex.g - 1.0) > 0.001 || abs(tex.b - 1.0) > 0.001);
 	if (tex_has_content) {
-		// Apply palette as a tint multiplier controlled by palette.a (0..1).
 		float pal_alpha = clamp(palette.a, 0.0, 1.0);
-		vec3 tinted = mix(tex.rgb, tex.rgb * palette.rgb, pal_alpha);
+		vec4 slot_albedo = get_slot_albedo_color(index);
+		vec3 tint_target = palette.rgb;
+		if (slot_albedo.a > 0.001) {
+			vec3 base_albedo = max(slot_albedo.rgb, vec3(0.001));
+			tint_target = clamp(palette.rgb / base_albedo, vec3(0.0), vec3(4.0));
+		}
+		vec3 tinted = tex.rgb * mix(vec3(1.0), tint_target, pal_alpha);
 		return vec4(tinted, tex.a);
 	}
 	// Fallback: if texture is effectively empty/placeholder, blend with palette as before.
@@ -617,7 +629,13 @@ vec4 _mst_apply_material_tint(int index, vec4 tex, vec2 palette_coords) {
 	bool tex_has_content = (tex.a > 0.001) && (abs(tex.r - 1.0) > 0.001 || abs(tex.g - 1.0) > 0.001 || abs(tex.b - 1.0) > 0.001);
 	if (tex_has_content) {
 		float pal_alpha = clamp(palette.a, 0.0, 1.0);
-		vec3 tinted = mix(tex.rgb, tex.rgb * palette.rgb, pal_alpha);
+		vec4 slot_albedo = get_slot_albedo_color(index);
+		vec3 tint_target = palette.rgb;
+		if (slot_albedo.a > 0.001) {
+			vec3 base_albedo = max(slot_albedo.rgb, vec3(0.001));
+			tint_target = clamp(palette.rgb / base_albedo, vec3(0.0), vec3(4.0));
+		}
+		vec3 tinted = tex.rgb * mix(vec3(1.0), tint_target, pal_alpha);
 		return vec4(tinted, tex.a);
 	}
 	return mix(tex, palette, clamp(palette.a, 0.0, 1.0));

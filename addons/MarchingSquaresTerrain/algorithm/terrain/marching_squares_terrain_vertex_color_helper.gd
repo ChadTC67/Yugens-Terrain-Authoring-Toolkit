@@ -469,12 +469,12 @@ static func rebuild_palette_uniforms(terrain) -> void:
 	var img_slot_albedo := Image.create_empty(1, max_slots, false, Image.FORMAT_RGBAF)
 	# Palette colors are edited/stored as sRGB-style values.
 	# Shaders operate in linear space, so convert to linear before uploading.
-	var fallback := Color(0.392, 0.471, 0.318, 1.0).srgb_to_linear()
+	var fallback := Color(1.0, 1.0, 1.0, 0.0)
 
 	for slot in range(max_slots):
 		var indices: Array = terrain.slot_color_indices[slot]
 		var count := mini(indices.size(), 8)
-		var out_count := maxi(count, 1)
+		var out_count := count
 
 		# Meta packing (0..255 per channel)
 		var mode := clampi(int(terrain.slot_blend_modes[slot]), 0, 3)
@@ -503,9 +503,9 @@ static func rebuild_palette_uniforms(terrain) -> void:
 				c = terrain.palette_colors[indices[i]].srgb_to_linear()
 				w = (float(terrain.palette_weights[indices[i]]) / 100.0) if indices[i] < terrain.palette_weights.size() else 1.0
 			elif i == 0 and count == 0:
-				# Ensure every slot has at least 1 entry for the shader.
+				# Empty slots should mean "no tint", not an implicit fallback color.
 				c = fallback
-				w = 1.0
+				w = 0.0
 			img_colors.set_pixel(i, slot, c)
 			img_weights.set_pixel(i, slot, Color(w, 0.0, 0.0, 1.0))
 
@@ -522,6 +522,7 @@ static func rebuild_palette_uniforms(terrain) -> void:
 	terrain.terrain_material.set_shader_parameter("palette_surface_settings_tex", tex_surface_settings)
 	terrain.terrain_material.set_shader_parameter("palette_floor_noise_tex", tex_floor_noise)
 	terrain.terrain_material.set_shader_parameter("palette_wall_noise_tex", tex_wall_noise)
+	terrain.terrain_material.set_shader_parameter("slot_albedo_tex", tex_slot_albedo)
 
 	var grass_mat := terrain.grass_mesh.material as ShaderMaterial
 	grass_mat.set_shader_parameter("palette_colors_tex", tex_colors)
