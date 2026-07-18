@@ -24,11 +24,13 @@ enum StorageMode {
 @export_category("Storage Options")
 ## The storage mode for terrain data.
 @export_storage var _storage_mode_internal : StorageMode = StorageMode.BAKED
-var storage_mode : StorageMode:
+@export var storage_mode : StorageMode:
 	get():
 		return _storage_mode_internal
 	set(value):
 		_set_storage_mode_internal(value)
+@export_tool_button("Repair Chunk Storage") var repair_chunk_storage_button = func():
+	_repair_chunk_storage()
 
 func _set_storage_mode_internal(value: StorageMode) -> void:
 	if _storage_mode_internal != value:
@@ -140,6 +142,9 @@ var _data_directory : String = ""
 
 ## Tracks the mode used during the last successful save for reporting purposes.
 @export_storage var _last_storage_mode : StorageMode = StorageMode.BAKED
+@export_storage var _warned_storage_mode_message : bool = false
+@export_storage var _warned_data_directory_message : bool = false
+@export_storage var _warned_embedded_chunk_migration : bool = false
 
 ## One-time mesh migration flag: walls are now tagged via UV sentinel so shaders reliably detect walls.
 ## Existing chunks need a one-time regen to pick up the new UV values.
@@ -1075,9 +1080,15 @@ func _enter_tree() -> void:
 
 func _initialize_data_directory() -> void:
 	var copy_from_dir := ""
-	if EngineWrapper.instance.is_editor() and not data_directory.is_empty() and not MSTDataHandler.is_data_directory_unique(self):
-		copy_from_dir = data_directory
-		data_directory = ""
+	if EngineWrapper.instance.is_editor() and not data_directory.is_empty():
+		var normalized_dir := str(data_directory).replace("\\", "/")
+		if not normalized_dir.begins_with("res://"):
+			push_warning("[MST] Ignoring invalid data_directory '" + str(data_directory) + "'. Falling back to an auto-generated project-relative terrain data folder.")
+			data_directory = ""
+		elif not MSTDataHandler.is_data_directory_unique(self):
+			copy_from_dir = data_directory
+			data_directory = ""
+			push_warning("[MST] This terrain shared a data_directory with another terrain. A unique terrain data folder will be generated automatically to prevent chunk data overlap.")
 
 	if EngineWrapper.instance.is_editor() and (data_directory.is_empty()):
 		var auto_path := MSTDataHandler.generate_data_directory(self)
@@ -1085,6 +1096,38 @@ func _initialize_data_directory() -> void:
 			data_directory = auto_path
 	if copy_from_dir:
 		MSTDataHandler.copy_recursive(copy_from_dir, data_directory)
+	if EngineWrapper.instance.is_editor() and data_directory.is_empty() and not _warned_data_directory_message:
+		_warned_data_directory_message = true
+		push_warning("[MST] Terrain data_directory could not be generated yet. Save the scene once so MST can assign a stable external chunk storage folder.")
+
+
+func _warn_storage_expectations() -> void:
+	if not EngineWrapper.instance.is_editor():
+		return
+	if storage_mode == StorageMode.BAKED and not _warned_storage_mode_message:
+		_warned_storage_mode_message = true
+		push_warning("[MST] Storage Mode is BAKED. Chunk metadata can be larger because mesh, collision, and baked grass cache data may be stored externally. Use RUNTIME for smaller files with more rebuild/load work.")
+
+
+func _repair_chunk_storage() -> void:
+	if not EngineWrapper.instance.is_editor():
+		return
+	_initialize_data_directory()
+	if data_directory == null or data_directory == "":
+		push_error("[MST] Cannot repair chunk storage because no data directory is assigned. Save the scene first, then try again.")
+		return
+	chunks.clear()
+	for child in get_children():
+		if child is MarchingSquaresTerrainChunk:
+			chunks[child.chunk_coords] = child
+			child.terrain_system = self
+			child.mark_dirty()
+	if MSTDataHandler.save_all_chunks(self):
+		_storage_initialized = true
+		EditorInterface.mark_scene_as_unsaved()
+		push_warning("[MST] Chunk metadata was repaired and externalized. Save the scene now to strip embedded chunk payload from the .tscn.")
+	else:
+		push_error("[MST] Failed to repair chunk storage. Embedded chunk data was left untouched.")
 
 
 func _deferred_enter_tree() -> void:
@@ -1109,10 +1152,15 @@ func _deferred_enter_tree() -> void:
 			chunk.terrain_system = self
 			chunk.grass_planter = null
 
+	_warn_storage_expectations()
+
 	# Load external data if storage was previously initialized
 	if _storage_initialized:
 		MSTDataHandler.load_terrain_data(self)
 	elif EngineWrapper.instance.is_editor() and MSTDataHandler.needs_migration(self):
+		if not _warned_embedded_chunk_migration:
+			_warned_embedded_chunk_migration = true
+			push_warning("[MST] Embedded legacy chunk data was detected for this terrain. MST is auto-migrating chunk source data to external storage. Save the scene after migration to strip embedded chunk payload from the .tscn.")
 		# Auto-migrate embedded data to external storage (editor only)
 		MSTDataHandler.migrate_to_external_storage(self)
 
@@ -1395,11 +1443,11 @@ func _push_slot_blend_modes() -> void:
 ## Call this after setting is_batch_updating = true and changing properties
 func force_batch_update() -> void:
 	var grass_mat := grass_mesh.material as ShaderMaterial
-
+	
 	# TERRAIN MATERIAL - Core parameters
 	terrain_material.set_shader_parameter("chunk_size", dimensions)
 	terrain_material.set_shader_parameter("cell_size", cell_size)
-
+	
 	# TERRAIN MATERIAL - Texture2DArray + per-slot scales
 	_ensure_texture_slots()
 	_maybe_migrate_legacy_textures()
@@ -1412,11 +1460,11 @@ func force_batch_update() -> void:
 	terrain_material.set_shader_parameter("has_prefab_colormap", has_prefab_map)
 	_sync_prefab_material_state()
 	refresh_chunk_surface_materials()
-
+	
 	# GRASS MATERIAL - Grass Textures (Texture2DArray)
 	_maybe_migrate_legacy_grass()
 	rebuild_grass_texture_array()
-
+	
 	terrain_material.set_shader_parameter("global_noise_texture", global_noise_texture)
 	terrain_material.set_shader_parameter("global_noise_strength", global_noise_strength)
 	terrain_material.set_shader_parameter("global_noise_scale", global_noise_scale)
@@ -1444,7 +1492,7 @@ func save_to_preset() -> void:
 				preset_has_legacy_texture_payload = true
 				break
 	current_texture_preset.visible_texture_slot_count = clampi(int(visible_texture_slot_count), 6, MAX_TEXTURE_SLOTS)
-
+	
 	# Terrain textures
 	if preset_owns_texture_resources or preset_has_legacy_texture_payload:
 		current_texture_preset.new_textures.terrain_textures[0] = texture_1

@@ -15,12 +15,22 @@ const TEXTURE_SETTINGS_MIN_WIDTH_LARGE := 324
 const LARGE_EDITOR_RESOLUTION := Vector2i(1920, 1080)
 const SLOT_PREVIEW_SIZE_SMALL := 96
 const SLOT_PREVIEW_SIZE_LARGE := 128
+const TEXTURE_PRESET_DIR := "res://addons/MarchingSquaresTerrain/resources/texture_presets/"
 
 # Avoid hard class_name dependency in headless/script-cache runs.
-const _TEXTURE_SLOT_SCRIPT := preload("res://addons/MarchingSquaresTerrain/resources/marching_squares_texture_slot.gd")
-const MarchingSquaresBaker := preload("res://addons/MarchingSquaresTerrain/editor/tools/marching_squares_baker.gd")
-const MarchingSquaresTerrainHelpers := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_helpers.gd")
-const MSTextureLibraryScript := preload("res://addons/MarchingSquaresTerrain/resources/marching_squares_terrain_texture_library.gd")
+const _TEXTURE_SLOT_SCRIPT := preload("uid://blcngv6fs1rut")
+const MarchingSquaresBaker := preload("uid://bvqkmycahgowa")
+const MarchingSquaresTerrainHelpers := preload("uid://b33pjajd0cl83")
+const MSTextureLibraryScript := preload("uid://iyvy0c8carkd")
+
+const _TEXTURE_EDIT_WINDOW := preload("uid://58vqrcbqc0jm")
+
+var texture_import_dialog: AcceptDialog
+var texture_import_name_input: LineEdit
+var texture_import_save_path_input: LineEdit
+var texture_import_albedo_dir_input: LineEdit
+var texture_import_normal_dir_input: LineEdit
+var texture_import_bake_check: CheckBox
 
 const VAR_NAMES : Array[Dictionary] = [
 	{
@@ -103,6 +113,7 @@ func _ready() -> void:
 	add_theme_constant_override("separation", 5)
 	add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	_create_texture_import_dialog()
 
 
 func _get_texture_settings_min_width() -> int:
@@ -121,6 +132,110 @@ func _use_large_editor_layout() -> bool:
 
 func _get_slot_preview_size() -> int:
 	return SLOT_PREVIEW_SIZE_LARGE if _use_large_editor_layout() else SLOT_PREVIEW_SIZE_SMALL
+
+
+func _create_texture_import_dialog() -> void:
+	if texture_import_dialog != null:
+		return
+	texture_import_dialog = AcceptDialog.new()
+	texture_import_dialog.title = "Texture Import"
+	texture_import_dialog.unresizable = true
+	texture_import_dialog.exclusive = false
+	texture_import_dialog.confirmed.connect(_on_texture_import_confirmed)
+	
+	var cont := VBoxContainer.new()
+	cont.add_theme_constant_override("separation", 8)
+	
+	var name_label := Label.new()
+	name_label.text = "Preset name:"
+	cont.add_child(name_label)
+	
+	texture_import_name_input = LineEdit.new()
+	texture_import_name_input.placeholder_text = "new_texture_import"
+	cont.add_child(texture_import_name_input)
+	
+	var save_path_label := Label.new()
+	save_path_label.text = "Save path:"
+	cont.add_child(save_path_label)
+	
+	texture_import_save_path_input = LineEdit.new()
+	texture_import_save_path_input.text = TEXTURE_PRESET_DIR
+	texture_import_save_path_input.placeholder_text = TEXTURE_PRESET_DIR
+	cont.add_child(texture_import_save_path_input)
+	
+	cont.add_child(_build_texture_import_path_row(
+		"Albedo or Diffuse Maps Folder:",
+		"Select the folder that contains albedo or diffuse textures.",
+		func(line_edit: LineEdit): _open_texture_import_folder_dialog(line_edit, "Select Albedo or Diffuse Maps Folder")
+	))
+	texture_import_albedo_dir_input = cont.get_child(cont.get_child_count() - 1).get_meta("path_input")
+	
+	cont.add_child(_build_texture_import_path_row(
+		"Normal Maps Folder:",
+		"Select the folder that contains normal textures.",
+		func(line_edit: LineEdit): _open_texture_import_folder_dialog(line_edit, "Select Normal Maps Folder")
+	))
+	texture_import_normal_dir_input = cont.get_child(cont.get_child_count() - 1).get_meta("path_input")
+	
+	texture_import_bake_check = CheckBox.new()
+	texture_import_bake_check.text = "Bake arrays after import"
+	texture_import_bake_check.tooltip_text = "Immediately bake Texture2DArray resources for the imported preset."
+	cont.add_child(texture_import_bake_check)
+	
+	texture_import_dialog.add_child(cont)
+	add_child(texture_import_dialog)
+
+
+func _build_texture_import_path_row(label_text: String, tooltip_text: String, on_browse: Callable) -> VBoxContainer:
+	var wrapper := VBoxContainer.new()
+	var label := Label.new()
+	label.text = label_text
+	label.tooltip_text = tooltip_text
+	wrapper.add_child(label)
+	
+	var row := HBoxContainer.new()
+	var line_edit := LineEdit.new()
+	line_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line_edit.placeholder_text = "res://"
+	line_edit.tooltip_text = tooltip_text
+	row.add_child(line_edit)
+	
+	var browse_btn := Button.new()
+	browse_btn.text = "Browse"
+	browse_btn.pressed.connect(func(): on_browse.call(line_edit))
+	row.add_child(browse_btn)
+	wrapper.add_child(row)
+	wrapper.set_meta("path_input", line_edit)
+	return wrapper
+
+
+func _open_texture_import_dialog() -> void:
+	if texture_import_dialog == null:
+		_create_texture_import_dialog()
+	texture_import_name_input.text = "new_texture_import"
+	texture_import_save_path_input.text = TEXTURE_PRESET_DIR
+	texture_import_albedo_dir_input.text = ""
+	texture_import_normal_dir_input.text = ""
+	texture_import_bake_check.button_pressed = false
+	texture_import_dialog.popup_centered(Vector2i(520, 260))
+	texture_import_name_input.grab_focus()
+	texture_import_name_input.select_all()
+
+
+func _open_texture_import_folder_dialog(path_edit: LineEdit, title: String) -> void:
+	var dialog := EditorFileDialog.new()
+	dialog.file_mode = EditorFileDialog.FILE_MODE_OPEN_DIR
+	dialog.access = EditorFileDialog.ACCESS_RESOURCES
+	dialog.title = title
+	dialog.exclusive = false
+	dialog.current_dir = path_edit.text if not path_edit.text.is_empty() else "res://"
+	dialog.dir_selected.connect(func(dir: String):
+		path_edit.text = dir
+		dialog.queue_free()
+	)
+	dialog.canceled.connect(func(): dialog.queue_free())
+	EditorInterface.get_base_control().add_child(dialog)
+	dialog.popup_centered(Vector2i(600, 400))
 
 
 func _ensure_terrain_arrays(terrain: Object) -> bool:
@@ -369,7 +484,7 @@ func _refresh_slot_runtime(
 func _apply_slot_albedo(terrain, slot_idx: int, resource: Variant, p_refresh_ui: bool = false) -> void:
 	if terrain == null or slot_idx < 0 or slot_idx >= MAX_TEXTURE_SLOTS or slot_idx == 15:
 		return
-	var texture: Texture2D = _coerce_texture2d(resource)
+	var texture : Texture2D = _coerce_texture2d(resource)
 	if not _ensure_terrain_arrays(terrain):
 		return
 	if terrain.texture_slots[slot_idx] == null:
@@ -426,11 +541,13 @@ func _apply_slot_normal(terrain, slot_idx: int, resource: Variant) -> void:
 	if not _ensure_terrain_arrays(terrain):
 		return
 	var lib_res := _get_texture_library(terrain)
-	if lib_res != null and slot_idx < lib_res.normal_textures.size():
+	if lib_res == null and terrain.has_method("ensure_texture_library_resource"):
+		lib_res = terrain.ensure_texture_library_resource()
 		lib_res.normal_textures[slot_idx] = texture
 		_save_resource_if_external(lib_res)
 	_refresh_slot_runtime(terrain, false)
-
+	if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
+		terrain.save_to_preset()
 
 func _apply_slot_scale(terrain, slot_idx: int, value: Variant) -> void:
 	if terrain == null or slot_idx < 0 or slot_idx >= MAX_TEXTURE_SLOTS or slot_idx == 15:
@@ -538,41 +655,6 @@ func _shrink_visible_texture_slots(terrain) -> void:
 	terrain.visible_texture_slot_count = _get_effective_visible_slot_count(terrain)
 
 
-func _set_modal_preview_texture(preview: TextureRect, terrain, texture: Texture2D, max_size: int = 256) -> void:
-	if preview == null:
-		return
-	if texture == null:
-		preview.texture = null
-		return
-	if terrain == null or not terrain.has_method("_get_decompressed_image"):
-		preview.texture = texture
-		return
-	var img: Image = terrain._get_decompressed_image(texture)
-	if img == null:
-		preview.texture = texture
-		return
-	var iw: int = img.get_width()
-	var ih: int = img.get_height()
-	if iw <= 0 or ih <= 0:
-		preview.texture = texture
-		return
-	if iw > max_size or ih > max_size:
-		var nw: int = iw
-		var nh: int = ih
-		if iw >= ih:
-			nw = max_size
-			nh = max(1, int(round(float(ih) * float(nw) / float(iw))))
-		else:
-			nh = max_size
-			nw = max(1, int(round(float(iw) * float(nh) / float(ih))))
-		img.resize(nw, nh, Image.INTERPOLATE_BILINEAR)
-		var preview_texture := ImageTexture.new()
-		preview_texture.create_from_image(img)
-		preview.texture = preview_texture
-	else:
-		preview.texture = texture
-
-
 func _clear_slot(terrain, slot_idx: int, p_refresh_ui: bool = true) -> void:
 	if terrain == null or slot_idx < 0 or slot_idx >= MAX_TEXTURE_SLOTS or slot_idx == 15:
 		return
@@ -616,34 +698,27 @@ func _make_slot_preview(texture: Texture2D, size: int = 64) -> TextureRect:
 	thumb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	return thumb
 
+
 func add_texture_settings() -> void:
 	for child in get_children():
 		child.queue_free()
-
+	
 	var terrain := plugin.current_terrain_node
 	if terrain == null:
 		_built_for_terrain_id = 0
 		return
 	_built_for_terrain_id = terrain.get_instance_id()
-
+	
 	# Ensure slot/palette arrays are initialized before we build UI.
 	if not _ensure_terrain_arrays(terrain):
 		return
-
+	
 	var vbox := VBoxContainer.new()
 	# Match the dock width so slot cards do not collapse into unreadable previews/labels.
 	var texture_settings_min_width := _get_texture_settings_min_width()
 	var slot_preview_size := _get_slot_preview_size()
 	vbox.set_custom_minimum_size(Vector2(texture_settings_min_width, 0))
-
-	# Bake button: create external Texture2DArray resources from a linked MSTextureLibrary.
-	var bake_btn := Button.new()
-	bake_btn.text = "Bake Texture Arrays"
-	bake_btn.tooltip_text = "Bake assigned textures into external Texture2DArray .res files (uses texture_library on the terrain)."
-	bake_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bake_btn.pressed.connect(self._on_bake_pressed)
-	vbox.add_child(bake_btn, true)
-
+	
 	var preset := terrain.current_texture_preset
 	var names : Array[String] = []
 	if preset and preset.new_tex_names:
@@ -652,7 +727,7 @@ func add_texture_settings() -> void:
 	elif vp_tex_names:
 		MarchingSquaresTerrainPlugin._ensure_texture_names_resource(vp_tex_names)
 		names = vp_tex_names.get("texture_names")
-
+	
 	# "Ghost" slot: Global Noise (not a texture slot).
 	var gn_label := Label.new()
 	gn_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -661,7 +736,7 @@ func add_texture_settings() -> void:
 	gn_label.set_custom_minimum_size(Vector2(160, 25))
 	gn_label.tooltip_text = "Texture used by the shader's global noise multiplier (not a texture slot)"
 	vbox.add_child(gn_label, true)
-
+	
 	var gn_picker := EditorResourcePicker.new()
 	gn_picker.set_base_type("Texture2D")
 	var gn_tex: Texture2D = _coerce_texture2d(terrain.get("global_noise_texture"))
@@ -680,7 +755,7 @@ func add_texture_settings() -> void:
 	gn_picker_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	gn_picker_center.add_child(gn_picker)
 	vbox.add_child(gn_picker_center, true)
-
+	
 	# Strength/scale controls for Global Noise (stored on the terrain node).
 	var gn_strength_hbox := HBoxContainer.new()
 	gn_strength_hbox.set_custom_minimum_size(Vector2(150, 20))
@@ -702,7 +777,7 @@ func add_texture_settings() -> void:
 	gn_strength_slider.set_custom_minimum_size(Vector2(95, 25))
 	gn_strength_hbox.add_child(gn_strength_slider)
 	gn_strength_hbox.visible = false
-
+	
 	var gn_scale_hbox := HBoxContainer.new()
 	gn_scale_hbox.set_custom_minimum_size(Vector2(150, 20))
 	var gn_scale_label := Label.new()
@@ -723,33 +798,18 @@ func add_texture_settings() -> void:
 	gn_scale_slider.set_custom_minimum_size(Vector2(95, 25))
 	gn_scale_hbox.add_child(gn_scale_slider)
 	gn_scale_hbox.visible = false
-
-	var gn_scroll_hbox := HBoxContainer.new()
-	gn_scroll_hbox.set_custom_minimum_size(Vector2(150, 20))
-	var gn_scroll_label := Label.new()
-	gn_scroll_label.text = "Scroll:"
-	gn_scroll_label.set_custom_minimum_size(Vector2(70, 20))
-	gn_scroll_hbox.add_child(gn_scroll_label)
-	var gn_scroll_slider := EditorSpinSlider.new()
-	gn_scroll_slider.set_flat(true)
-	gn_scroll_slider.set_min(0.0)
-	gn_scroll_slider.set_max(10.0)
-	gn_scroll_slider.set_step(0.1)
-	var gn_scroll_val = terrain.get("global_noise_scroll")
-	if gn_scroll_val is float or gn_scroll_val is int:
-		gn_scroll_slider.set_value(float(gn_scroll_val))
-	else:
-		gn_scroll_slider.set_value(0.0)
-	gn_scroll_slider.value_changed.connect(func(v): terrain.set("global_noise_scroll", float(v)))
-	gn_scroll_slider.set_custom_minimum_size(Vector2(95, 25))
-	gn_scroll_hbox.add_child(gn_scroll_slider)
-	vbox.add_child(gn_scroll_hbox, true)
-
+	
+	var import_texture_folder_btn := Button.new()
+	import_texture_folder_btn.text = "Import Texture Folder"
+	import_texture_folder_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	import_texture_folder_btn.pressed.connect(_open_texture_import_dialog)
+	vbox.add_child(import_texture_folder_btn, true)
+	
 	vbox.add_child(HSeparator.new())
-
+	
 	var visible_count := _get_effective_visible_slot_count(terrain)
-
-	# Compact slot list. Per-slot editing lives in _open_slot_modal().
+	
+	# Compact slot list
 	var actions_v := VBoxContainer.new()
 	actions_v.set_custom_minimum_size(Vector2(120, 56))
 	actions_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -766,6 +826,12 @@ func add_texture_settings() -> void:
 		call_deferred("add_texture_settings")
 	)
 	actions_v.add_child(add_compact)
+	var bake_btn := Button.new()
+	bake_btn.text = "Bake Texture Arrays"
+	bake_btn.tooltip_text = "Bake assigned textures into external Texture2DArray .res files (uses texture_library on the terrain)."
+	bake_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bake_btn.pressed.connect(self._on_bake_pressed)
+	actions_v.add_child(bake_btn)
 	var export_compact := MarchingSquaresTexturePresetExporter.new()
 	export_compact.current_terrain_node = terrain
 	export_compact.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -815,7 +881,7 @@ func add_texture_settings() -> void:
 		var edit_btn := Button.new()
 		edit_btn.text = "Edit"
 		edit_btn.set_custom_minimum_size(Vector2(48, 24))
-		edit_btn.pressed.connect(func(): _open_slot_modal(__si))
+		edit_btn.pressed.connect(func(): _open_texture_edit_window(__si))
 		btn_h.add_child(edit_btn)
 		var rem_btn := Button.new()
 		rem_btn.text = "X"
@@ -838,65 +904,22 @@ func is_built_for_current_terrain() -> bool:
 	return terrain != null and _built_for_terrain_id == terrain.get_instance_id() and get_child_count() > 0
 
 
-func _add_modal_box(parent: VBoxContainer, title: String) -> VBoxContainer:
-	var panel := PanelContainer.new()
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.border_color = Color(0.32, 0.32, 0.32, 1.0)
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_right = 4
-	style.corner_radius_bottom_left = 4
-	panel.add_theme_stylebox_override("panel", style)
-	parent.add_child(panel)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_top", 8)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	panel.add_child(margin)
-
-	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", 6)
-	margin.add_child(inner)
-
-	var label := Label.new()
-	label.text = title
-	inner.add_child(label)
-	return inner
-
-func _open_slot_modal(slot_idx: int) -> void:
+func _open_texture_edit_window(slot_idx: int) -> void:
 	var terrain := plugin.current_terrain_node
 	if terrain == null:
 		return
-	var existing := get_tree().get_root().get_node_or_null("mst_slot_modal")
+	
+	var existing := get_tree().get_root().get_node_or_null("TextureEditWindow")
 	if existing:
 		existing.queue_free()
-	var dialog := AcceptDialog.new()
-	dialog.name = "mst_slot_modal"
+	
+	var dialog : MarchingSquaresTextureEditWindow = _TEXTURE_EDIT_WINDOW.instantiate()
 	dialog.title = "Edit Texture %d" % (slot_idx + 1)
-	dialog.min_size = Vector2i(780, 520)
-	dialog.exclusive = false
-	var body := HBoxContainer.new()
-	body.name = "modal_body"
-	body.set_custom_minimum_size(Vector2(840, 0))
-	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var v := VBoxContainer.new()
-	v.name = "modal_left"
-	v.set_custom_minimum_size(Vector2(300, 0))
-	v.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	# Name
-	var name_section := _add_modal_box(v, "Texture Name")
-	var name_edit := LineEdit.new()
-	name_edit.name = "name_edit"
-	# Fill with preset or default name
+	
+	# Texture preview
+	dialog.texture_preview.texture = EditorInterface.get_editor_viewport_3d().get_texture()
+	
+	# Texture name edit
 	var preset := terrain.current_texture_preset
 	var names : Array = []
 	if preset and preset.new_tex_names:
@@ -904,268 +927,79 @@ func _open_slot_modal(slot_idx: int) -> void:
 		names = preset.new_tex_names.get("texture_names")
 	elif vp_tex_names:
 		names = vp_tex_names.get("texture_names")
-	name_edit.text = names[slot_idx] if slot_idx < names.size() else ("Texture " + str(slot_idx + 1))
-	name_section.add_child(name_edit)
-	# Preview
-	var preview_section := _add_modal_box(v, "Preview")
-	var preview := TextureRect.new()
-	preview.name = "preview"
-	# Force a compact preview container so very large textures don't resize the modal
-	preview.set_custom_minimum_size(Vector2(256, 256))
-	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	# Container with fixed minimum size to clamp the preview area
-	var preview_container := CenterContainer.new()
-	preview_container.set_custom_minimum_size(Vector2(256, 256))
-	preview_container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	preview_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	# Ensure content is clipped so a large texture can't expand the dialog
-	preview_container.clip_contents = true
-	# Keep the preview fixed-size; TextureRect's natural texture size must not drive modal layout.
-	preview.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	preview.set_custom_minimum_size(Vector2(256, 256))
-	preview_container.add_child(preview)
-	preview_section.add_child(preview_container)
-	# Inline color preview overlay inside preview (bottom-right)
-	var overlay_v := VBoxContainer.new()
-	overlay_v.name = "preview_overlay"
-	overlay_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	overlay_v.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	overlay_v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var overlay_spacer := Control.new()
-	overlay_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	overlay_v.add_child(overlay_spacer)
-	var overlay_h := HBoxContainer.new()
-	overlay_h.name = "preview_overlay_h"
-	var overlay_h_spacer := Control.new()
-	overlay_h_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	overlay_h.add_child(overlay_h_spacer)
-	# Add color swatches for this slot (show up to 6 for compactness)
-	var sidxs_local: Array = terrain.slot_color_indices[slot_idx]
-	var max_swatches: int = min(sidxs_local.size(), 6)
-	for i_sw in range(max_swatches):
-		var cr := ColorRect.new()
-		cr.name = "color_preview_rect_%d" % i_sw
-		var pidx_local: int = int(sidxs_local[i_sw])
-		if pidx_local >= 0 and pidx_local < terrain.palette_colors.size():
-			cr.color = terrain.palette_colors[pidx_local]
-		else:
-			cr.color = Color(1, 1, 1)
-		cr.set_custom_minimum_size(Vector2(36, 36))
-		cr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		overlay_h.add_child(cr)
-	overlay_v.add_child(overlay_h)
-	preview.add_child(overlay_v)
-	# Ensure initial swatch color reflects first palette color if available
-	var initial_sw : ColorRect = preview.get_node_or_null("preview_overlay/preview_overlay_h/color_preview_rect_0") as ColorRect
-	if initial_sw != null:
-		var sidxs: Array = terrain.slot_color_indices[slot_idx]
-		if sidxs.size() > 0:
-			var first_p : int = int(sidxs[0])
-			if first_p >= 0 and first_p < terrain.palette_colors.size():
-				initial_sw.color = terrain.palette_colors[first_p]
-	# Position swatch after layout
-	call_deferred("_position_preview_swatch", preview, initial_sw)
-	# Texture picker
-	var maps_section := _add_modal_box(v, "Textures")
-	var alb_label := Label.new()
-	alb_label.text = "Albedo Map"
-	maps_section.add_child(alb_label)
-	var picker := EditorResourcePicker.new()
-	picker.name = "tex_picker"
-	picker.set_base_type("Texture2D")
-	var existing_tex: Texture2D = _get_slot_albedo_texture(terrain, slot_idx)
-	if existing_tex != null:
-		picker.edited_resource = existing_tex
-		_set_modal_preview_texture(preview, terrain, existing_tex, 256)
-	picker.resource_changed.connect(func(res):
-		var preview_tex: Texture2D = _coerce_texture2d(res)
-		_set_modal_preview_texture(preview, terrain, preview_tex, 256)
+	dialog.texture_name_edit.text = names[slot_idx] if slot_idx < names.size() else ("Texture " + str(slot_idx + 1))
+	
+	# Albedo texture picker
+	var existing_alb_tex : Texture2D = _get_slot_albedo_texture(terrain, slot_idx)
+	if existing_alb_tex != null:
+		dialog.albedo_picker.edited_resource = existing_alb_tex
+	dialog.albedo_picker.resource_changed.connect(func(res):
+		var preview_tex : Texture2D = _coerce_texture2d(res)
 		_apply_slot_albedo(terrain, slot_idx, res, true)
-		# Reposition the inline swatch after the preview may have resized
-		call_deferred("_position_preview_swatch", preview, preview.get_node_or_null("preview_overlay/preview_overlay_h/color_preview_rect_0"))
 	)
-	maps_section.add_child(picker)
-
-	# Normal picker (modal)
-	var nrm_label := Label.new()
-	nrm_label.text = "Normal Map"
-	maps_section.add_child(nrm_label)
-	var lib_res_modal: Resource = terrain.get("texture_library") if terrain.has_method("get") else null
-	var initial_norm_modal: Texture2D = null
-	if lib_res_modal != null and lib_res_modal is MSTextureLibraryScript and slot_idx < lib_res_modal.normal_textures.size():
-		var maybe_nrm_modal = lib_res_modal.normal_textures[slot_idx]
-		initial_norm_modal = _coerce_texture2d(maybe_nrm_modal)
-	var nrm_picker_modal := EditorResourcePicker.new()
-	nrm_picker_modal.set_base_type("Texture2D")
-	nrm_picker_modal.edited_resource = initial_norm_modal
-	nrm_picker_modal.set_custom_minimum_size(Vector2(100, 25))
-	nrm_picker_modal.resource_changed.connect(func(resource):
+	
+	# Normal texture picker
+	var lib_res : Resource = terrain.get("texture_library") if terrain.has_method("get") else null
+	var initial_norm_tex : Texture2D = null
+	if lib_res != null and lib_res is MSTextureLibraryScript and slot_idx < lib_res.normal_textures.size():
+		var possible_nrm_tex = lib_res.normal_textures[slot_idx]
+		initial_norm_tex = _coerce_texture2d(possible_nrm_tex)
+	dialog.normal_picker.edited_resource = initial_norm_tex
+	dialog.normal_picker.resource_changed.connect(func(resource):
 		_apply_slot_normal(terrain, slot_idx, resource)
-		call_deferred("add_texture_settings")
 	)
-	maps_section.add_child(nrm_picker_modal)
-
-	var scale_hbox := HBoxContainer.new()
-	scale_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var scale_label := Label.new()
-	scale_label.text = "Texture Scale"
-	scale_label.set_custom_minimum_size(Vector2(95, 20))
-	scale_hbox.add_child(scale_label)
-	var scale_slider := EditorSpinSlider.new()
-	scale_slider.set_flat(true)
-	scale_slider.set_min(0.001)
-	scale_slider.set_max(64.0)
-	scale_slider.set_step(0.01)
+	
+	# Scale slider
 	var slot_scale := 1.0
 	if slot_idx < terrain.texture_slots.size() and terrain.texture_slots[slot_idx] != null and terrain.texture_slots[slot_idx].get("scale") != null:
 		slot_scale = maxf(float(terrain.texture_slots[slot_idx].scale), 0.001)
-	scale_slider.set_value(slot_scale)
-	scale_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scale_slider.set_custom_minimum_size(Vector2(120, 25))
-	scale_slider.value_changed.connect(func(value: float):
+	dialog.texture_scale_slider.set_value(slot_scale)
+	dialog.texture_scale_slider.value_changed.connect(func(value: float):
 		_apply_slot_scale(terrain, slot_idx, value)
 	)
-	scale_hbox.add_child(scale_slider)
-	maps_section.add_child(scale_hbox, true)
-
-	# Advanced collapsible
-	body.add_child(v)
-
-	var right_panel := VBoxContainer.new()
-	right_panel.name = "modal_right"
-	right_panel.set_custom_minimum_size(Vector2(420, 0))
-	right_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var adv_label := Label.new()
-	adv_label.text = "Advanced"
-	right_panel.add_child(adv_label)
-
-	var adv_scroll := ScrollContainer.new()
-	adv_scroll.name = "adv_scroll"
-	adv_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
-	adv_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	adv_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	adv_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	adv_scroll.set_custom_minimum_size(Vector2(420, 0))
-
-	var adv_vbox := VBoxContainer.new()
-	adv_vbox.name = "adv_vbox"
-	adv_vbox.visible = true
-	adv_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	adv_vbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	adv_vbox.set_custom_minimum_size(Vector2(400, 0))
-	# Reuse existing palette builder inside modal for parity
-	_build_palette_ui(adv_vbox, terrain, slot_idx)
-
-	# Inline status area
-	var status_lbl := Label.new()
-	status_lbl.name = "status_label"
-	status_lbl.text = ""
-	adv_vbox.add_child(status_lbl)
-
-	adv_scroll.add_child(adv_vbox)
-	right_panel.add_child(adv_scroll)
-	body.add_child(right_panel)
-
-	dialog.add_child(body)
-	dialog.confirmed.connect(func(): _on_slot_modal_confirmed(slot_idx))
-	# Parent modal to the scene root so rebuilding this panel won't free it
+	
+	# Color section
+	_connect_color_ui(dialog, terrain, slot_idx)
+	
+	# Dialog window confirmation
+	dialog.confirmed.connect(func(): _on_slot_settings_confirmed(slot_idx))
+	# Parent window to the scene root so rebuilding it won't free it
 	var root := get_tree().get_root()
 	if root != null:
 		root.add_child(dialog)
 	else:
 		add_child(dialog)
-	dialog.popup_centered(Vector2i(900, 620))
-	# Ensure modal content is fully laid out and in-sync
-	call_deferred("_refresh_slot_modal", slot_idx)
-	var modal_preview := _find_modal_node(dialog, "preview")
-	call_deferred("_position_preview_swatch", modal_preview, modal_preview.get_node_or_null("preview_overlay/preview_overlay_h/color_preview_rect_0") if modal_preview != null else null)
+	dialog.popup_centered()
+	
+	# Ensure the window content is fully laid out and in-sync
+	call_deferred("_refresh_slot_editor", dialog, slot_idx)
 
-func _find_modal_node(root: Node, node_name: String) -> Node:
-	if root == null:
-		return null
-	if root.name == node_name:
-		return root
-	for child in root.get_children():
-		var found: Node = _find_modal_node(child, node_name)
-		if found != null:
-			return found
-	return null
 
-func _refresh_slot_modal(slot_idx: int) -> void:
-	# Rebuild only the adv_vbox inside the open slot modal so changes appear immediately without closing.
-	var dlg := get_tree().get_root().get_node_or_null("mst_slot_modal")
-	if dlg == null:
+func _refresh_slot_editor(dialog: MarchingSquaresTextureEditWindow, slot_idx: int) -> void:
+	if dialog == null:
 		return
-	var adv_vbox := _find_modal_node(dlg, "adv_vbox") as VBoxContainer
-	if adv_vbox == null:
-		# Fallback: close+reopen if we can't locate the container reliably
-		dlg.queue_free()
-		call_deferred("_open_slot_modal", slot_idx)
-		return
-	# Clear existing children safely
-	for c in adv_vbox.get_children():
-		adv_vbox.remove_child(c)
-		c.queue_free()
+	
 	# Rebuild UI in-place
 	var terrain := plugin.current_terrain_node
 	if terrain == null:
 		return
-	_build_palette_ui(adv_vbox, terrain, slot_idx)
-	_refresh_modal_preview_swatches(dlg, terrain, slot_idx)
-	adv_vbox.queue_sort()
-	call_deferred("_force_modal_layout_refresh")
-	# Ensure a status_label exists (modal expects it)
-	if not adv_vbox.has_node("status_label"):
-		var status_lbl := Label.new()
-		status_lbl.name = "status_label"
-		status_lbl.text = ""
-		adv_vbox.add_child(status_lbl)
-	# Make sure visibility remains as before (don't force toggle)
-	# Done.
-
-func _force_modal_layout_refresh() -> void:
-	var dlg := get_tree().get_root().get_node_or_null("mst_slot_modal")
-	if dlg == null:
+	
+	for child in dialog.colors_container.get_children():
+		child.queue_free()
+	
+	await get_tree().process_frame
+	
+	if not is_instance_valid(dialog):
 		return
-	var body := _find_modal_node(dlg, "modal_body") as Control
-	if body != null:
-		body.queue_sort()
-	var adv_vbox := _find_modal_node(dlg, "adv_vbox") as Control
-	if adv_vbox != null:
-		adv_vbox.queue_sort()
+	
+	_connect_color_ui(dialog, terrain, slot_idx)
 
-func _refresh_modal_preview_swatches(dlg: Node, terrain, slot_idx: int) -> void:
-	var preview_node := _find_modal_node(dlg, "preview") as TextureRect
-	if preview_node == null:
-		return
-	var overlay_h := preview_node.get_node_or_null("preview_overlay/preview_overlay_h") as HBoxContainer
-	if overlay_h == null:
-		return
-	for child in overlay_h.get_children():
-		if str(child.name).begins_with("color_preview_rect_"):
-			overlay_h.remove_child(child)
-			child.queue_free()
-	var sidxs: Array = terrain.slot_color_indices[slot_idx]
-	var max_swatches: int = min(sidxs.size(), 6)
-	for i_sw in range(max_swatches):
-		var cr := ColorRect.new()
-		cr.name = "color_preview_rect_%d" % i_sw
-		var pidx: int = int(sidxs[i_sw])
-		cr.color = terrain.palette_colors[pidx] if pidx >= 0 and pidx < terrain.palette_colors.size() else Color(1, 1, 1)
-		cr.set_custom_minimum_size(Vector2(36, 36))
-		cr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		overlay_h.add_child(cr)
-	call_deferred("_position_preview_swatch", preview_node, preview_node.get_node_or_null("preview_overlay/preview_overlay_h/color_preview_rect_0"))
 
-func _on_slot_modal_confirmed(slot_idx: int) -> void:
-	var dialog := get_tree().get_root().get_node_or_null("mst_slot_modal")
+func _on_slot_settings_confirmed(slot_idx: int) -> void:
+	var dialog : MarchingSquaresTextureEditWindow = get_tree().get_root().get_node_or_null("TextureEditWindow")
 	if dialog == null:
 		return
-	var name_edit := _find_modal_node(dialog, "name_edit") as LineEdit
-	var picker := _find_modal_node(dialog, "tex_picker") as EditorResourcePicker
+	var texture_name_edit := dialog.texture_name_edit
 	var terrain := plugin.current_terrain_node
 	if terrain == null:
 		dialog.queue_free()
@@ -1176,19 +1010,20 @@ func _on_slot_modal_confirmed(slot_idx: int) -> void:
 	if terrain.texture_slots[slot_idx] == null:
 		terrain.texture_slots[slot_idx] = _TEXTURE_SLOT_SCRIPT.new()
 	# Texture changes are applied immediately by the picker callbacks.
-
+	
 	# Persist name into preset if available
 	var preset := terrain.current_texture_preset
 	if preset != null and preset.new_tex_names != null:
 		MarchingSquaresTerrainPlugin._ensure_texture_names_resource(preset.new_tex_names)
 		var n := preset.new_tex_names.get("texture_names")
 		if n is Array and slot_idx < n.size():
-			n[slot_idx] = (name_edit.text if name_edit != null else n[slot_idx])
+			n[slot_idx] = (texture_name_edit.text if texture_name_edit != null else n[slot_idx])
 			preset.new_tex_names.set("texture_names", n)
 			if preset.resource_path != null and not str(preset.resource_path).is_empty():
 				ResourceSaver.save(preset)
 	dialog.queue_free()
 	call_deferred("add_texture_settings")
+
 
 func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 	emit_signal("texture_setting_changed", p_setting_name, p_value)
@@ -1261,36 +1096,25 @@ func _repair_slot_palette_indices(terrain, slot: int) -> void:
 		terrain.save_to_preset()
 
 
-func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slot: int) -> void:
+func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: MarchingSquaresTerrain, slot: int) -> void:
+	#print("children before ui rebuild: ", dialog.colors_container.get_child_count())
 	_repair_slot_palette_indices(terrain, slot)
-	var colors_section := _add_modal_box(vbox, "Colors")
+	var connect_persistent := not dialog.has_meta("_mst_slot_editor_persistent_connected")
+	
 	# Blend mode dropdown
-	var blend_hbox := HBoxContainer.new()
-	var blend_label := Label.new()
-	blend_label.text = "Blend:"
-	blend_label.set_custom_minimum_size(Vector2(50, 20))
-	blend_hbox.add_child(blend_label)
-
-	var blend_opt := OptionButton.new()
-	blend_opt.add_item("Gradient", 0)
-	blend_opt.add_item("Retro", 1)
-	blend_opt.add_item("Dithered", 2)
-	blend_opt.add_item("Stippled", 3)
-	blend_opt.selected = terrain.slot_blend_modes[slot]
-	blend_opt.set_custom_minimum_size(Vector2(95, 25))
-	blend_opt.item_selected.connect(func(idx):
-		terrain.slot_blend_modes[slot] = idx
-		terrain._rebuild_palette_uniforms()
-		terrain.save_to_preset()
-	)
-	blend_hbox.add_child(blend_opt)
-	colors_section.add_child(blend_hbox, true)
-
+	dialog.blend_mode_button.selected = terrain.slot_blend_modes[slot]
+	if connect_persistent:
+		dialog.blend_mode_button.item_selected.connect(func(idx):
+			terrain.slot_blend_modes[slot] = idx
+			terrain._rebuild_palette_uniforms()
+			terrain.save_to_preset()
+		)
+	
 	# Color rows
 	var slot_indices : Array = terrain.slot_color_indices[slot]
 	var weight_labels := {}
 	var weight_sliders := {}
-
+	
 	var update_weight_controls := func(indices: Array) -> void:
 		for idx in indices:
 			var pidx := int(idx)
@@ -1303,62 +1127,39 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 				slider.set_block_signals(true)
 				slider.value = clampf(float(terrain.palette_weights[pidx]), 0.0, 100.0)
 				slider.set_block_signals(false)
-
+	
 	for ci in range(slot_indices.size()):
+		var current_color_container := dialog.SINGLE_COLOR_CONTAINER.instantiate() as MSTSingleColorContainer
+		dialog.colors_container.add_child(current_color_container)
+		
 		var palette_idx : int = slot_indices[ci]
-		# Compact row: preview, picker, weight bar, percent, slider, remove
-		var c_hbox := HBoxContainer.new()
-		c_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		c_hbox.set_custom_minimum_size(Vector2(0, 28))
-
-		# Small numeric label
-		var c_label := Label.new()
-		c_label.text = str(ci + 1)
-		c_label.set_custom_minimum_size(Vector2(20, 20))
-		c_label.tooltip_text = "Color index"
-		c_hbox.add_child(c_label)
-
+		
+		# Color (index) label
+		current_color_container.color_label.text = str(ci + 1)
+		
 		# Color picker
-		var c_btn := ColorPickerButton.new()
-		c_btn.color = terrain.palette_colors[palette_idx]
-		c_btn.set_custom_minimum_size(Vector2(60, 24))
-		c_btn.focus_mode = Control.FOCUS_NONE
-		c_btn.color_changed.connect(func(new_color, s = slot, pidx = palette_idx):
+		current_color_container.color_picker.color = terrain.palette_colors[palette_idx]
+		current_color_container.color_picker.color_changed.connect(func(new_color, s = slot, pidx = palette_idx):
 			if not is_instance_valid(terrain) or not is_instance_valid(plugin.current_terrain_node) or plugin.current_terrain_node != terrain:
 				return
 			if pidx < 0 or pidx >= terrain.palette_colors.size():
 				return
 			terrain.palette_colors[pidx] = new_color
-			# Update shared modal color preview if present.
-			var dlg := get_tree().get_root().get_node_or_null("mst_slot_modal")
-			if dlg != null:
-				var preview_node := _find_modal_node(dlg, "preview")
-				if preview_node != null:
-					_refresh_modal_preview_swatches(dlg, terrain, s)
 			terrain._rebuild_palette_uniforms()
 			terrain.save_to_preset()
 		)
-		c_hbox.add_child(c_btn)
-
+		
 		# Inline weight display (only if multiple colors)
 		if slot_indices.size() > 1:
+			current_color_container.color_weight_h_box.visible = true
+			
 			terrain._ensure_palette_weights()
-			var w_label := Label.new()
-			w_label.text = str(int(round(terrain.palette_weights[palette_idx]))) + "%"
-			w_label.set_custom_minimum_size(Vector2(42, 20))
-			weight_labels[palette_idx] = w_label
-			c_hbox.add_child(w_label)
-
-			var w_slider := HSlider.new()
-			w_slider.min_value = 0.0
-			w_slider.max_value = 100.0
-			w_slider.step = 1.0
-			w_slider.value = clampf(float(terrain.palette_weights[palette_idx]), 0.0, 100.0)
-			w_slider.set_custom_minimum_size(Vector2(150, 20))
-			w_slider.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-			w_slider.focus_mode = Control.FOCUS_NONE
-			weight_sliders[palette_idx] = w_slider
-			w_slider.value_changed.connect(func(val, s = slot, pidx = palette_idx):
+			current_color_container.weight_percentage_label.text = str(int(round(terrain.palette_weights[palette_idx]))) + "%"
+			weight_labels[palette_idx] = current_color_container.weight_percentage_label
+			
+			current_color_container.weight_slider.value = clampf(float(terrain.palette_weights[palette_idx]), 0.0, 100.0)
+			weight_sliders[palette_idx] = current_color_container.weight_slider
+			current_color_container.weight_slider.value_changed.connect(func(val, s = slot, pidx = palette_idx):
 				if not is_instance_valid(terrain) or not is_instance_valid(plugin.current_terrain_node) or plugin.current_terrain_node != terrain:
 					return
 				terrain._ensure_palette_weights()
@@ -1388,18 +1189,17 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 				update_weight_controls.call(indices)
 				terrain._rebuild_palette_uniforms()
 			)
-			w_slider.drag_ended.connect(func(_ended):
+			current_color_container.weight_slider.drag_ended.connect(func(_ended):
 				if not is_instance_valid(terrain) or not is_instance_valid(plugin.current_terrain_node) or plugin.current_terrain_node != terrain:
 					return
 				terrain.save_to_preset()
 				add_texture_settings()
 			)
-			c_hbox.add_child(w_slider)
-
-		var remove_btn := Button.new()
-		remove_btn.text = "X"
-		remove_btn.set_custom_minimum_size(Vector2(22, 22))
-		remove_btn.pressed.connect(func(s = slot, pidx = palette_idx):
+		else:
+			current_color_container.color_weight_h_box.visible = false
+		
+		# Remove button
+		current_color_container.remove_color_button.pressed.connect(func(s = slot, pidx = palette_idx):
 			if not is_instance_valid(terrain) or not is_instance_valid(plugin.current_terrain_node) or plugin.current_terrain_node != terrain:
 				return
 			var remove_at: int = terrain.slot_color_indices[s].find(pidx)
@@ -1414,343 +1214,268 @@ func _build_palette_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slo
 					terrain.palette_weights[idx] = each
 			terrain._rebuild_palette_uniforms()
 			terrain.save_to_preset()
-			# Refresh modal in-place if open
-			if get_tree().get_root().has_node("mst_slot_modal"):
-				call_deferred("_refresh_slot_modal", s)
-			# Refresh main panel as well (deferred to avoid freeing modal)
-			call_deferred("add_texture_settings")
+			# Refresh window in-place if open
+			if get_tree().get_root().has_node("TextureEditWindow"):
+				call_deferred("_refresh_slot_editor", dialog, s)
 		)
-		c_hbox.add_child(remove_btn)
-		colors_section.add_child(c_hbox, true)
-
-	# Add Color button
-	var add_btn := Button.new()
-	add_btn.text = "+ Add Color"
-	add_btn.set_custom_minimum_size(Vector2(210, 28))
-	add_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	add_btn.pressed.connect(func(s = slot):
-		if not is_instance_valid(terrain) or not is_instance_valid(plugin.current_terrain_node) or plugin.current_terrain_node != terrain:
-			return
-		# Find first unused palette index
-		_ensure_palette_capacity(terrain)
-		var used := {}
-		for si in range(MAX_TEXTURE_SLOTS):
-			for idx in terrain.slot_color_indices[si]:
-				used[int(idx)] = true
-		var next_idx := _next_free_palette_index(terrain, used)
-		if next_idx < 0:
-			push_error("[MST] Palette is full (128 colors max)")
-			return
-		terrain.palette_colors[next_idx] = _default_palette_color_for_slot(s)
-		terrain.slot_color_indices[s].append(next_idx)
-		terrain._ensure_palette_weights()
-		var indices: Array = terrain.slot_color_indices[s]
-		var each := 100.0 / float(max(indices.size(), 1))
-		for idx in indices:
-			terrain.palette_weights[idx] = each
-		terrain._rebuild_palette_uniforms()
-		terrain.save_to_preset()
-		var dlg := get_tree().get_root().get_node_or_null("mst_slot_modal")
-		if dlg != null:
-			var preview_node := _find_modal_node(dlg, "preview")
-			if preview_node != null:
-				# Try to update the newly added swatch (or first swatch if it's not yet present)
-				var new_count: int = int(terrain.slot_color_indices[s].size())
-				var sw_idx: int = min(new_count - 1, 5)
-				if sw_idx < 0:
-					sw_idx = 0
-				var sw_name := "preview_overlay/preview_overlay_h/color_preview_rect_%d" % sw_idx
-				var gpreview: ColorRect = preview_node.get_node_or_null(sw_name) as ColorRect
-				if gpreview != null:
-					gpreview.color = terrain.palette_colors[next_idx]
-		if dlg != null:
-			# Rebuild on the next idle step so the newly added row is part of the refreshed tree.
-			call_deferred("_refresh_slot_modal", s)
-			# Also refresh main UI after current frame so compact list updates if needed.
-			call_deferred("add_texture_settings")
-		else:
-			call_deferred("add_texture_settings")
-	)
-	colors_section.add_child(add_btn, true)
-
-	# Grass settings (slot-based)
+	
+	# Add color button
+	if connect_persistent:
+		dialog.add_color_button.pressed.connect(func(s = slot):
+			if not is_instance_valid(terrain) or not is_instance_valid(plugin.current_terrain_node) or plugin.current_terrain_node != terrain:
+				return
+			# Find first unused palette index
+			_ensure_palette_capacity(terrain)
+			var used := {}
+			for si in range(MAX_TEXTURE_SLOTS):
+				for idx in terrain.slot_color_indices[si]:
+					used[int(idx)] = true
+			var next_idx := _next_free_palette_index(terrain, used)
+			if next_idx < 0:
+				push_error("[MST] Palette is full (128 colors max)")
+				return
+			terrain.palette_colors[next_idx] = _default_palette_color_for_slot(s)
+			terrain.slot_color_indices[s].append(next_idx)
+			terrain._ensure_palette_weights()
+			var indices: Array = terrain.slot_color_indices[s]
+			var each := 100.0 / float(max(indices.size(), 1))
+			for idx in indices:
+				terrain.palette_weights[idx] = each
+			terrain._rebuild_palette_uniforms()
+			terrain.save_to_preset()
+			var dlg := get_tree().get_root().get_node_or_null("TextureEditWindow")
+			if dlg != null:
+				# Rebuild on the next idle step so the newly added row is part of the refreshed tree.
+				call_deferred("_refresh_slot_editor", dialog, s)
+			else:
+				call_deferred("add_texture_settings")
+		)
+	
+	# Has grass checkbox
 	var slot_res = terrain.texture_slots[slot]
 	var has_grass_var := bool(slot_res.has_grass) if slot_res != null else (slot == 0)
-	var grass_cb := CheckBox.new()
-	grass_cb.text = "Has Grass"
-	grass_cb.set_flat(true)
-	grass_cb.button_pressed = has_grass_var
-	grass_cb.set_custom_minimum_size(Vector2(25, 15))
-
-	var grass_center := CenterContainer.new()
-	grass_center.set_custom_minimum_size(Vector2(25, 25))
-	grass_center.add_child(grass_cb, true)
-	vbox.add_child(grass_center, true)
-
-	var grass_picker := EditorResourcePicker.new()
-	grass_picker.set_base_type("Texture2D")
+	dialog.has_grass_check_box.button_pressed = has_grass_var
+	
+	# Grass sprite texture picker
 	var grass_tex_var : Texture2D = _coerce_texture2d(slot_res.grass_texture) if slot_res != null else null
 	if grass_tex_var == null and slot >= 0 and slot < 6:
 		grass_tex_var = _coerce_texture2d(terrain.get("grass_sprite_tex_%d" % (slot + 1)))
-	grass_picker.edited_resource = grass_tex_var
-	grass_picker.visible = grass_cb.button_pressed
-	grass_picker.set_custom_minimum_size(Vector2(100, 25))
-	vbox.add_child(grass_picker, true)
-
+	dialog.grass_texture_picker.edited_resource = grass_tex_var
+	dialog.grass_texture_picker.visible = dialog.has_grass_check_box.button_pressed
+	
 	var __s_grass = slot
-	grass_cb.toggled.connect(func(pressed: bool):
-		grass_picker.visible = pressed
-		if not _ensure_terrain_arrays(terrain):
-			return
-		if terrain.texture_slots[__s_grass] == null:
-			terrain.texture_slots[__s_grass] = _TEXTURE_SLOT_SCRIPT.new()
-		terrain.texture_slots[__s_grass].has_grass = pressed
-
-		# Always request a grass regen when toggling Has Grass so scene reflects change immediately.
-		if terrain.has_method("_request_grass_regen"):
-			terrain._request_grass_regen()
-
-		# Keep legacy properties in sync for slots 1..6 so presets/UI stay compatible.
-		if __s_grass >= 0 and __s_grass < 6:
-			terrain.set("tex%d_has_grass" % (__s_grass + 1), pressed)
-		else:
+	dialog.grass_texture_picker.visible = dialog.has_grass_check_box.button_pressed
+	if connect_persistent:
+		dialog.has_grass_check_box.toggled.connect(func(pressed: bool):
+			dialog.grass_texture_picker.visible = pressed
+			if not _ensure_terrain_arrays(terrain):
+				return
+			if terrain.texture_slots[__s_grass] == null:
+				terrain.texture_slots[__s_grass] = _TEXTURE_SLOT_SCRIPT.new()
+			terrain.texture_slots[__s_grass].has_grass = pressed
+			
+			# Always request a grass regen when toggling Has Grass so scene reflects change immediately.
+			if terrain.has_method("_request_grass_regen"):
+				terrain._request_grass_regen()
+			
+			# Keep legacy properties in sync for slots 1..6 so presets/UI stay compatible.
+			if __s_grass >= 0 and __s_grass < 6:
+				terrain.set("tex%d_has_grass" % (__s_grass + 1), pressed)
+			else:
+				if terrain.has_method("invalidate_grass_bake_state"):
+					terrain.invalidate_grass_bake_state()
+				else:
+					terrain.set("baked_grass_array_path", "")
+					terrain.set("baked_dense_slot_lookup", PackedInt32Array())
+				if terrain.has_method("rebuild_grass_texture_array"):
+					terrain.rebuild_grass_texture_array()
+			
+			if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
+				terrain.save_to_preset()
+		)
+	
+	var __s_grass2 = slot
+	if connect_persistent:
+		dialog.grass_texture_picker.resource_changed.connect(func(resource):
+			resource = _coerce_texture2d(resource)
+			if not _ensure_terrain_arrays(terrain):
+				return
+			if terrain.texture_slots[__s_grass2] == null:
+				terrain.texture_slots[__s_grass2] = _TEXTURE_SLOT_SCRIPT.new()
+			terrain.texture_slots[__s_grass2].grass_texture = resource
+			
+			# Keep legacy properties in sync for slots 1..6 so presets/UI stay compatible.
+			if __s_grass2 >= 0 and __s_grass2 < 6:
+				terrain.set("grass_sprite_tex_%d" % (__s_grass2 + 1), resource)
+			var lib_res := _get_texture_library(terrain)
+			if lib_res != null and __s_grass2 < lib_res.grass_textures.size():
+				lib_res.grass_textures[__s_grass2] = resource
+				_save_resource_if_external(lib_res)
 			if terrain.has_method("invalidate_grass_bake_state"):
 				terrain.invalidate_grass_bake_state()
 			else:
 				terrain.set("baked_grass_array_path", "")
 				terrain.set("baked_dense_slot_lookup", PackedInt32Array())
+			# Always rebuild grass arrays + request regen so scene updates immediately when a grass texture is changed
 			if terrain.has_method("rebuild_grass_texture_array"):
 				terrain.rebuild_grass_texture_array()
-
-		if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
-			terrain.save_to_preset()
-	)
-
-	var __s_grass2 = slot
-	grass_picker.resource_changed.connect(func(resource):
-		resource = _coerce_texture2d(resource)
-		if not _ensure_terrain_arrays(terrain):
-			return
-		if terrain.texture_slots[__s_grass2] == null:
-			terrain.texture_slots[__s_grass2] = _TEXTURE_SLOT_SCRIPT.new()
-		terrain.texture_slots[__s_grass2].grass_texture = resource
-
-		# Keep legacy properties in sync for slots 1..6 so presets/UI stay compatible.
-		if __s_grass2 >= 0 and __s_grass2 < 6:
-			terrain.set("grass_sprite_tex_%d" % (__s_grass2 + 1), resource)
-		var lib_res := _get_texture_library(terrain)
-		if lib_res != null and __s_grass2 < lib_res.grass_textures.size():
-			lib_res.grass_textures[__s_grass2] = resource
-			_save_resource_if_external(lib_res)
-		if terrain.has_method("invalidate_grass_bake_state"):
-			terrain.invalidate_grass_bake_state()
-		else:
-			terrain.set("baked_grass_array_path", "")
-			terrain.set("baked_dense_slot_lookup", PackedInt32Array())
-		# Always rebuild grass arrays + request regen so scene updates immediately when a grass texture is changed
-		if terrain.has_method("rebuild_grass_texture_array"):
-			terrain.rebuild_grass_texture_array()
-		if terrain.has_method("_request_grass_regen"):
-			terrain._request_grass_regen()
-
-		if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
-			terrain.save_to_preset()
-	)
-
-	_build_slot_noise_ui(vbox, terrain, slot)
-
-	# Wetness (per slot)
-	var wet_cb := CheckBox.new()
-	wet_cb.text = "Wetness"
-	wet_cb.set_flat(true)
-	wet_cb.button_pressed = bool(terrain.slot_wet_enabled[slot]) if (terrain.get("slot_wet_enabled") is Array and slot >= 0 and slot < terrain.slot_wet_enabled.size()) else false
-	wet_cb.set_custom_minimum_size(Vector2(25, 15))
-	var wet_center := CenterContainer.new()
-	wet_center.set_custom_minimum_size(Vector2(25, 25))
-	wet_center.add_child(wet_cb, true)
-	vbox.add_child(wet_center, true)
-
-	var wet_mode_hbox := HBoxContainer.new()
-	wet_mode_hbox.set_custom_minimum_size(Vector2(150, 20))
-	var wet_mode_label := Label.new()
-	wet_mode_label.text = "Mode:"
-	wet_mode_label.set_custom_minimum_size(Vector2(50, 20))
-	wet_mode_hbox.add_child(wet_mode_label)
-	var wet_mode_opt := OptionButton.new()
-	wet_mode_opt.add_item("Wet", 0)
-	wet_mode_opt.add_item("Glossy Puddles", 1)
-	wet_mode_opt.selected = int(terrain.slot_wet_modes[slot]) if (terrain.get("slot_wet_modes") is Array and slot >= 0 and slot < terrain.slot_wet_modes.size()) else 0
-	wet_mode_opt.set_custom_minimum_size(Vector2(95, 25))
-	wet_mode_hbox.add_child(wet_mode_opt)
-	wet_mode_hbox.visible = wet_cb.button_pressed
-	vbox.add_child(wet_mode_hbox, true)
-
-	var wetness_hbox := HBoxContainer.new()
-	wetness_hbox.set_custom_minimum_size(Vector2(150, 20))
-	var wetness_label := Label.new()
-	wetness_label.text = "Terrain:"
-	wetness_label.set_custom_minimum_size(Vector2(70, 20))
-	wetness_hbox.add_child(wetness_label)
-	var wetness_slider := EditorSpinSlider.new()
-	wetness_slider.set_flat(true)
-	wetness_slider.set_min(0.0)
-	wetness_slider.set_max(1.0)
-	wetness_slider.set_step(0.05)
-	# Stored as roughness: roughness = 1 - wetness.
-	if terrain.get("slot_roughnesses") is Array and slot >= 0 and slot < terrain.slot_roughnesses.size():
-		wetness_slider.set_value(1.0 - float(terrain.slot_roughnesses[slot]))
-	else:
-		wetness_slider.set_value(0.0)
-	wetness_slider.set_custom_minimum_size(Vector2(95, 25))
-	wetness_hbox.add_child(wetness_slider)
-	wetness_hbox.visible = wet_cb.button_pressed
-	vbox.add_child(wetness_hbox, true)
-
-	var grass_wetness_hbox := HBoxContainer.new()
-	grass_wetness_hbox.set_custom_minimum_size(Vector2(150, 20))
-	var grass_wetness_label := Label.new()
-	grass_wetness_label.text = "Grass:"
-	grass_wetness_label.set_custom_minimum_size(Vector2(70, 20))
-	grass_wetness_hbox.add_child(grass_wetness_label)
-	var grass_wetness_slider := EditorSpinSlider.new()
-	grass_wetness_slider.set_flat(true)
-	grass_wetness_slider.set_min(0.0)
-	grass_wetness_slider.set_max(1.0)
-	grass_wetness_slider.set_step(0.05)
-	if terrain.get("slot_grass_wetnesses") is Array and slot >= 0 and slot < terrain.slot_grass_wetnesses.size():
-		grass_wetness_slider.set_value(float(terrain.slot_grass_wetnesses[slot]))
-	else:
-		grass_wetness_slider.set_value(0.0)
-	grass_wetness_slider.set_custom_minimum_size(Vector2(95, 25))
-	grass_wetness_hbox.add_child(grass_wetness_slider)
-	grass_wetness_hbox.visible = wet_cb.button_pressed
-	vbox.add_child(grass_wetness_hbox, true)
-
-	wet_cb.toggled.connect(func(pressed: bool):
-		if not _ensure_terrain_arrays(terrain):
-			return
-		if terrain.get("slot_wet_enabled") is Array and slot >= 0 and slot < terrain.slot_wet_enabled.size():
-			terrain.slot_wet_enabled[slot] = pressed
-		wet_mode_hbox.visible = pressed
-		wetness_hbox.visible = pressed
-		grass_wetness_hbox.visible = pressed
-		terrain._rebuild_palette_uniforms()
-		terrain.save_to_preset()
-	)
-
-	wet_mode_opt.item_selected.connect(func(idx: int):
-		if not _ensure_terrain_arrays(terrain):
-			return
-		if terrain.get("slot_wet_modes") is Array and slot >= 0 and slot < terrain.slot_wet_modes.size():
-			terrain.slot_wet_modes[slot] = idx
-		terrain._rebuild_palette_uniforms()
-		terrain.save_to_preset()
-	)
-
-	wetness_slider.value_changed.connect(func(value: float):
-		if not _ensure_terrain_arrays(terrain):
-			return
-		if terrain.get("slot_roughnesses") is Array and slot >= 0 and slot < terrain.slot_roughnesses.size():
-			terrain.slot_roughnesses[slot] = clampf(1.0 - float(value), 0.0, 1.0)
-		terrain._rebuild_palette_uniforms()
-		terrain.save_to_preset()
-	)
-
-	grass_wetness_slider.value_changed.connect(func(value: float):
-		if not _ensure_terrain_arrays(terrain):
-			return
-		if terrain.get("slot_grass_wetnesses") is Array and slot >= 0 and slot < terrain.slot_grass_wetnesses.size():
-			terrain.slot_grass_wetnesses[slot] = clampf(float(value), 0.0, 1.0)
-		terrain._rebuild_palette_uniforms()
-		terrain.save_to_preset()
-	)
-
-func _build_slot_noise_ui(vbox: VBoxContainer, terrain: MarchingSquaresTerrain, slot: int) -> void:
+			if terrain.has_method("_request_grass_regen"):
+				terrain._request_grass_regen()
+			
+			if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
+				terrain.save_to_preset()
+		)
+	
+	# Floor & Wall noise
 	if not _ensure_terrain_arrays(terrain):
 		return
-	var row := HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 10)
-	_add_slot_noise_column(row, terrain, slot, "Floor Noise", "slot_floor_noise_enabled", "slot_floor_noise_strengths", "slot_floor_noise_scales")
-	_add_slot_noise_column(row, terrain, slot, "Wall Noise", "slot_wall_noise_enabled", "slot_wall_noise_strengths", "slot_wall_noise_scales")
-	vbox.add_child(row, true)
-
-
-func _add_slot_noise_column(parent: HBoxContainer, terrain: MarchingSquaresTerrain, slot: int, label_text: String, enabled_prop: String, strength_prop: String, scale_prop: String) -> void:
-	var col := VBoxContainer.new()
-	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.set_custom_minimum_size(Vector2(140, 0))
-	parent.add_child(col, true)
-
-	var enabled_arr: Array = terrain.get(enabled_prop)
-	var strength_arr: Array = terrain.get(strength_prop)
-	var scale_arr: Array = terrain.get(scale_prop)
-	var enabled := bool(enabled_arr[slot]) if slot >= 0 and slot < enabled_arr.size() else false
-
-	var cb := CheckBox.new()
-	cb.text = label_text
-	cb.set_flat(true)
-	cb.button_pressed = enabled
-	col.add_child(cb, true)
-
-	var fields := GridContainer.new()
-	fields.columns = 2
-	fields.add_theme_constant_override("h_separation", 8)
-	fields.add_theme_constant_override("v_separation", 4)
-	fields.visible = enabled
-	col.add_child(fields, true)
-
-	var strength_label := Label.new()
-	strength_label.text = "Strength:"
-	strength_label.set_custom_minimum_size(Vector2(62, 20))
-	fields.add_child(strength_label)
-	var strength_slider := EditorSpinSlider.new()
-	strength_slider.set_flat(true)
-	strength_slider.set_min(0.0)
-	strength_slider.set_max(1.0)
-	strength_slider.set_step(0.01)
-	strength_slider.set_value(clampf(float(strength_arr[slot]), 0.0, 1.0))
-	strength_slider.set_custom_minimum_size(Vector2(86, 24))
-	fields.add_child(strength_slider)
-
-	var scale_label := Label.new()
-	scale_label.text = "Scale:"
-	scale_label.set_custom_minimum_size(Vector2(62, 20))
-	fields.add_child(scale_label)
-	var scale_slider := EditorSpinSlider.new()
-	scale_slider.set_flat(true)
-	scale_slider.set_min(0.001)
-	scale_slider.set_max(1.0)
-	scale_slider.set_step(0.001)
-	scale_slider.set_value(clampf(float(scale_arr[slot]), 0.001, 1.0))
-	scale_slider.set_custom_minimum_size(Vector2(86, 24))
-	fields.add_child(scale_slider)
-
-	cb.toggled.connect(func(pressed: bool):
-		if not _ensure_terrain_arrays(terrain):
-			return
-		var current_enabled: Array = terrain.get(enabled_prop)
-		current_enabled[slot] = pressed
-		fields.visible = pressed
-		terrain._rebuild_palette_uniforms()
-		terrain.save_to_preset()
-	)
-	strength_slider.value_changed.connect(func(value: float):
-		if not _ensure_terrain_arrays(terrain):
-			return
-		var current_strengths: Array = terrain.get(strength_prop)
-		current_strengths[slot] = clampf(float(value), 0.0, 1.0)
-		terrain._rebuild_palette_uniforms()
-		terrain.save_to_preset()
-	)
-	scale_slider.value_changed.connect(func(value: float):
-		if not _ensure_terrain_arrays(terrain):
-			return
-		var current_scales: Array = terrain.get(scale_prop)
-		current_scales[slot] = clampf(float(value), 0.001, 1.0)
-		terrain._rebuild_palette_uniforms()
-		terrain.save_to_preset()
-	)
+	
+	for i in range(2):
+		var noise_settings_container : Control
+		
+		var enabled_arr : Array
+		var strength_arr : Array
+		var scale_arr : Array
+		
+		var noise_enabled_prop : String
+		var noise_strength_prop : String
+		var noise_scale_prop : String
+		
+		var slot_checkbox : CheckBox
+		var strength_slider : EditorSpinSlider
+		var scale_slider : EditorSpinSlider
+		
+		match(i):
+			0:
+				noise_settings_container = dialog.floor_noise_attributes
+				
+				enabled_arr = terrain.get("slot_floor_noise_enabled")
+				strength_arr = terrain.get("slot_floor_noise_strengths")
+				scale_arr = terrain.get("slot_floor_noise_scales")
+				
+				noise_enabled_prop = "slot_floor_noise_enabled"
+				noise_strength_prop = "slot_floor_noise_strengths"
+				noise_scale_prop = "slot_floor_noise_scales"
+				
+				slot_checkbox = dialog.floor_noise_check_box
+				strength_slider = dialog.floor_strength_slider
+				scale_slider = dialog.floor_scale_slider
+			1:
+				noise_settings_container = dialog.wall_noise_attributes
+				
+				enabled_arr = terrain.get("slot_wall_noise_enabled")
+				strength_arr = terrain.get("slot_wall_noise_strengths")
+				scale_arr = terrain.get("slot_wall_noise_scales")
+				
+				noise_enabled_prop = "slot_wall_noise_enabled"
+				noise_strength_prop = "slot_wall_noise_strengths"
+				noise_scale_prop = "slot_wall_noise_scales"
+				
+				slot_checkbox = dialog.wall_noise_check_box
+				strength_slider = dialog.wall_strength_slider
+				scale_slider = dialog.wall_scale_slider
+		
+		var noise_enabled := bool(enabled_arr[slot]) if slot >= 0 and slot < enabled_arr.size() else false
+		
+		slot_checkbox.button_pressed = noise_enabled
+		strength_slider.set_value(clampf(float(strength_arr[slot]), 0.0, 1.0))
+		scale_slider.set_value(clampf(float(scale_arr[slot]), 0.001, 1.0))
+		
+		noise_settings_container.visible = slot_checkbox.button_pressed
+		if connect_persistent:
+			slot_checkbox.toggled.connect(func(pressed: bool):
+				if not _ensure_terrain_arrays(terrain):
+					return
+				var current_enabled : Array = terrain.get(noise_enabled_prop)
+				current_enabled[slot] = pressed
+				noise_settings_container.visible = pressed
+				terrain._rebuild_palette_uniforms()
+				terrain.save_to_preset()
+			)
+		strength_slider.value_changed.connect(func(value: float):
+			if not _ensure_terrain_arrays(terrain):
+				return
+			var current_strengths: Array = terrain.get(noise_strength_prop)
+			current_strengths[slot] = clampf(float(value), 0.0, 1.0)
+			terrain._rebuild_palette_uniforms()
+			terrain.save_to_preset()
+		)
+		scale_slider.value_changed.connect(func(value: float):
+			if not _ensure_terrain_arrays(terrain):
+				return
+			var current_scales: Array = terrain.get(noise_scale_prop)
+			current_scales[slot] = clampf(float(value), 0.001, 1.0)
+			terrain._rebuild_palette_uniforms()
+			terrain.save_to_preset()
+		)
+	
+	# Wetness
+	dialog.wetness_check_box.button_pressed = bool(terrain.slot_wet_enabled[slot]) if (terrain.get("slot_wet_enabled") is Array and slot >= 0 and slot < terrain.slot_wet_enabled.size()) else false
+	dialog.wetness_mode_button.selected = int(terrain.slot_wet_modes[slot]) if (terrain.get("slot_wet_modes") is Array and slot >= 0 and slot < terrain.slot_wet_modes.size()) else 0
+	
+	# Stored as roughness: roughness = 1 - wetness.
+	if terrain.get("slot_roughnesses") is Array and slot >= 0 and slot < terrain.slot_roughnesses.size():
+		dialog.wetness_terrain_slider.set_value(1.0 - float(terrain.slot_roughnesses[slot]))
+	else:
+		dialog.wetness_terrain_slider.set_value(0.0)
+	
+	if terrain.get("slot_grass_wetnesses") is Array and slot >= 0 and slot < terrain.slot_grass_wetnesses.size():
+		dialog.wetness_grass_slider.set_value(float(terrain.slot_grass_wetnesses[slot]))
+	else:
+		dialog.wetness_grass_slider.set_value(0.0)
+	
+	dialog.wetness_attributes.visible = dialog.wetness_check_box.button_pressed
+	if connect_persistent:
+		dialog.wetness_check_box.toggled.connect(func(pressed: bool):
+			dialog.wetness_attributes.visible = pressed
+			
+			if not _ensure_terrain_arrays(terrain):
+				return
+			
+			if terrain.get("slot_wet_enabled") is Array and slot >= 0 and slot < terrain.slot_wet_enabled.size():
+				terrain.slot_wet_enabled[slot] = pressed
+			
+			terrain._rebuild_palette_uniforms()
+			terrain.save_to_preset()
+		)
+	
+		dialog.wetness_check_box.toggled.connect(func(pressed: bool):
+			if not _ensure_terrain_arrays(terrain):
+				return
+			if terrain.get("slot_wet_enabled") is Array and slot >= 0 and slot < terrain.slot_wet_enabled.size():
+				terrain.slot_wet_enabled[slot] = pressed
+			terrain._rebuild_palette_uniforms()
+			terrain.save_to_preset()
+		)
+		
+		dialog.wetness_mode_button.item_selected.connect(func(idx: int):
+			if not _ensure_terrain_arrays(terrain):
+				return
+			if terrain.get("slot_wet_modes") is Array and slot >= 0 and slot < terrain.slot_wet_modes.size():
+				terrain.slot_wet_modes[slot] = idx
+			terrain._rebuild_palette_uniforms()
+			terrain.save_to_preset()
+		)
+		
+		dialog.wetness_terrain_slider.value_changed.connect(func(value: float):
+			if not _ensure_terrain_arrays(terrain):
+				return
+			if terrain.get("slot_roughnesses") is Array and slot >= 0 and slot < terrain.slot_roughnesses.size():
+				terrain.slot_roughnesses[slot] = clampf(1.0 - float(value), 0.0, 1.0)
+			terrain._rebuild_palette_uniforms()
+			terrain.save_to_preset()
+		)
+		
+		dialog.wetness_grass_slider.value_changed.connect(func(value: float):
+			if not _ensure_terrain_arrays(terrain):
+				return
+			if terrain.get("slot_grass_wetnesses") is Array and slot >= 0 and slot < terrain.slot_grass_wetnesses.size():
+				terrain.slot_grass_wetnesses[slot] = clampf(float(value), 0.0, 1.0)
+			terrain._rebuild_palette_uniforms()
+			terrain.save_to_preset()
+		)
+	if connect_persistent:
+		dialog.set_meta("_mst_slot_editor_persistent_connected", true)
 
 
 func _on_slider_drag_ended(ended: bool) -> void:
@@ -1763,35 +1488,371 @@ func _on_slider_drag_ended(ended: bool) -> void:
 		if chunk != null and chunk.grass_planter:
 			chunk.grass_planter.regenerate_all_cells()
 
-func _on_bake_pressed() -> void:
-	var terrain := plugin.current_terrain_node
+
+func _on_texture_import_confirmed() -> void:
+	var terrain := plugin.current_terrain_node if plugin != null else null
+	if terrain == null:
+		push_error("[MST] No terrain selected for texture import.")
+		return
+	if not _ensure_terrain_arrays(terrain):
+		return
+	
+	var preset_name := texture_import_name_input.text.strip_edges()
+	var preset_slug := preset_name.to_lower().to_snake_case()
+	if preset_name.is_empty() or preset_slug.is_empty():
+		push_error("[MST] Texture import requires a preset name.")
+		return
+	
+	var albedo_dir := texture_import_albedo_dir_input.text.strip_edges()
+	var normal_dir := texture_import_normal_dir_input.text.strip_edges()
+	if albedo_dir.is_empty() or normal_dir.is_empty():
+		push_error("[MST] Choose both an Albedo or Diffuse Maps folder and a Normal Maps folder.")
+		return
+	
+	var pairs := _build_texture_import_pairs(albedo_dir, normal_dir)
+	if pairs.is_empty():
+		push_error("[MST] No matching albedo/diffuse and normal texture pairs were found.")
+		return
+	
+	var save_dir := _normalize_texture_import_save_dir(texture_import_save_path_input.text)
+	var preset_folder := save_dir.path_join(preset_slug)
+	var preset_folder_abs := ProjectSettings.globalize_path(preset_folder)
+	if not DirAccess.dir_exists_absolute(preset_folder_abs):
+		DirAccess.make_dir_recursive_absolute(preset_folder_abs)
+	
+	var preset_path := preset_folder.path_join(preset_slug + ".tres")
+	var texture_names_path := preset_folder.path_join("texture_names.tres")
+	var texture_library_path := preset_folder.path_join("texture_library.tres")
+	
+	var names_res: MarchingSquaresTextureNames = vp_tex_names.duplicate(true)
+	MarchingSquaresTerrainPlugin._ensure_texture_names_resource(names_res)
+	var save_names_error := ResourceSaver.save(names_res, texture_names_path)
+	if save_names_error != OK:
+		push_error("[MST] Failed to save texture names resource for import.")
+		return
+	var saved_names := ResourceLoader.load(texture_names_path) as MarchingSquaresTextureNames
+	if saved_names != null:
+		names_res = saved_names
+	
+	var texture_library: Resource = MSTextureLibraryScript.new()
+	if texture_library.has_method("ensure_length"):
+		texture_library.ensure_length()
+	var save_library_error := ResourceSaver.save(texture_library, texture_library_path)
+	if save_library_error != OK:
+		push_error("[MST] Failed to save texture library for import.")
+		return
+	var saved_library := ResourceLoader.load(texture_library_path)
+	if saved_library != null:
+		texture_library = saved_library
+	if texture_library != null and texture_library.has_method("ensure_length"):
+		texture_library.ensure_length()
+	
+	var imported_preset := MarchingSquaresTexturePreset.new()
+	imported_preset.preset_name = preset_name
+	imported_preset.new_tex_names = names_res
+	imported_preset.texture_library = texture_library
+	if terrain.current_texture_preset != null:
+		imported_preset.apply_terrain_settings = bool(terrain.current_texture_preset.apply_terrain_settings)
+		imported_preset.apply_chunk_settings = bool(terrain.current_texture_preset.apply_chunk_settings)
+		imported_preset.apply_vertex_painter_settings = bool(terrain.current_texture_preset.apply_vertex_painter_settings)
+		imported_preset.apply_grass_settings = bool(terrain.current_texture_preset.apply_grass_settings)
+	var save_preset_error := ResourceSaver.save(imported_preset, preset_path)
+	if save_preset_error != OK:
+		push_error("[MST] Failed to save imported texture preset.")
+		return
+	var saved_preset := ResourceLoader.load(preset_path) as MarchingSquaresTexturePreset
+	if saved_preset != null:
+		imported_preset = saved_preset
+	if imported_preset.texture_library == null:
+		imported_preset.texture_library = texture_library
+	if imported_preset.new_tex_names == null:
+		imported_preset.new_tex_names = names_res
+	
+	terrain.set("current_texture_preset", imported_preset)
+	terrain.set("texture_library", texture_library)
+	
+	var slots: Array = terrain.texture_slots
+	for slot_idx in range(MAX_TEXTURE_SLOTS):
+		if slots[slot_idx] == null:
+			slots[slot_idx] = _TEXTURE_SLOT_SCRIPT.new()
+		slots[slot_idx].texture = null
+		slots[slot_idx].grass_texture = null
+		slots[slot_idx].active = false
+		slots[slot_idx].scale = 1.0
+		slots[slot_idx].has_grass = (slot_idx == 0)
+		if slot_idx < 15:
+			terrain.set("texture_%d" % (slot_idx + 1), null)
+			terrain.set("texture_scale_%d" % (slot_idx + 1), 1.0)
+		if texture_library != null:
+			if slot_idx < texture_library.albedo_textures.size():
+				texture_library.albedo_textures[slot_idx] = null
+			if slot_idx < texture_library.normal_textures.size():
+				texture_library.normal_textures[slot_idx] = null
+			if slot_idx < texture_library.grass_textures.size():
+				texture_library.grass_textures[slot_idx] = null
+	
+	var occupied_slots := {}
+	var explicit_pairs: Array = []
+	var auto_pairs: Array = []
+	for pair in pairs:
+		var forced_slot := int(pair.get("slot_idx", -1))
+		if forced_slot >= 0 and forced_slot < MAX_TEXTURE_SLOTS and forced_slot != 15:
+			if not occupied_slots.has(forced_slot):
+				explicit_pairs.append(pair)
+				occupied_slots[forced_slot] = true
+		else:
+			auto_pairs.append(pair)
+	
+	var assigned := 0
+	var highest_slot := -1
+	for pair in explicit_pairs:
+		var slot_idx := int(pair["slot_idx"])
+		if _assign_texture_import_pair(terrain, texture_library, names_res, slot_idx, pair):
+			assigned += 1
+			highest_slot = maxi(highest_slot, slot_idx)
+	
+	var next_auto_slot := 0
+	for pair in auto_pairs:
+		next_auto_slot = _next_texture_import_slot(next_auto_slot, occupied_slots)
+		if next_auto_slot < 0:
+			break
+		if _assign_texture_import_pair(terrain, texture_library, names_res, next_auto_slot, pair):
+			occupied_slots[next_auto_slot] = true
+			assigned += 1
+			highest_slot = maxi(highest_slot, next_auto_slot)
+		next_auto_slot += 1
+	
+	if assigned <= 0:
+		push_error("[MST] Texture import found files but could not assign any valid pairs.")
+		return
+	
+	terrain.visible_texture_slot_count = clampi(maxi(highest_slot + 1, 6), 6, MAX_TEXTURE_SLOTS)
+	_save_resource_if_external(texture_library)
+	_save_resource_if_external(names_res)
+	_refresh_slot_runtime(terrain, true)
+	terrain.save_to_preset()
+	if texture_import_bake_check != null and texture_import_bake_check.button_pressed:
+		if _bake_texture_arrays_for_terrain(terrain):
+			terrain.save_to_preset()
+	if plugin != null:
+		plugin.current_texture_preset = imported_preset
+	EditorInterface.mark_scene_as_unsaved()
+
+
+func _normalize_texture_import_save_dir(raw_dir: String) -> String:
+	var save_dir := raw_dir.strip_edges().replace("\\", "/")
+	if save_dir.is_empty():
+		save_dir = TEXTURE_PRESET_DIR
+	if not save_dir.begins_with("res://"):
+		save_dir = TEXTURE_PRESET_DIR
+	if not save_dir.ends_with("/"):
+		save_dir += "/"
+	var dir := DirAccess.open("res://")
+	if not dir.dir_exists(save_dir):
+		dir.make_dir_recursive(save_dir)
+	return save_dir
+
+
+func _assign_texture_import_pair(terrain, texture_library, names_res: MarchingSquaresTextureNames, slot_idx: int, pair: Dictionary) -> bool:
+	if slot_idx < 0 or slot_idx >= MAX_TEXTURE_SLOTS or slot_idx == 15:
+		return false
+	var albedo_tex := ResourceLoader.load(str(pair["albedo"]), "Texture2D") as Texture2D
+	var normal_tex := ResourceLoader.load(str(pair["normal"]), "Texture2D") as Texture2D
+	if albedo_tex == null or normal_tex == null:
+		push_warning("[MST] Skipping unreadable texture pair: " + str(pair))
+		return false
+	if terrain.texture_slots[slot_idx] == null:
+		terrain.texture_slots[slot_idx] = _TEXTURE_SLOT_SCRIPT.new()
+	terrain.texture_slots[slot_idx].active = true
+	terrain.texture_slots[slot_idx].texture = albedo_tex
+	terrain.texture_slots[slot_idx].grass_texture = null
+	terrain.texture_slots[slot_idx].has_grass = (slot_idx == 0)
+	terrain.texture_slots[slot_idx].scale = 1.0
+	terrain.texture_slots[slot_idx].albedo = _compute_slot_albedo_color(terrain, albedo_tex)
+	_sync_slot_legacy_fields(terrain, slot_idx)
+	if texture_library != null:
+		if slot_idx < texture_library.albedo_textures.size():
+			texture_library.albedo_textures[slot_idx] = albedo_tex
+		if slot_idx < texture_library.normal_textures.size():
+			texture_library.normal_textures[slot_idx] = normal_tex
+	if names_res != null:
+		MarchingSquaresTerrainPlugin._ensure_texture_names_resource(names_res)
+		var names := names_res.texture_names
+		if slot_idx < names.size():
+			var display_name := str(pair.get("display_name", "")).strip_edges()
+			if not display_name.is_empty():
+				names[slot_idx] = display_name
+			names_res.texture_names = names
+	return true
+
+
+func _build_texture_import_pairs(albedo_dir: String, normal_dir: String) -> Array:
+	var albedo_files := _list_texture_import_files(albedo_dir)
+	var normal_files := _list_texture_import_files(normal_dir)
+	var normal_by_key := {}
+	for path in normal_files:
+		var normal_info := _texture_import_file_info(path, true)
+		var normal_key := str(normal_info["key"])
+		if not normal_by_key.has(normal_key):
+			normal_by_key[normal_key] = path
+	var pairs: Array = []
+	for albedo_path in albedo_files:
+		var albedo_info := _texture_import_file_info(albedo_path, false)
+		var key := str(albedo_info["key"])
+		if not normal_by_key.has(key):
+			continue
+		pairs.append({
+			"key": key,
+			"albedo": albedo_path,
+			"normal": normal_by_key[key],
+			"slot_idx": int(albedo_info["slot_idx"]),
+			"display_name": str(albedo_info["display_name"]),
+		})
+	pairs.sort_custom(func(a, b):
+		var a_slot := int(a["slot_idx"])
+		var b_slot := int(b["slot_idx"])
+		if a_slot >= 0 and b_slot >= 0:
+			return a_slot < b_slot
+		if a_slot >= 0:
+			return true
+		if b_slot >= 0:
+			return false
+		return str(a["key"]) < str(b["key"])
+	)
+	return pairs
+
+
+func _list_texture_import_files(dir_path: String) -> Array:
+	var out: Array = []
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		push_error("[MST] Directory not found: " + dir_path)
+		return out
+	dir.list_dir_begin()
+	var name := dir.get_next()
+	while name != "":
+		if not dir.current_is_dir():
+			var lower := name.to_lower()
+			if lower.ends_with(".png") or lower.ends_with(".jpg") or lower.ends_with(".jpeg") or lower.ends_with(".webp") or lower.ends_with(".tga") or lower.ends_with(".exr"):
+				out.append(dir_path.path_join(name))
+		name = dir.get_next()
+	dir.list_dir_end()
+	out.sort()
+	return out
+
+
+func _texture_import_file_info(path: String, is_normal: bool) -> Dictionary:
+	var base := path.get_file().get_basename().strip_edges()
+	var slot_info := _extract_texture_import_slot_prefix(base)
+	var raw_name := str(slot_info["name"])
+	var suffixes := _texture_import_normal_suffixes() if is_normal else _texture_import_albedo_suffixes()
+	var key_name := _strip_texture_import_suffix(raw_name.to_lower(), suffixes)
+	var display_name := _strip_texture_import_suffix_ignore_case(raw_name, suffixes)
+	display_name = _collapse_texture_import_spaces(display_name.replace("_", " ").replace("-", " ").strip_edges())
+	return {
+		"slot_idx": int(slot_info["slot_idx"]),
+		"key": _collapse_texture_import_spaces(key_name.replace("_", " ").replace("-", " ").strip_edges()),
+		"display_name": display_name,
+	}
+
+
+func _extract_texture_import_slot_prefix(name: String) -> Dictionary:
+	var idx := 0
+	while idx < name.length() and _texture_import_is_ascii_digit(name.unicode_at(idx)):
+		idx += 1
+	if idx <= 0 or idx >= name.length():
+		return {"slot_idx": -1, "name": name}
+	var sep := name[idx]
+	if sep != " " and sep != "_" and sep != "-":
+		return {"slot_idx": -1, "name": name}
+	var slot_number := int(name.substr(0, idx))
+	if slot_number < 1 or slot_number > MAX_TEXTURE_SLOTS:
+		return {"slot_idx": -1, "name": name}
+	var raw_rest := name.substr(idx + 1).strip_edges()
+	while raw_rest.begins_with("_") or raw_rest.begins_with("-"):
+		raw_rest = raw_rest.substr(1).strip_edges()
+	if raw_rest.is_empty():
+		raw_rest = name
+	return {"slot_idx": slot_number - 1, "name": raw_rest}
+
+
+func _texture_import_is_ascii_digit(codepoint: int) -> bool:
+	return codepoint >= 48 and codepoint <= 57
+
+
+func _texture_import_albedo_suffixes() -> Array:
+	return [
+		"_albedo", "-albedo", " albedo", "-a",
+		"_diffuse", "-diffuse", " diffuse", "-d",
+		"_basecolor", "-basecolor",
+		"_base_color", "-base_color",
+		"_color", "-color"
+	]
+
+
+func _texture_import_normal_suffixes() -> Array:
+	return ["_normal", "-normal", " normal", "_nrm", "-nrm", "_nor", "-nor", "_n", "-n"]
+
+
+func _strip_texture_import_suffix_ignore_case(name: String, suffixes: Array) -> String:
+	var lower_name := name.to_lower()
+	for suffix in suffixes:
+		if lower_name.ends_with(str(suffix)):
+			return name.substr(0, name.length() - str(suffix).length())
+	return name
+
+
+func _strip_texture_import_suffix(name: String, suffixes: Array) -> String:
+	for suffix in suffixes:
+		var suffix_str := str(suffix)
+		if name.ends_with(suffix_str):
+			return name.substr(0, name.length() - suffix_str.length())
+	return name
+
+
+func _collapse_texture_import_spaces(value: String) -> String:
+	var s := value
+	while s.find("  ") != -1:
+		s = s.replace("  ", " ")
+	return s.strip_edges()
+
+
+func _next_texture_import_slot(start_slot: int, occupied_slots: Dictionary) -> int:
+	for slot_idx in range(maxi(start_slot, 0), MAX_TEXTURE_SLOTS):
+		if slot_idx == 15:
+			continue
+		if occupied_slots.has(slot_idx):
+			continue
+		return slot_idx
+	return -1
+
+
+func _bake_texture_arrays_for_terrain(terrain) -> bool:
 	if terrain == null:
 		push_error("[MST] No terrain selected to bake textures for.")
-		return
+		return false
 	var lib = terrain.get("texture_library") if terrain.has_method("get") else null
 	if lib == null:
 		if terrain.has_method("ensure_texture_library_resource"):
 			lib = terrain.ensure_texture_library_resource()
 		if lib == null:
 			push_error("[MST] Terrain has no texture_library assigned, and Codex could not create one from the current texture slots.")
-			return
+			return false
 	_sync_texture_library_from_slots(terrain, lib)
 	var out_dir := "res://scenes/baked_texture_arrays"
-	# If the terrain has a data_directory, prefer saving alongside it (convert Windows paths to resource-style).
 	if terrain.get("data_directory") != null and terrain.get("data_directory") != "":
 		out_dir = str(terrain.get("data_directory")).replace("\\", "/")
 		if out_dir.ends_with("/"):
 			out_dir = out_dir + "baked_texture_arrays"
 		else:
 			out_dir = out_dir + "/baked_texture_arrays"
-
 	var baker := MarchingSquaresBaker.new()
 	var runtime_size := int(terrain.get("runtime_baked_texture_size")) if terrain.get("runtime_baked_texture_size") != null else int(terrain.get("baked_texture_size"))
 	var grass_size := int(terrain.get("baked_grass_texture_size")) if terrain.get("baked_grass_texture_size") != null else 64
 	var results := baker.bake_library(lib, out_dir, runtime_size, grass_size)
 	if results.size() == 0:
 		push_error("[MST] Baking failed or produced no results.")
-		return
+		return false
 	if results.has("albedo_path") and results["albedo_path"] != "":
 		terrain.set("baked_albedo_array_path", results["albedo_path"])
 	if results.has("normal_path") and results["normal_path"] != "":
@@ -1800,26 +1861,12 @@ func _on_bake_pressed() -> void:
 		terrain.set("baked_grass_array_path", results["grass_path"])
 	if results.has("dense_slot_lookup"):
 		terrain.set("baked_dense_slot_lookup", results["dense_slot_lookup"])
-
-	# Rebuild runtime arrays so material uses the newly baked resources.
 	MarchingSquaresTerrainHelpers.rebuild_texture_array(terrain)
 	MarchingSquaresTerrainHelpers.rebuild_grass_texture_array(terrain)
+	return true
 
 
-# Helper: position the small color swatch inside the preview control (bottom-right)
-func _position_preview_swatch(preview: Control, swatch: Control) -> void:
-	if preview == null or swatch == null:
-		return
-	var psize: Vector2 = preview.get_size()
-	if psize.x <= 0 or psize.y <= 0:
-		# Try again later after layout
-		call_deferred("_position_preview_swatch", preview, swatch)
-		return
-	var sw := Vector2(36, 36)
-	if swatch.has_method("set_custom_minimum_size"):
-		swatch.set_custom_minimum_size(sw)
-	else:
-		swatch.size = sw
-	var padding := Vector2(8, 8)
-	var pos := Vector2(max(0, psize.x - sw.x - padding.x), max(0, psize.y - sw.y - padding.y))
-	swatch.position = pos
+func _on_bake_pressed() -> void:
+	var terrain := plugin.current_terrain_node
+	if _bake_texture_arrays_for_terrain(terrain) and terrain != null and terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
+		terrain.save_to_preset()

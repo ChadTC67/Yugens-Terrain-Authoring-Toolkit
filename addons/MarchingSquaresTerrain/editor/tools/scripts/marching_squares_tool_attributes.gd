@@ -343,7 +343,7 @@ func add_setting(p_params: Dictionary) -> void:
 
 			cont = MarginContainer.new()
 			cont.set_custom_minimum_size(Vector2(80, 35))
-			if setting_name == "height" or setting_name == "ease_value":
+			if setting_name == "height" or setting_name == "ease_value" or setting_name == "size":
 				var spin_slider := EditorSpinSlider.new()
 				spin_slider.set_flat(true)
 				spin_slider.allow_greater = true
@@ -353,7 +353,7 @@ func add_setting(p_params: Dictionary) -> void:
 				spin_slider.set_step(range_step)
 				spin_slider.set_value(default_value)
 				spin_slider.value_changed.connect(func(value): _on_setting_changed(setting_name, value))
-				spin_slider.set_custom_minimum_size(Vector2(80, 35))
+				spin_slider.set_custom_minimum_size(Vector2(110, 35))
 
 				cont.add_theme_constant_override("margin_top", -5)
 				cont.add_child(spin_slider, true)
