@@ -1010,6 +1010,8 @@ func _get_setting_value(p_setting_name: String) -> Variant:
 			pass
 		"import_heightmap":
 			pass
+		"heightmap_exporter":
+			pass
 		_:
 			push_error("Couldn't find tool attributes setting name: " + p_setting_name)
 	return "ERROR"
