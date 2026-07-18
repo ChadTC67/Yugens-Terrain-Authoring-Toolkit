@@ -1122,7 +1122,6 @@ func _repair_slot_palette_indices(terrain, slot: int) -> void:
 
 
 func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: MarchingSquaresTerrain, slot: int) -> void:
-	#print("children before ui rebuild: ", dialog.colors_container.get_child_count())
 	_repair_slot_palette_indices(terrain, slot)
 	var connect_persistent := not dialog.has_meta("_mst_slot_editor_persistent_connected")
 	
@@ -1224,6 +1223,7 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 				add_texture_settings()
 			)
 		else:
+			current_color_container.color_weight_h_box.size_flags_horizontal = Control.SIZE_FILL
 			current_color_container.color_weight_h_box.visible = true
 			current_color_container.weight_percentage_label.visible = false
 			current_color_container.weight_slider.visible = false
