@@ -63,8 +63,6 @@ group_uniforms;
 
 group_uniforms Effects.GlobalNoise;
 uniform float global_noise_scale = 0.037;
-uniform float global_noise_strength : hint_range(0.0, 1.0, 0.01) = 1.0;
-uniform float global_noise_scroll = 0.0;
 uniform vec2 wind_direction = vec2(1.0, 1.0);
 uniform float wind_speed = 0.14;
 uniform sampler2D global_noise_texture : hint_default_white, repeat_enable, filter_linear;
@@ -94,34 +92,10 @@ varying flat int instance_slot_id;
 varying float v_grass_wet_mask;
 varying flat int instance_id;
 
-// ------------- Wind Choices --------------
-
-float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
 
 float hash3(vec3 p) {
 	return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
 }
-
-float noise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	f = f * f * (3.0 - 2.0 * f);
-	float a = hash(i);
-	float b = hash(i + vec2(1.0, 0.0));
-	float c = hash(i + vec2(0.0, 1.0));
-	float d = hash(i + vec2(1.0, 1.0));
-	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-
-float cheap_noise(vec2 p) {
-	vec2 warp = vec2(
-		noise(p + vec2(1.7, 9.2)),
-		noise(p + vec2(8.3, 2.8)));
-	return noise(p + warp * 0.4) * 0.6 + noise(p * 2.1 + vec2(5.2, 1.3)) * 0.4;
-}
-
 
 vec4 _palette_meta(int slot) {
 	slot = clamp(slot, 0, 255);
@@ -234,7 +208,6 @@ vec4 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 		}
 		cum += wi;
 	}
-	int i1 = min(i0 + 1, color_count - 1);
 	float t = 0.0;
 	if (w0 > 0.00001) t = clamp((x - start) / w0, 0.0, 1.0);
 
@@ -554,7 +527,7 @@ void light() {
 		float ndoth = max(dot(NORMAL, half_vec), 0.0);
 		float spec = pow(ndoth, mix(10.0, 22.0, wet_mask));
 		float fres = pow(1.0 - max(dot(NORMAL, VIEW), 0.0), 3.0);
-		float wet_spec = (spec * 0.55 + fres * 0.25) * wet_mask;
+		float wet_spec = (spec * 0.55 + fres * 0.16) * wet_mask;
 		SPECULAR_LIGHT += LIGHT_COLOR.rgb * wet_spec * ATTENUATION;
 	}
 }
