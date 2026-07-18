@@ -737,10 +737,10 @@ func _make_albedo_preview_texture(texture: Texture2D) -> Texture2D:
 		return texture
 	var frame_w := 484
 	var frame_h := 267
-	var target_w := 256
-	var target_h := 256
+	var padding := 20
+	var target_w := frame_w - padding * 2
+	var target_h := frame_h - padding * 2
 	var scale := min(float(target_w) / float(iw), float(target_h) / float(ih))
-	scale = min(scale, 1.0)
 	var draw_w := max(1, int(round(float(iw) * scale)))
 	var draw_h := max(1, int(round(float(ih) * scale)))
 	if draw_w != iw or draw_h != ih:
@@ -1027,9 +1027,18 @@ func _open_texture_edit_window(slot_idx: int) -> void:
 	dialog.albedo_picker.resource_changed.connect(func(res):
 		var preview_tex : Texture2D = _coerce_texture2d(res)
 		if not available_preview_sources.is_empty() and available_preview_sources[0] is Dictionary and str(available_preview_sources[0].get("type", "")) == "albedo":
-			available_preview_sources[0]["texture"] = preview_tex
-			if current_cam_index == 0:
-				dialog.texture_preview.texture = preview_tex
+			if preview_tex == null:
+				available_preview_sources.remove_at(0)
+				if current_cam_index > 0:
+					current_cam_index -= 1
+				if not available_preview_sources.is_empty():
+					_apply_preview_source(dialog, current_cam_index)
+				else:
+					dialog.texture_preview.texture = null
+			else:
+				available_preview_sources[0]["texture"] = preview_tex
+				if current_cam_index == 0:
+					dialog.texture_preview.texture = preview_tex
 		elif preview_tex != null:
 			available_preview_sources.insert(0, {
 				"type": "albedo",
