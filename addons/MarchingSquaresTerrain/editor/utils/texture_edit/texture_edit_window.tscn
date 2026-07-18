@@ -5,7 +5,7 @@
 [sub_resource type="ViewportTexture" id="ViewportTexture_jefjx"]
 viewport_path = NodePath("SubViewport")
 
-[node name="TextureEditWindow" type="AcceptDialog" unique_id=1202449268 node_paths=PackedStringArray("texture_preview", "texture_name_edit", "albedo_picker", "normal_picker", "texture_scale_slider", "blend_mode_button", "colors_container", "add_color_button", "has_grass_check_box", "grass_texture_picker", "floor_noise_attributes", "floor_noise_check_box", "floor_strength_slider", "floor_scale_slider", "wall_noise_attributes", "wall_noise_check_box", "wall_strength_slider", "wall_scale_slider", "wetness_attributes", "wetness_check_box", "wetness_mode_button", "wetness_terrain_slider", "wetness_grass_slider")]
+[node name="TextureEditWindow" type="AcceptDialog" unique_id=1202449268 node_paths=PackedStringArray("texture_preview", "prev_cam_button", "next_cam_button", "texture_name_edit", "albedo_picker", "normal_picker", "texture_scale_slider", "blend_mode_button", "colors_container", "add_color_button", "has_grass_check_box", "grass_texture_picker", "floor_noise_attributes", "floor_noise_check_box", "floor_strength_slider", "floor_scale_slider", "wall_noise_attributes", "wall_noise_check_box", "wall_strength_slider", "wall_scale_slider", "wetness_attributes", "wetness_check_box", "wetness_mode_button", "wetness_terrain_slider", "wetness_grass_slider")]
 oversampling_override = 1.0
 title = "Edit Texture"
 initial_position = 1
@@ -16,6 +16,8 @@ unresizable = true
 ok_button_text = "      OK      "
 script = ExtResource("1_jefjx")
 texture_preview = NodePath("WindowVBoxContainer/TexturePreview")
+prev_cam_button = NodePath("WindowVBoxContainer/CameraControlHBox/PrevCameraButton")
+next_cam_button = NodePath("WindowVBoxContainer/CameraControlHBox/NextCameraButton")
 texture_name_edit = NodePath("WindowVBoxContainer/SettingsScrollContainer/SettingsContainer/TextureSettings/TextureNameEdit")
 albedo_picker = NodePath("WindowVBoxContainer/SettingsScrollContainer/SettingsContainer/TextureSettings/AlbedoPicker")
 normal_picker = NodePath("WindowVBoxContainer/SettingsScrollContainer/SettingsContainer/TextureSettings/NormalPicker")
@@ -53,6 +55,19 @@ layout_mode = 2
 texture = SubResource("ViewportTexture_jefjx")
 expand_mode = 5
 stretch_mode = 4
+
+[node name="CameraControlHBox" type="HBoxContainer" parent="WindowVBoxContainer" unique_id=693490937]
+layout_mode = 2
+
+[node name="PrevCameraButton" type="Button" parent="WindowVBoxContainer/CameraControlHBox" unique_id=405043208]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "←"
+
+[node name="NextCameraButton" type="Button" parent="WindowVBoxContainer/CameraControlHBox" unique_id=1070799933]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "→"
 
 [node name="SettingsScrollContainer" type="ScrollContainer" parent="WindowVBoxContainer" unique_id=448656659]
 layout_mode = 2

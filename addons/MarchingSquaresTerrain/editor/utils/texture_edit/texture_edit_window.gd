@@ -5,7 +5,10 @@ class_name MarchingSquaresTextureEditWindow
 
 const SINGLE_COLOR_CONTAINER := preload("uid://cf8710euu81ol")
 
+# Viewport nodes
 @export var texture_preview : TextureRect
+@export var prev_cam_button : Button
+@export var next_cam_button : Button
 
 # Texture settings nodes
 @export var texture_name_edit : LineEdit

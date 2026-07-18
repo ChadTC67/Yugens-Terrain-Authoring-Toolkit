@@ -25,12 +25,15 @@ const MSTextureLibraryScript := preload("uid://iyvy0c8carkd")
 
 const _TEXTURE_EDIT_WINDOW := preload("uid://58vqrcbqc0jm")
 
-var texture_import_dialog: AcceptDialog
-var texture_import_name_input: LineEdit
-var texture_import_save_path_input: LineEdit
-var texture_import_albedo_dir_input: LineEdit
-var texture_import_normal_dir_input: LineEdit
-var texture_import_bake_check: CheckBox
+var available_viewports : Array = []
+var current_cam_index : int = 0
+
+var texture_import_dialog : AcceptDialog
+var texture_import_name_input : LineEdit
+var texture_import_save_path_input : LineEdit
+var texture_import_albedo_dir_input : LineEdit
+var texture_import_normal_dir_input : LineEdit
+var texture_import_bake_check : CheckBox
 
 const VAR_NAMES : Array[Dictionary] = [
 	{
@@ -918,7 +921,28 @@ func _open_texture_edit_window(slot_idx: int) -> void:
 	dialog.title = "Edit Texture %d" % (slot_idx + 1)
 	
 	# Texture preview
-	dialog.texture_preview.texture = EditorInterface.get_editor_viewport_3d().get_texture()
+	available_viewports.clear()
+	for vp in get_tree().root.find_children("*", "SubViewport", true, false):
+		if vp.owner != null:
+			available_viewports.append(vp)
+	available_viewports.append(EditorInterface.get_editor_viewport_3d())
+	
+	dialog.texture_preview.texture = available_viewports.get(0).get_texture()
+	current_cam_index = 0
+	
+	dialog.prev_cam_button.pressed.connect(func():
+		current_cam_index -= 1
+		if current_cam_index < 0:
+			current_cam_index = available_viewports.size() - 1
+		dialog.texture_preview.texture = available_viewports[current_cam_index].get_texture()
+	)
+	
+	dialog.next_cam_button.pressed.connect(func():
+		current_cam_index += 1
+		if current_cam_index >= available_viewports.size():
+			current_cam_index = 0
+		dialog.texture_preview.texture = available_viewports[current_cam_index].get_texture()
+	)
 	
 	# Texture name edit
 	var preset := terrain.current_texture_preset

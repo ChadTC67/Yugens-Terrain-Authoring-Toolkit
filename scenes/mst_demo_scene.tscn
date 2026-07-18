@@ -824,7 +824,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 0, 32)
 script = ExtResource("1_0xhur")
 
 [node name="Camera3D" type="Camera3D" parent="SubViewportContainer/SubViewport/CameraPivot" unique_id=1065357724]
-transform = Transform3D(0.70710677, 0.35355338, -0.6123724, 0, 0.8660254, 0.5, 0.70710677, -0.35355338, 0.6123724, -44.251278, 36.13102, 44.251278)
+transform = Transform3D(0.70710677, 0.3535534, -0.6123724, 0, 0.8660254, 0.50000006, 0.70710677, -0.3535534, 0.6123724, -44.25122, 36.131012, 44.25122)
 projection = 1
 size = 55.0
 near = 0.003
@@ -835,6 +835,7 @@ script = ExtResource("3_0450b")
 data_directory = "res://scenes/mst_demo_scene_TerrainData/MarchingSquaresTerrain_8ee4c990"
 baked_dense_slot_lookup = PackedInt32Array()
 _storage_initialized = true
+_warned_storage_mode_message = true
 _uv_wall_sentinel_migrated = true
 _uv_wall_sentinel_v2_migrated = true
 _wall_material_pair_migrated = true
