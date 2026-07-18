@@ -154,7 +154,7 @@ float sample_palette_weight(int slot, int color_idx) {
 vec4 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 	slot = clamp(slot, 0, 255);
 	int color_count = _palette_count(slot);
-	if (color_count <= 0) return vec4(0.392, 0.471, 0.318, 1.0);
+	if (color_count <= 0) return vec4(1.0, 1.0, 1.0, 0.0);
 	if (color_count == 1) return sample_palette_entry(slot, 0);
 
 	int mode = _palette_blend_mode(slot);
@@ -324,7 +324,13 @@ vec4 sample_floor_material_color(int slot, vec2 base_uv) {
 	bool tex_has_content = (tex.a > 0.001) && (abs(tex.r - 1.0) > 0.001 || abs(tex.g - 1.0) > 0.001 || abs(tex.b - 1.0) > 0.001);
 	if (tex_has_content) {
 		float pal_alpha = clamp(palette.a, 0.0, 1.0);
-		vec3 tinted = mix(tex.rgb, tex.rgb * palette.rgb, pal_alpha);
+		vec4 slot_albedo = get_slot_albedo_color(slot);
+		vec3 tint_target = palette.rgb;
+		if (slot_albedo.a > 0.001) {
+			vec3 base_albedo = max(slot_albedo.rgb, vec3(0.001));
+			tint_target = clamp(palette.rgb / base_albedo, vec3(0.0), vec3(4.0));
+		}
+		vec3 tinted = tex.rgb * mix(vec3(1.0), tint_target, pal_alpha);
 		return vec4(tinted, tex.a);
 	}
 	return mix(tex, palette, clamp(palette.a, 0.0, 1.0));

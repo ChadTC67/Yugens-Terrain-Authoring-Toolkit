@@ -1177,6 +1177,9 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 		# Inline weight display (only if multiple colors)
 		if slot_indices.size() > 1:
 			current_color_container.color_weight_h_box.visible = true
+			current_color_container.weight_percentage_label.visible = true
+			current_color_container.weight_slider.visible = true
+			current_color_container.remove_color_button.visible = true
 			
 			terrain._ensure_palette_weights()
 			current_color_container.weight_percentage_label.text = str(int(round(terrain.palette_weights[palette_idx]))) + "%"
@@ -1221,7 +1224,10 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 				add_texture_settings()
 			)
 		else:
-			current_color_container.color_weight_h_box.visible = false
+			current_color_container.color_weight_h_box.visible = true
+			current_color_container.weight_percentage_label.visible = false
+			current_color_container.weight_slider.visible = false
+			current_color_container.remove_color_button.visible = true
 		
 		# Remove button
 		current_color_container.remove_color_button.pressed.connect(func(s = slot, pidx = palette_idx):
