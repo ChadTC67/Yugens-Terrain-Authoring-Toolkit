@@ -26,6 +26,7 @@ const MSTextureLibraryScript := preload("uid://iyvy0c8carkd")
 const _TEXTURE_EDIT_WINDOW := preload("uid://58vqrcbqc0jm")
 
 var available_viewports : Array = []
+var available_preview_sources : Array = []
 var current_cam_index : int = 0
 
 var texture_import_dialog : AcceptDialog
@@ -703,6 +704,62 @@ func _make_slot_preview(texture: Texture2D, size: int = 64) -> TextureRect:
 	return thumb
 
 
+func _preview_texture_from_source(source: Variant) -> Texture2D:
+	if source == null:
+		return null
+	if source is Dictionary:
+		var source_type := str(source.get("type", ""))
+		if source_type == "albedo":
+			return _make_albedo_preview_texture(_coerce_texture2d(source.get("texture")))
+		if source_type == "viewport":
+			var viewport = source.get("viewport")
+			if viewport != null and viewport.has_method("get_texture"):
+				return viewport.get_texture()
+	elif source is Texture2D:
+		return source
+	elif source != null and source.has_method("get_texture"):
+		return source.get_texture()
+	return null
+
+
+func _make_albedo_preview_texture(texture: Texture2D) -> Texture2D:
+	if texture == null:
+		return null
+	var terrain := plugin.current_terrain_node if plugin != null else null
+	if terrain == null or not terrain.has_method("_get_decompressed_image"):
+		return texture
+	var img: Image = terrain._get_decompressed_image(texture)
+	if img == null:
+		return texture
+	var iw := img.get_width()
+	var ih := img.get_height()
+	if iw <= 0 or ih <= 0:
+		return texture
+	var frame_w := 484
+	var frame_h := 267
+	var target_w := 256
+	var target_h := 256
+	var scale := min(float(target_w) / float(iw), float(target_h) / float(ih))
+	scale = min(scale, 1.0)
+	var draw_w := max(1, int(round(float(iw) * scale)))
+	var draw_h := max(1, int(round(float(ih) * scale)))
+	if draw_w != iw or draw_h != ih:
+		img.resize(draw_w, draw_h, Image.INTERPOLATE_NEAREST)
+	var preview_img := Image.create_empty(frame_w, frame_h, false, Image.FORMAT_RGBA8)
+	preview_img.fill(Color(0.0, 0.0, 0.0, 0.0))
+	var offset_x := int((frame_w - draw_w) * 0.5)
+	var offset_y := int((frame_h - draw_h) * 0.5)
+	preview_img.blit_rect(img, Rect2i(0, 0, draw_w, draw_h), Vector2i(offset_x, offset_y))
+	return ImageTexture.create_from_image(preview_img)
+
+
+func _apply_preview_source(dialog: MarchingSquaresTextureEditWindow, source_idx: int) -> void:
+	if dialog == null or available_preview_sources.is_empty():
+		return
+	current_cam_index = wrapi(source_idx, 0, available_preview_sources.size())
+	dialog.texture_preview.texture = _preview_texture_from_source(available_preview_sources[current_cam_index])
+
+
 func add_texture_settings() -> void:
 	for child in get_children():
 		child.queue_free()
@@ -920,28 +977,39 @@ func _open_texture_edit_window(slot_idx: int) -> void:
 	var dialog : MarchingSquaresTextureEditWindow = _TEXTURE_EDIT_WINDOW.instantiate()
 	dialog.title = "Edit Texture %d" % (slot_idx + 1)
 	
+	# Albedo texture picker / preview source
+	var existing_alb_tex : Texture2D = _get_slot_albedo_texture(terrain, slot_idx)
+
 	# Texture preview
 	available_viewports.clear()
+	available_preview_sources.clear()
+	if existing_alb_tex != null:
+		available_preview_sources.append({
+			"type": "albedo",
+			"texture": existing_alb_tex,
+		})
 	for vp in get_tree().root.find_children("*", "SubViewport", true, false):
 		if vp.owner != null:
 			available_viewports.append(vp)
+			available_preview_sources.append({
+				"type": "viewport",
+				"viewport": vp,
+			})
 	available_viewports.append(EditorInterface.get_editor_viewport_3d())
-	
-	dialog.texture_preview.texture = available_viewports.get(0).get_texture()
+	available_preview_sources.append({
+		"type": "viewport",
+		"viewport": EditorInterface.get_editor_viewport_3d(),
+	})
+
 	current_cam_index = 0
+	_apply_preview_source(dialog, current_cam_index)
 	
 	dialog.prev_cam_button.pressed.connect(func():
-		current_cam_index -= 1
-		if current_cam_index < 0:
-			current_cam_index = available_viewports.size() - 1
-		dialog.texture_preview.texture = available_viewports[current_cam_index].get_texture()
+		_apply_preview_source(dialog, current_cam_index - 1)
 	)
 	
 	dialog.next_cam_button.pressed.connect(func():
-		current_cam_index += 1
-		if current_cam_index >= available_viewports.size():
-			current_cam_index = 0
-		dialog.texture_preview.texture = available_viewports[current_cam_index].get_texture()
+		_apply_preview_source(dialog, current_cam_index + 1)
 	)
 	
 	# Texture name edit
@@ -954,12 +1022,20 @@ func _open_texture_edit_window(slot_idx: int) -> void:
 		names = vp_tex_names.get("texture_names")
 	dialog.texture_name_edit.text = names[slot_idx] if slot_idx < names.size() else ("Texture " + str(slot_idx + 1))
 	
-	# Albedo texture picker
-	var existing_alb_tex : Texture2D = _get_slot_albedo_texture(terrain, slot_idx)
 	if existing_alb_tex != null:
 		dialog.albedo_picker.edited_resource = existing_alb_tex
 	dialog.albedo_picker.resource_changed.connect(func(res):
 		var preview_tex : Texture2D = _coerce_texture2d(res)
+		if not available_preview_sources.is_empty() and available_preview_sources[0] is Dictionary and str(available_preview_sources[0].get("type", "")) == "albedo":
+			available_preview_sources[0]["texture"] = preview_tex
+			if current_cam_index == 0:
+				dialog.texture_preview.texture = preview_tex
+		elif preview_tex != null:
+			available_preview_sources.insert(0, {
+				"type": "albedo",
+				"texture": preview_tex,
+			})
+			current_cam_index += 1
 		_apply_slot_albedo(terrain, slot_idx, res, true)
 	)
 	
