@@ -301,9 +301,7 @@ func add_setting(p_params: Dictionary) -> void:
 			hbox_container.add_child(VSeparator.new())
 
 	var add_label := true
-	if setting_type == SettingType.CHUNK or setting_type == SettingType.TERRAIN \
-			or setting_type == SettingType.HEIGHTMAP_IMPORTER \
-			or setting_type == SettingType.HEIGHTMAP_EXPORTER:
+	if setting_type in [SettingType.CHUNK, SettingType.TERRAIN, SettingType.HEIGHTMAP_IMPORTER, SettingType.HEIGHTMAP_EXPORTER]:
 		add_label = false
 	if add_label:
 		var label := Label.new()
@@ -1245,7 +1243,7 @@ func _make_exporter_checkbox_row(label_text: String, setting_name: String, curre
 	var cb := CheckBox.new()
 	cb.set_flat(true)
 	cb.button_pressed = current_val
-	cb.toggled.connect(func(pressed): _on_exporter_setting_changed(setting_name, pressed))
+	cb.toggled.connect(func(pressed): on_exporter_setting_changed(setting_name, pressed))
 	cb.set_custom_minimum_size(Vector2(25, 25))
 	var sc := CenterContainer.new()
 	sc.set_custom_minimum_size(Vector2(35, 35))
@@ -1254,35 +1252,13 @@ func _make_exporter_checkbox_row(label_text: String, setting_name: String, curre
 	return hbox
 
 
-func _on_exporter_setting_changed(p_name: String, p_value: Variant) -> void:
+func on_exporter_setting_changed(p_name: String, p_value: Variant) -> void:
 	emit_signal("setting_changed", p_name, p_value)
 
 
-func _open_exporter_folder_dialog(setting_name: String, path_edit: LineEdit) -> void:
-	var dialog := EditorFileDialog.new()
-	dialog.file_mode = EditorFileDialog.FILE_MODE_OPEN_DIR
-	dialog.access = EditorFileDialog.ACCESS_RESOURCES
-	dialog.title = "Select Output Directory"
-
-	var current_path : String = path_edit.text
-	if current_path.is_empty():
-		dialog.current_dir = "res://"
-	else:
-		dialog.current_dir = current_path
-
-	dialog.dir_selected.connect(func(dir: String):
-		path_edit.text = dir
-		_on_exporter_setting_changed(setting_name, dir)
-		dialog.queue_free()
-	)
-	dialog.canceled.connect(func(): dialog.queue_free())
-
-	EditorInterface.get_base_control().add_child(dialog)
-	dialog.popup_centered(Vector2i(600, 400))
-
-
-func _on_export_terrain_pressed() -> void:
-	emit_signal("setting_changed", "export_terrain", true)
+func export_terrain_heightmap(filename) -> void:
+	plugin.terrain_heightmap_folder_name = filename
+	emit_signal("setting_changed", "export_terrain_heightmap", true)
 
 
 func _format_constant_string(text: String) -> String:

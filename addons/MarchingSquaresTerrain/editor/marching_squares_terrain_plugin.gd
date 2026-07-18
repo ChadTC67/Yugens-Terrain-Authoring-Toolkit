@@ -255,6 +255,8 @@ var bridge_start_chunk_coords : Vector2i
 var base_position : Vector3
 #endregion
 
+var terrain_heightmap_folder_name : String = "new_terrain_heightmap"
+
 #region raycast variables
 # Use script-wide variables to provide data to the physics process function
 var raycast_queued := false
@@ -1795,7 +1797,8 @@ func run_heightmap_export() -> void:
 		hme_export_texture_index,
 		output_path,
 		self,
-		hme_single_file
+		hme_single_file,
+		terrain_heightmap_folder_name
 	)
 
 #endregion

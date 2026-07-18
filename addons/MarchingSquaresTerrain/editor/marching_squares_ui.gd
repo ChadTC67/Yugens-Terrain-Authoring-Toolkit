@@ -238,7 +238,7 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 		"hme_output_path":
 			if p_value is String:
 				plugin.hme_output_path = p_value
-		"export_terrain":
+		"export_terrain_heightmap":
 			plugin.run_heightmap_export()
 
 

@@ -18,7 +18,8 @@ static func run(
 	export_texture_index: bool,
 	output_path: String,
 	caller: Node,
-	single_file: bool = false
+	single_file: bool = false,
+	folder_name: String = "new_terrain_heightmap"
 ) -> void:
 	# --- Build progress dialog ---
 	var base_control := EditorInterface.get_base_control()
@@ -204,19 +205,23 @@ static func run(
 
 	# --- Ensure output directory exists ---
 	status_label.text = "Saving files..."
-	var abs_path : String = ProjectSettings.globalize_path(output_path)
+	
+	# Create an export folder inside the output path
+	var export_path := output_path.path_join(folder_name)
+	
+	var abs_path : String = ProjectSettings.globalize_path(export_path)
 	if not DirAccess.dir_exists_absolute(abs_path):
 		var make_err := DirAccess.make_dir_recursive_absolute(abs_path)
 		if make_err != OK:
-			finish_error.call("Failed to create output directory:\n%s" % output_path)
+			finish_error.call("Failed to create output directory:\n%s" % export_path)
 			return
-
+	
 	# --- Save images ---
 	var terrain_name : String = terrain.name
 	var files_saved : int = 0
-
+	
 	if combined_img:
-		var path := output_path.path_join(terrain_name + "_terrain.png")
+		var path := export_path.path_join(terrain_name + "_terrain.png")
 		var err := combined_img.save_png(path)
 		if err != OK:
 			finish_error.call("Failed to save combined terrain map:\n%s" % path)
@@ -224,7 +229,7 @@ static func run(
 		files_saved += 1
 
 	if hmap_img:
-		var path := output_path.path_join(terrain_name + "_heightmap.png")
+		var path := export_path.path_join(terrain_name + "_heightmap.png")
 		var err := hmap_img.save_png(path)
 		if err != OK:
 			finish_error.call("Failed to save heightmap:\n%s" % path)
@@ -232,7 +237,7 @@ static func run(
 		files_saved += 1
 
 	if grass_img:
-		var path := output_path.path_join(terrain_name + "_grass.png")
+		var path := export_path.path_join(terrain_name + "_grass.png")
 		var err := grass_img.save_png(path)
 		if err != OK:
 			finish_error.call("Failed to save grass mask:\n%s" % path)
@@ -240,7 +245,7 @@ static func run(
 		files_saved += 1
 
 	if tex_img:
-		var path := output_path.path_join(terrain_name + "_texture_index.png")
+		var path := export_path.path_join(terrain_name + "_texture_index.png")
 		var err := tex_img.save_png(path)
 		if err != OK:
 			finish_error.call("Failed to save texture index:\n%s" % path)
