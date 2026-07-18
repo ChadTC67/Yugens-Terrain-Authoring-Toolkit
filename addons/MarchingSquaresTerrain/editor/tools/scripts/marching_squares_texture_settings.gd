@@ -485,7 +485,7 @@ func _refresh_slot_runtime(
 		call_deferred("add_texture_settings")
 
 
-func _apply_slot_albedo(terrain, slot_idx: int, resource: Variant, p_refresh_ui: bool = false) -> void:
+func _apply_slot_albedo(terrain, slot_idx: int, resource: Variant, p_refresh_ui: bool = false, p_runtime_refresh: bool = true) -> void:
 	if terrain == null or slot_idx < 0 or slot_idx >= MAX_TEXTURE_SLOTS or slot_idx == 15:
 		return
 	var texture : Texture2D = _coerce_texture2d(resource)
@@ -501,7 +501,8 @@ func _apply_slot_albedo(terrain, slot_idx: int, resource: Variant, p_refresh_ui:
 	if lib_res != null and slot_idx < lib_res.albedo_textures.size():
 		lib_res.albedo_textures[slot_idx] = texture
 		_save_resource_if_external(lib_res)
-	_refresh_slot_runtime(terrain, p_refresh_ui)
+	if p_runtime_refresh:
+		_refresh_slot_runtime(terrain, p_refresh_ui, false, false)
 
 
 func _compute_slot_albedo_color(terrain, texture: Texture2D) -> Color:
@@ -538,7 +539,7 @@ func _compute_slot_albedo_color(terrain, texture: Texture2D) -> Color:
 	return Color(accum.r / count, accum.g / count, accum.b / count, 1.0)
 
 
-func _apply_slot_normal(terrain, slot_idx: int, resource: Variant) -> void:
+func _apply_slot_normal(terrain, slot_idx: int, resource: Variant, p_runtime_refresh: bool = true) -> void:
 	if terrain == null or slot_idx < 0 or slot_idx >= MAX_TEXTURE_SLOTS or slot_idx == 15:
 		return
 	var texture: Texture2D = _coerce_texture2d(resource)
@@ -550,7 +551,8 @@ func _apply_slot_normal(terrain, slot_idx: int, resource: Variant) -> void:
 	if lib_res != null and slot_idx < lib_res.normal_textures.size():
 		lib_res.normal_textures[slot_idx] = texture
 		_save_resource_if_external(lib_res)
-	_refresh_slot_runtime(terrain, false)
+	if p_runtime_refresh:
+		_refresh_slot_runtime(terrain, false, false, false)
 	if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
 		terrain.save_to_preset()
 
@@ -709,8 +711,10 @@ func _preview_texture_from_source(source: Variant) -> Texture2D:
 		return null
 	if source is Dictionary:
 		var source_type := str(source.get("type", ""))
-		if source_type == "albedo":
-			return _make_albedo_preview_texture(_coerce_texture2d(source.get("texture")))
+		if source_type == "material_preview":
+			var terrain = source.get("terrain")
+			var slot_idx := int(source.get("slot_idx", -1))
+			return _make_material_preview_texture(terrain, slot_idx)
 		if source_type == "viewport":
 			var viewport = source.get("viewport")
 			if viewport != null and viewport.has_method("get_texture"):
@@ -722,34 +726,329 @@ func _preview_texture_from_source(source: Variant) -> Texture2D:
 	return null
 
 
-func _make_albedo_preview_texture(texture: Texture2D) -> Texture2D:
+func _get_material_preview_source(slot_idx: int, terrain) -> Dictionary:
+	return {
+		"type": "material_preview",
+		"terrain": terrain,
+		"slot_idx": slot_idx,
+	}
+
+
+func _is_material_preview_source(source: Variant) -> bool:
+	return source is Dictionary and str(source.get("type", "")) == "material_preview"
+
+
+func _find_material_preview_source_index() -> int:
+	for i in range(available_preview_sources.size()):
+		if _is_material_preview_source(available_preview_sources[i]):
+			return i
+	return -1
+
+
+func _mark_slot_runtime_refresh_pending(dialog: MarchingSquaresTextureEditWindow) -> void:
+	if dialog != null:
+		dialog.set_meta("_mst_slot_runtime_refresh_pending", true)
+
+
+func _flush_slot_runtime_refresh_pending(dialog: MarchingSquaresTextureEditWindow, terrain, p_refresh_ui: bool = false) -> void:
+	if dialog == null or terrain == null:
+		return
+	if not dialog.has_meta("_mst_slot_runtime_refresh_pending"):
+		return
+	if not bool(dialog.get_meta("_mst_slot_runtime_refresh_pending")):
+		return
+	dialog.set_meta("_mst_slot_runtime_refresh_pending", false)
+	_refresh_slot_runtime(terrain, p_refresh_ui, false, false)
+
+
+func _refresh_active_material_preview(dialog: MarchingSquaresTextureEditWindow) -> void:
+	if dialog == null or available_preview_sources.is_empty():
+		return
+	if current_cam_index < 0 or current_cam_index >= available_preview_sources.size():
+		return
+	if _is_material_preview_source(available_preview_sources[current_cam_index]):
+		dialog.texture_preview.texture = _preview_texture_from_source(available_preview_sources[current_cam_index])
+
+
+func _get_preview_noise_image(terrain) -> Image:
+	if terrain == null or not terrain.has_method("_get_decompressed_image"):
+		return null
+	var noise_tex: Texture2D = _coerce_texture2d(terrain.get("global_noise_texture")) if terrain.has_method("get") else null
+	if noise_tex == null:
+		return null
+	return terrain._get_decompressed_image(noise_tex)
+
+
+func _get_slot_preview_entries(terrain, slot_idx: int) -> Array:
+	var entries: Array = []
+	if terrain == null or slot_idx < 0 or slot_idx >= terrain.slot_color_indices.size():
+		return entries
+	var indices: Array = terrain.slot_color_indices[slot_idx]
+	for idx in indices:
+		var palette_idx := int(idx)
+		if palette_idx < 0 or palette_idx >= terrain.palette_colors.size():
+			continue
+		var weight := 100.0
+		if palette_idx < terrain.palette_weights.size():
+			weight = maxf(float(terrain.palette_weights[palette_idx]), 0.0)
+		entries.append({
+			"color": terrain.palette_colors[palette_idx],
+			"weight": weight,
+		})
+	return entries
+
+
+func _sample_preview_noise(noise_img: Image, uv: Vector2) -> float:
+	if noise_img == null:
+		var seed_value: float = sin(uv.dot(Vector2(12.9898, 78.233))) * 43758.5453
+		return seed_value - floor(seed_value)
+	var w: int = noise_img.get_width()
+	var h: int = noise_img.get_height()
+	if w <= 0 or h <= 0:
+		return 0.5
+	var fx: float = uv.x - floor(uv.x)
+	var fy: float = uv.y - floor(uv.y)
+	var px: int = clampi(int(floor(fx * float(w))), 0, w - 1)
+	var py: int = clampi(int(floor(fy * float(h))), 0, h - 1)
+	return noise_img.get_pixel(px, py).r
+
+
+func _preview_hash(coord: Vector2) -> float:
+	var seed_value: float = sin(coord.dot(Vector2(127.1, 311.7))) * 43758.5453
+	return seed_value - floor(seed_value)
+
+
+func _preview_smoothstep(edge0: float, edge1: float, x: float) -> float:
+	if absf(edge1 - edge0) <= 0.000001:
+		return 0.0 if x < edge0 else 1.0
+	var t := clampf((x - edge0) / (edge1 - edge0), 0.0, 1.0)
+	return t * t * (3.0 - 2.0 * t)
+
+
+func _sample_preview_albedo(albedo_img: Image, uv: Vector2) -> Color:
+	if albedo_img == null:
+		return Color(1.0, 1.0, 1.0, 1.0)
+	var w: int = albedo_img.get_width()
+	var h: int = albedo_img.get_height()
+	if w <= 0 or h <= 0:
+		return Color(1.0, 1.0, 1.0, 1.0)
+	var fx: float = uv.x - floor(uv.x)
+	var fy: float = uv.y - floor(uv.y)
+	var px: int = clampi(int(floor(fx * float(w))), 0, w - 1)
+	var py: int = clampi(int(floor(fy * float(h))), 0, h - 1)
+	return albedo_img.get_pixel(px, py)
+
+
+func _preview_palette_color(entries: Array, blend_mode: int, surface_coords: Vector2, noise_img: Image) -> Color:
+	if entries.is_empty():
+		return Color(1.0, 1.0, 1.0, 0.0)
+	if entries.size() == 1:
+		return entries[0]["color"]
+	var color_count := entries.size()
+	var gradient_mode := blend_mode != 1 and blend_mode != 2 and blend_mode != 3
+	var palette_gn_scale := 0.014 if gradient_mode else 0.008
+	var uv := Vector2(
+		surface_coords.x * palette_gn_scale - floor(surface_coords.x * palette_gn_scale),
+		surface_coords.y * palette_gn_scale - floor(surface_coords.y * palette_gn_scale)
+	)
+	var n := 1.0 - _sample_preview_noise(noise_img, uv)
+	if gradient_mode:
+		var centered := (clampf(n, 0.0, 1.0) - 0.5) * 2.0
+		n = clampf(sign(centered) * pow(absf(centered), 0.55) * 0.5 + 0.5, 0.0, 1.0)
+	else:
+		n = _preview_smoothstep(0.0, 1.0, n)
+
+	var ws: Array[float] = []
+	ws.resize(color_count)
+	var total := 0.0
+	for i in range(color_count):
+		var current_weight := maxf(float(entries[i]["weight"]) / 100.0, 0.0)
+		ws[i] = current_weight
+		total += current_weight
+	if total <= 0.0001:
+		total = float(color_count)
+		for i in range(color_count):
+			ws[i] = 1.0
+
+	var x := clampf(n, 0.0, 1.0) * total
+	var i0 := 0
+	var start := 0.0
+	var w0 := ws[0]
+	var cumulative := 0.0
+	for i in range(color_count):
+		var wi := ws[i]
+		if x < cumulative + wi or i == color_count - 1:
+			i0 = i
+			start = cumulative
+			w0 = wi
+			break
+		cumulative += wi
+	var i1 := mini(i0 + 1, color_count - 1)
+	var t := 0.0
+	if w0 > 0.00001:
+		t = clampf((x - start) / w0, 0.0, 1.0)
+
+	if blend_mode == 1:
+		return entries[i0]["color"]
+	elif blend_mode == 2:
+		var result: Color = entries[i0]["color"]
+		var boundary := 0.0
+		var transition := maxf(total * 0.09, 0.0001)
+		var dither_coord := Vector2(floor(surface_coords.x * 8.0), floor(surface_coords.y * 8.0))
+		var dither := _preview_hash(dither_coord)
+		for i in range(color_count - 1):
+			boundary += ws[i]
+			if ws[i] <= 0.0001 or ws[i + 1] <= 0.0001:
+				continue
+			var blend_t := _preview_smoothstep(boundary - transition, boundary + transition, x)
+			if dither <= blend_t:
+				result = entries[i + 1]["color"]
+		return result
+	elif blend_mode == 3:
+		var result: Color = entries[i0]["color"]
+		var boundary := 0.0
+		var transition := maxf(total * 0.09, 0.0001)
+		var seam := 0.12
+		var checker_coord := Vector2(floor(surface_coords.x * 4.0), floor(surface_coords.y * 4.0))
+		var checker := fposmod(checker_coord.x + checker_coord.y, 2.0)
+		for i in range(color_count - 1):
+			boundary += ws[i]
+			if ws[i] <= 0.0001 or ws[i + 1] <= 0.0001:
+				continue
+			var blend_t := _preview_smoothstep(boundary - transition, boundary + transition, x)
+			var next_color: Color = entries[i + 1]["color"]
+			if blend_t > 0.5 + seam:
+				result = next_color
+			elif blend_t >= 0.5 - seam:
+				result = next_color if checker > 0.5 else result
+		return result
+
+	var accum_color := Color(0.0, 0.0, 0.0, 0.0)
+	var accum_weight := 0.0
+	var band_start := 0.0
+	for i in range(color_count):
+		var wi := ws[i]
+		var band_end := band_start + wi
+		if wi > 0.0001:
+			var left_width := 0.0 if i == 0 else maxf(minf(ws[i - 1], wi) * 0.75, total * 0.004)
+			var right_width := 0.0 if i == color_count - 1 else maxf(minf(wi, ws[i + 1]) * 0.75, total * 0.004)
+			var left := 1.0
+			var right := 1.0
+			if i > 0:
+				left = _preview_smoothstep(band_start - left_width, band_start + left_width, x)
+			if i < color_count - 1:
+				right = 1.0 - _preview_smoothstep(band_end - right_width, band_end + right_width, x)
+			var band_weight := clampf(left * right, 0.0, 1.0)
+			if band_weight > 0.0001:
+				accum_color += entries[i]["color"] * band_weight
+				accum_weight += band_weight
+		band_start = band_end
+	if accum_weight > 0.0001:
+		return accum_color / accum_weight
+	return entries[i0]["color"].lerp(entries[i1]["color"], t)
+
+
+func _tint_preview_pixel(src: Color, palette: Color, base_albedo: Color) -> Color:
+	var alpha := clampf(palette.a, 0.0, 1.0)
+	if alpha <= 0.0001:
+		return src
+	var src_linear := src.srgb_to_linear()
+	var palette_linear := palette.srgb_to_linear()
+	var base_linear := base_albedo.srgb_to_linear()
+	var base_r := maxf(base_linear.r, 0.001)
+	var base_g := maxf(base_linear.g, 0.001)
+	var base_b := maxf(base_linear.b, 0.001)
+	var ratio_r := clampf(palette_linear.r / base_r, 0.0, 4.0)
+	var ratio_g := clampf(palette_linear.g / base_g, 0.0, 4.0)
+	var ratio_b := clampf(palette_linear.b / base_b, 0.0, 4.0)
+	var mul_r := lerpf(1.0, ratio_r, alpha)
+	var mul_g := lerpf(1.0, ratio_g, alpha)
+	var mul_b := lerpf(1.0, ratio_b, alpha)
+	var tinted_linear := Color(
+		clampf(src_linear.r * mul_r, 0.0, 1.0),
+		clampf(src_linear.g * mul_g, 0.0, 1.0),
+		clampf(src_linear.b * mul_b, 0.0, 1.0),
+		src.a
+	)
+	return tinted_linear.linear_to_srgb()
+
+
+func _make_material_preview_texture(terrain, slot_idx: int) -> Texture2D:
+	if terrain == null or slot_idx < 0:
+		return null
+	var texture := _get_slot_albedo_texture(terrain, slot_idx)
 	if texture == null:
 		return null
-	var terrain := plugin.current_terrain_node if plugin != null else null
-	if terrain == null or not terrain.has_method("_get_decompressed_image"):
+	if not terrain.has_method("_get_decompressed_image"):
 		return texture
 	var img: Image = terrain._get_decompressed_image(texture)
 	if img == null:
 		return texture
+	img = img.duplicate()
+	if img == null:
+		return texture
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
 	var iw := img.get_width()
 	var ih := img.get_height()
 	if iw <= 0 or ih <= 0:
 		return texture
 	var frame_w := 484
 	var frame_h := 267
-	var padding := 20
-	var target_w := frame_w - padding * 2
-	var target_h := frame_h - padding * 2
-	var scale := min(float(target_w) / float(iw), float(target_h) / float(ih))
-	var draw_w := max(1, int(round(float(iw) * scale)))
-	var draw_h := max(1, int(round(float(ih) * scale)))
-	if draw_w != iw or draw_h != ih:
-		img.resize(draw_w, draw_h, Image.INTERPOLATE_NEAREST)
+	var card_size := 256
+	var card_img := Image.create_empty(card_size, card_size, false, Image.FORMAT_RGBA8)
+	var base_albedo := Color(1.0, 1.0, 1.0, 0.0)
+	if slot_idx < terrain.texture_slots.size() and terrain.texture_slots[slot_idx] != null:
+		var raw_albedo: Variant = terrain.texture_slots[slot_idx].get("albedo")
+		if raw_albedo is Color:
+			base_albedo = raw_albedo
+	if base_albedo.a <= 0.0001:
+		base_albedo = _compute_slot_albedo_color(terrain, texture)
+	var noise_img := _get_preview_noise_image(terrain)
+	if noise_img != null:
+		noise_img = noise_img.duplicate()
+	var entries := _get_slot_preview_entries(terrain, slot_idx)
+	var mode := 0
+	if slot_idx < terrain.slot_blend_modes.size():
+		mode = clampi(int(terrain.slot_blend_modes[slot_idx]), 0, 3)
+	var tile_scale := 1.9
+	var slot_scale := 1.0
+	if slot_idx < terrain.texture_slots.size() and terrain.texture_slots[slot_idx] != null:
+		var raw_scale: Variant = terrain.texture_slots[slot_idx].get("scale")
+		if raw_scale is float or raw_scale is int:
+			slot_scale = maxf(float(raw_scale), 0.01)
+	var uv_scale := tile_scale / slot_scale
+	for y in range(card_size):
+		for x in range(card_size):
+			var uv := Vector2(float(x) / float(card_size), float(y) / float(card_size))
+			var sample_uv := uv * uv_scale
+			var src := _sample_preview_albedo(img, sample_uv)
+			var px := src
+			if not entries.is_empty():
+				var palette_color := _preview_palette_color(entries, mode, uv * 256.0, noise_img)
+				px = _tint_preview_pixel(src, palette_color, base_albedo)
+			var centered_uv := uv - Vector2(0.5, 0.5)
+			var dist := centered_uv.length()
+			var edge_fade := clampf(1.0 - maxf(dist - 0.60, 0.0) * 2.4, 0.78, 1.0)
+			px.r = clampf(px.r * edge_fade, 0.0, 1.0)
+			px.g = clampf(px.g * edge_fade, 0.0, 1.0)
+			px.b = clampf(px.b * edge_fade, 0.0, 1.0)
+			card_img.set_pixel(x, y, px)
 	var preview_img := Image.create_empty(frame_w, frame_h, false, Image.FORMAT_RGBA8)
 	preview_img.fill(Color(0.0, 0.0, 0.0, 0.0))
-	var offset_x := int((frame_w - draw_w) * 0.5)
-	var offset_y := int((frame_h - draw_h) * 0.5)
-	preview_img.blit_rect(img, Rect2i(0, 0, draw_w, draw_h), Vector2i(offset_x, offset_y))
+	var shadow_size := card_size + 12
+	var shadow_img := Image.create_empty(shadow_size, shadow_size, false, Image.FORMAT_RGBA8)
+	shadow_img.fill(Color(0.0, 0.0, 0.0, 0.0))
+	for y in range(shadow_size):
+		for x in range(shadow_size):
+			var centered := Vector2(float(x) / float(shadow_size), float(y) / float(shadow_size)) - Vector2(0.5, 0.5)
+			var dist := centered.length()
+			var alpha := clampf(1.0 - _preview_smoothstep(0.44, 0.72, dist), 0.0, 1.0) * 0.18
+			shadow_img.set_pixel(x, y, Color(0.0, 0.0, 0.0, alpha))
+	var offset_x := int((frame_w - card_size) * 0.5)
+	var offset_y := int((frame_h - card_size) * 0.5)
+	preview_img.blit_rect(shadow_img, Rect2i(0, 0, shadow_size, shadow_size), Vector2i(offset_x - 6, offset_y + 8))
+	preview_img.blit_rect(card_img, Rect2i(0, 0, card_size, card_size), Vector2i(offset_x, offset_y))
 	return ImageTexture.create_from_image(preview_img)
 
 
@@ -977,17 +1276,14 @@ func _open_texture_edit_window(slot_idx: int) -> void:
 	var dialog : MarchingSquaresTextureEditWindow = _TEXTURE_EDIT_WINDOW.instantiate()
 	dialog.title = "Edit Texture %d" % (slot_idx + 1)
 	
-	# Albedo texture picker / preview source
+	# Material card preview source
 	var existing_alb_tex : Texture2D = _get_slot_albedo_texture(terrain, slot_idx)
 
 	# Texture preview
 	available_viewports.clear()
 	available_preview_sources.clear()
 	if existing_alb_tex != null:
-		available_preview_sources.append({
-			"type": "albedo",
-			"texture": existing_alb_tex,
-		})
+		available_preview_sources.append(_get_material_preview_source(slot_idx, terrain))
 	for vp in get_tree().root.find_children("*", "SubViewport", true, false):
 		if vp.owner != null:
 			available_viewports.append(vp)
@@ -1026,26 +1322,28 @@ func _open_texture_edit_window(slot_idx: int) -> void:
 		dialog.albedo_picker.edited_resource = existing_alb_tex
 	dialog.albedo_picker.resource_changed.connect(func(res):
 		var preview_tex : Texture2D = _coerce_texture2d(res)
-		if not available_preview_sources.is_empty() and available_preview_sources[0] is Dictionary and str(available_preview_sources[0].get("type", "")) == "albedo":
-			if preview_tex == null:
-				available_preview_sources.remove_at(0)
-				if current_cam_index > 0:
+		_apply_slot_albedo(terrain, slot_idx, res, false, false)
+		_mark_slot_runtime_refresh_pending(dialog)
+		var material_preview_index := _find_material_preview_source_index()
+		if preview_tex == null:
+			if material_preview_index >= 0:
+				available_preview_sources.remove_at(material_preview_index)
+				if current_cam_index > material_preview_index:
 					current_cam_index -= 1
-				if not available_preview_sources.is_empty():
-					_apply_preview_source(dialog, current_cam_index)
-				else:
-					dialog.texture_preview.texture = null
-			else:
-				available_preview_sources[0]["texture"] = preview_tex
-				if current_cam_index == 0:
-					dialog.texture_preview.texture = preview_tex
-		elif preview_tex != null:
-			available_preview_sources.insert(0, {
-				"type": "albedo",
-				"texture": preview_tex,
-			})
-			current_cam_index += 1
-		_apply_slot_albedo(terrain, slot_idx, res, true)
+				elif current_cam_index == material_preview_index:
+					if not available_preview_sources.is_empty():
+						current_cam_index = clampi(current_cam_index, 0, available_preview_sources.size() - 1)
+						_apply_preview_source(dialog, current_cam_index)
+					else:
+						dialog.texture_preview.texture = null
+			return
+		if material_preview_index < 0:
+			available_preview_sources.insert(0, _get_material_preview_source(slot_idx, terrain))
+			if current_cam_index >= 0:
+				current_cam_index += 1
+		var active_material_preview_index := _find_material_preview_source_index()
+		if active_material_preview_index >= 0 and current_cam_index == active_material_preview_index:
+			_refresh_active_material_preview(dialog)
 	)
 	
 	# Normal texture picker
@@ -1056,7 +1354,8 @@ func _open_texture_edit_window(slot_idx: int) -> void:
 		initial_norm_tex = _coerce_texture2d(possible_nrm_tex)
 	dialog.normal_picker.edited_resource = initial_norm_tex
 	dialog.normal_picker.resource_changed.connect(func(resource):
-		_apply_slot_normal(terrain, slot_idx, resource)
+		_apply_slot_normal(terrain, slot_idx, resource, false)
+		_mark_slot_runtime_refresh_pending(dialog)
 	)
 	
 	# Scale slider
@@ -1073,6 +1372,10 @@ func _open_texture_edit_window(slot_idx: int) -> void:
 	
 	# Dialog window confirmation
 	dialog.confirmed.connect(func(): _on_slot_settings_confirmed(slot_idx))
+	dialog.canceled.connect(func():
+		_flush_slot_runtime_refresh_pending(dialog, terrain, true)
+		call_deferred("add_texture_settings")
+	)
 	# Parent window to the scene root so rebuilding it won't free it
 	var root := get_tree().get_root()
 	if root != null:
@@ -1120,6 +1423,7 @@ func _on_slot_settings_confirmed(slot_idx: int) -> void:
 	if terrain.texture_slots[slot_idx] == null:
 		terrain.texture_slots[slot_idx] = _TEXTURE_SLOT_SCRIPT.new()
 	# Texture changes are applied immediately by the picker callbacks.
+	_flush_slot_runtime_refresh_pending(dialog, terrain, false)
 	
 	# Persist name into preset if available
 	var preset := terrain.current_texture_preset
@@ -1217,6 +1521,7 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 			terrain.slot_blend_modes[slot] = idx
 			terrain._rebuild_palette_uniforms()
 			terrain.save_to_preset()
+			_refresh_active_material_preview(dialog)
 		)
 	
 	# Color rows
@@ -1256,6 +1561,7 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 			terrain.palette_colors[pidx] = new_color
 			terrain._rebuild_palette_uniforms()
 			terrain.save_to_preset()
+			_refresh_active_material_preview(dialog)
 		)
 		
 		# Inline weight display (only if multiple colors)
@@ -1300,11 +1606,13 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 							terrain.palette_weights[idx] = float(terrain.palette_weights[idx]) / total_other * remaining
 				update_weight_controls.call(indices)
 				terrain._rebuild_palette_uniforms()
+				_refresh_active_material_preview(dialog)
 			)
 			current_color_container.weight_slider.drag_ended.connect(func(_ended):
 				if not is_instance_valid(terrain) or not is_instance_valid(plugin.current_terrain_node) or plugin.current_terrain_node != terrain:
 					return
 				terrain.save_to_preset()
+				_refresh_active_material_preview(dialog)
 				add_texture_settings()
 			)
 		else:
@@ -1330,6 +1638,7 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 					terrain.palette_weights[idx] = each
 			terrain._rebuild_palette_uniforms()
 			terrain.save_to_preset()
+			_refresh_active_material_preview(dialog)
 			# Refresh window in-place if open
 			if get_tree().get_root().has_node("TextureEditWindow"):
 				call_deferred("_refresh_slot_editor", dialog, s)
@@ -1359,6 +1668,7 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 				terrain.palette_weights[idx] = each
 			terrain._rebuild_palette_uniforms()
 			terrain.save_to_preset()
+			_refresh_active_material_preview(dialog)
 			var dlg := get_tree().get_root().get_node_or_null("TextureEditWindow")
 			if dlg != null:
 				# Rebuild on the next idle step so the newly added row is part of the refreshed tree.
