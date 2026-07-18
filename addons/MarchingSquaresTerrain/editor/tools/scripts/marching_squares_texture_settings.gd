@@ -543,6 +543,7 @@ func _apply_slot_normal(terrain, slot_idx: int, resource: Variant) -> void:
 	var lib_res := _get_texture_library(terrain)
 	if lib_res == null and terrain.has_method("ensure_texture_library_resource"):
 		lib_res = terrain.ensure_texture_library_resource()
+	if lib_res != null and slot_idx < lib_res.normal_textures.size():
 		lib_res.normal_textures[slot_idx] = texture
 		_save_resource_if_external(lib_res)
 	_refresh_slot_runtime(terrain, false)
@@ -939,7 +940,7 @@ func _open_texture_edit_window(slot_idx: int) -> void:
 	)
 	
 	# Normal texture picker
-	var lib_res : Resource = terrain.get("texture_library") if terrain.has_method("get") else null
+	var lib_res := _get_texture_library(terrain)
 	var initial_norm_tex : Texture2D = null
 	if lib_res != null and lib_res is MSTextureLibraryScript and slot_idx < lib_res.normal_textures.size():
 		var possible_nrm_tex = lib_res.normal_textures[slot_idx]
