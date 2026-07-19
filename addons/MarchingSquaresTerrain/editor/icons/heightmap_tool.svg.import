@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bbcofphsipa03"
-path="res://.godot/imported/heightmap_importer_tool.png-82d6c024bcda019040fdc80bcfddd824.ctex"
+uid="uid://ckwltg172hfpf"
+path="res://.godot/imported/heightmap_tool.svg-b7d69c2603b5881347e893c748d96ad2.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://addons/MarchingSquaresTerrain/editor/icons/heightmap_importer_tool.png"
-dest_files=["res://.godot/imported/heightmap_importer_tool.png-82d6c024bcda019040fdc80bcfddd824.ctex"]
+source_file="res://addons/MarchingSquaresTerrain/editor/icons/heightmap_tool.svg"
+dest_files=["res://.godot/imported/heightmap_tool.svg-b7d69c2603b5881347e893c748d96ad2.ctex"]
 
 [params]
 
@@ -38,3 +38,6 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
+svg/scale=1.0
+editor/scale_with_editor_scale=false
+editor/convert_colors_with_editor_theme=false

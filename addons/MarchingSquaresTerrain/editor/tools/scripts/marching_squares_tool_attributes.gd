@@ -18,8 +18,7 @@ enum SettingType {
 	TERRAIN,
 	PRESET,
 	QUICK_PAINT,
-	HEIGHTMAP_IMPORTER,
-	HEIGHTMAP_EXPORTER,
+	HEIGHTMAP,
 	ERROR,
 }
 
@@ -75,6 +74,22 @@ const TERRAIN_SETTINGS_LABEL_OVERRIDES := {
 }
 
 const TERRAIN_TAB_VISIBLE_HEIGHT := 132
+
+var plugin : MarchingSquaresTerrainPlugin
+var attribute_list : MarchingSquaresToolAttributesList
+var settings : Dictionary = {}
+
+var last_setting_type : SettingType = SettingType.ERROR
+var selected_chunk : MarchingSquaresTerrainChunk
+var current_available_chunks : Array[MarchingSquaresTerrainChunk] = []
+
+var _terrain_settings_selected_tab: int = 0
+var _terrain_settings_scroll_positions: Dictionary = {}
+
+var _heightmap_tool_selected_tab : int = 0
+var _heightmap_tool_scroll_positions : Dictionary = {}
+
+var hbox_container
 
 
 func _add_texture_preset_options(preset_button: OptionButton, base_path: String) -> void:
@@ -180,18 +195,6 @@ func _get_vertex_paint_material_label(slot_idx: int, terrain_names: Array) -> St
 		return str(terrain_names[slot_idx])
 	return "Texture " + str(slot_idx + 1)
 
-var plugin : MarchingSquaresTerrainPlugin
-var attribute_list : MarchingSquaresToolAttributesList
-var settings : Dictionary = {}
-
-var last_setting_type : SettingType = SettingType.ERROR
-var selected_chunk : MarchingSquaresTerrainChunk
-var current_available_chunks : Array[MarchingSquaresTerrainChunk] = []
-var _terrain_settings_selected_tab: int = 0
-var _terrain_settings_scroll_positions: Dictionary = {}
-
-var hbox_container
-
 
 func _ready() -> void:
 	set_custom_minimum_size(Vector2(0, 35))
@@ -228,8 +231,7 @@ func show_tool_attributes(tool_index: int) -> void:
 		"terrain": SettingType.TERRAIN,
 		"preset": SettingType.PRESET,
 		"quick_paint": SettingType.QUICK_PAINT,
-		"heightmap_importer": SettingType.HEIGHTMAP_IMPORTER,
-		"heightmap_exporter": SettingType.HEIGHTMAP_EXPORTER,
+		"heightmap": SettingType.HEIGHTMAP,
 	}
 
 	var new_attributes := []
@@ -265,6 +267,8 @@ func show_tool_attributes(tool_index: int) -> void:
 		new_attributes.append(attribute_list.chunk_management)
 	if tool_attributes.terrain_settings:
 		new_attributes.append(attribute_list.terrain_settings)
+	if tool_attributes.heightmap:
+		new_attributes.append(attribute_list.heightmap)
 
 	# Rebuild material names from the preset or fallback to defaults
 	var terrain_names : Array = []
@@ -301,7 +305,7 @@ func add_setting(p_params: Dictionary) -> void:
 			hbox_container.add_child(VSeparator.new())
 
 	var add_label := true
-	if setting_type in [SettingType.CHUNK, SettingType.TERRAIN, SettingType.HEIGHTMAP_IMPORTER, SettingType.HEIGHTMAP_EXPORTER]:
+	if setting_type in [SettingType.CHUNK, SettingType.TERRAIN, SettingType.HEIGHTMAP]:
 		add_label = false
 	if add_label:
 		var label := Label.new()
@@ -605,10 +609,328 @@ func add_setting(p_params: Dictionary) -> void:
 			hbox_container.add_child(cont, true)
 		SettingType.TERRAIN:
 			hbox_container.add_child(_create_terrain_settings_tabs(), true)
+		SettingType.HEIGHTMAP:
+			hbox_container.add_child(_create_heightmap_tool_tabs(), true)
 		SettingType.ERROR: # Fallback
 			push_error("Couldn't load tool attributes setting")
-
+	
 	last_setting_type = setting_type
+
+
+func _create_heightmap_tool_tabs() -> Control:
+	var tabs := TabContainer.new()
+	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tabs.size_flags_vertical = Control.SIZE_FILL
+	tabs.set_custom_minimum_size(Vector2(0, 150))
+	
+	tabs.add_child(_create_heightmap_tab("Import"))
+	tabs.set_tab_title(tabs.get_tab_count() - 1, "Import")
+	
+	tabs.add_child(_create_heightmap_tab("Export"))
+	tabs.set_tab_title(tabs.get_tab_count() - 1, "Export")
+	
+	tabs.add_child(_create_heightmap_tab("Library"))
+	tabs.set_tab_title(tabs.get_tab_count() - 1, "Library")
+	
+	tabs.current_tab = clampi(_heightmap_tool_selected_tab, 0, max(tabs.get_tab_count() - 1, 0))
+	tabs.tab_changed.connect(func(tab_idx: int): _heightmap_tool_selected_tab = tab_idx)
+	
+	return tabs
+
+
+func _create_heightmap_tab(tab_name: String) -> Control:
+	var page := VBoxContainer.new()
+	page.name = tab_name
+	page.add_theme_constant_override("Separation", 8)
+	page.add_child(_create_tab_scroll(page.name, _create_heightmap_settings_list(tab_name)), true)
+	return page
+
+
+func _create_tab_scroll(tab_name: String, content: Control) -> Control:
+	var scroll := ScrollContainer.new()
+	
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	
+	scroll.set_custom_minimum_size(Vector2(0, 150))
+	scroll.custom_minimum_size.y = 150
+	
+	scroll.add_child(content, true)
+	if _heightmap_tool_scroll_positions.has(tab_name):
+		scroll.set_deferred("scroll_vertical", int(_heightmap_tool_scroll_positions[tab_name]))
+	else:
+		scroll.set_deferred("scroll_vertical", 0)
+	scroll.gui_input.connect(func(_event: InputEvent):
+		_heightmap_tool_scroll_positions[tab_name] = scroll.scroll_vertical
+	)
+	
+	return scroll
+
+
+func _create_heightmap_settings_list(tab_name: String) -> Control:
+	var wrapper := HBoxContainer.new()
+	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wrapper.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	
+	var left_spacer := Control.new()
+	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wrapper.add_child(left_spacer, true)
+	
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 6)
+	list.set_custom_minimum_size(Vector2(320, 0))
+	list.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	list.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	
+	match(tab_name):
+		"Import":
+			var vbox := VBoxContainer.new()
+			
+			# Row 0: Single File toggle
+			var hbox_sf := HBoxContainer.new()
+			var label_sf := Label.new()
+			label_sf.set_text("Single File:")
+			label_sf.set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER)
+			label_sf.set_custom_minimum_size(Vector2(80, 25))
+			var lcc_sf := CenterContainer.new()
+			lcc_sf.set_custom_minimum_size(Vector2(80, 35))
+			lcc_sf.add_child(label_sf, true)
+			hbox_sf.add_child(lcc_sf, true)
+			var spacer := Control.new()
+			spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			hbox_sf.add_child(spacer, true)
+			var cb_sf := CheckBox.new()
+			cb_sf.set_flat(true)
+			cb_sf.set_custom_minimum_size(Vector2(25, 25))
+			cb_sf.button_pressed = plugin.hm_single_file_import
+			cb_sf.toggled.connect(func(pressed): _on_importer_setting_changed("hm_single_file_import", pressed))
+			var cb_sc := CenterContainer.new()
+			cb_sc.set_custom_minimum_size(Vector2(40, 35))
+			cb_sc.add_child(cb_sf, true)
+			hbox_sf.add_child(cb_sc, true)
+			vbox.add_child(hbox_sf, true)
+			
+			if plugin.hm_single_file_import:
+				# Single-file mode: one combined RGBA picker
+				var hbox_combined := HBoxContainer.new()
+				var label_combined := Label.new()
+				label_combined.set_text("Combined Map:")
+				label_combined.set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER)
+				label_combined.set_custom_minimum_size(Vector2(80, 25))
+				var lcc_combined := CenterContainer.new()
+				lcc_combined.set_custom_minimum_size(Vector2(80, 35))
+				lcc_combined.add_child(label_combined, true)
+				hbox_combined.add_child(lcc_combined, true)
+				var spacer_combined := Control.new()
+				spacer_combined.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				hbox_combined.add_child(spacer_combined, true)
+				var rp_combined := EditorResourcePicker.new()
+				rp_combined.set_base_type("Texture2D")
+				rp_combined.edited_resource = plugin.hm_combined_image
+				_hide_textures(rp_combined)
+				rp_combined.resource_changed.connect(func(res): _on_importer_setting_changed("hm_combined_image", res))
+				rp_combined.set_custom_minimum_size(Vector2(120, 25))
+				var rp_combined_cont := CenterContainer.new()
+				rp_combined_cont.set_custom_minimum_size(Vector2(130, 35))
+				rp_combined_cont.add_child(rp_combined, true)
+				hbox_combined.add_child(rp_combined_cont, true)
+				vbox.add_child(hbox_combined, true)
+			else:
+				# Row 1: Heightmap texture picker
+				var hbox_tex := HBoxContainer.new()
+				var label_tex := Label.new()
+				label_tex.set_text("Heightmap:")
+				label_tex.set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER)
+				label_tex.set_custom_minimum_size(Vector2(80, 25))
+				var lcc_tex := CenterContainer.new()
+				lcc_tex.set_custom_minimum_size(Vector2(80, 35))
+				lcc_tex.add_child(label_tex, true)
+				hbox_tex.add_child(lcc_tex, true)
+				var spacer_tex := Control.new()
+				spacer_tex.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				hbox_tex.add_child(spacer_tex, true)
+				var rp := EditorResourcePicker.new()
+				rp.set_base_type("Texture2D")
+				rp.edited_resource = plugin.hm_heightmap_image
+				_hide_textures(rp)
+				rp.resource_changed.connect(func(res): _on_importer_setting_changed("hm_heightmap_image", res))
+				rp.set_custom_minimum_size(Vector2(120, 25))
+				var rp_cont := CenterContainer.new()
+				rp_cont.set_custom_minimum_size(Vector2(130, 35))
+				rp_cont.add_child(rp, true)
+				hbox_tex.add_child(rp_cont, true)
+				vbox.add_child(hbox_tex, true)
+			
+				# Row 2: Grass map picker (optional)
+				var hbox_grass := HBoxContainer.new()
+				var label_grass := Label.new()
+				label_grass.set_text("Grass Map:")
+				label_grass.set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER)
+				label_grass.set_custom_minimum_size(Vector2(80, 25))
+				var lcc_grass := CenterContainer.new()
+				lcc_grass.set_custom_minimum_size(Vector2(80, 35))
+				lcc_grass.add_child(label_grass, true)
+				hbox_grass.add_child(lcc_grass, true)
+				var spacer_grass := Control.new()
+				spacer_grass.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				hbox_grass.add_child(spacer_grass, true)
+				var rp_grass := EditorResourcePicker.new()
+				rp_grass.set_base_type("Texture2D")
+				rp_grass.edited_resource = plugin.hm_grass_image
+				_hide_textures(rp_grass)
+				rp_grass.resource_changed.connect(func(res): _on_importer_setting_changed("hm_grass_image", res))
+				rp_grass.set_custom_minimum_size(Vector2(120, 25))
+				var rp_grass_cont := CenterContainer.new()
+				rp_grass_cont.set_custom_minimum_size(Vector2(130, 35))
+				rp_grass_cont.add_child(rp_grass, true)
+				hbox_grass.add_child(rp_grass_cont, true)
+				vbox.add_child(hbox_grass, true)
+				
+				# Row 3: Texture index map picker (optional)
+				var hbox_texmap := HBoxContainer.new()
+				var label_texmap := Label.new()
+				label_texmap.set_text("Texture Map:")
+				label_texmap.set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER)
+				label_texmap.set_custom_minimum_size(Vector2(80, 25))
+				var lcc_texmap := CenterContainer.new()
+				lcc_texmap.set_custom_minimum_size(Vector2(80, 35))
+				lcc_texmap.add_child(label_texmap, true)
+				hbox_texmap.add_child(lcc_texmap, true)
+				var spacer_texmap := Control.new()
+				spacer_texmap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				hbox_texmap.add_child(spacer_texmap, true)
+				var rp_texmap := EditorResourcePicker.new()
+				rp_texmap.set_base_type("Texture2D")
+				rp_texmap.edited_resource = plugin.hm_texture_image
+				_hide_textures(rp_texmap)
+				rp_texmap.resource_changed.connect(func(res): _on_importer_setting_changed("hm_texture_image", res))
+				rp_texmap.set_custom_minimum_size(Vector2(120, 25))
+				var rp_texmap_cont := CenterContainer.new()
+				rp_texmap_cont.set_custom_minimum_size(Vector2(130, 35))
+				rp_texmap_cont.add_child(rp_texmap, true)
+				hbox_texmap.add_child(rp_texmap_cont, true)
+				vbox.add_child(hbox_texmap, true)
+			# end if/else single_file
+			
+			# Flush the texture pickers, then give Chunks X/Z their own column
+			if vbox.get_child_count() > 0:
+				list.add_child(vbox)
+				list.add_child(HSeparator.new())
+				vbox = VBoxContainer.new()
+			
+			# Chunks X and Chunks Z share a dedicated column
+			vbox.add_child(_make_importer_spinbox_row("Chunks X:", "hm_chunks_x", plugin.hm_chunks_x, 1, 64), true)
+			vbox.add_child(_make_importer_spinbox_row("Chunks Z:", "hm_chunks_z", plugin.hm_chunks_z, 1, 64), true)
+			list.add_child(vbox)
+			list.add_child(HSeparator.new())
+			vbox = VBoxContainer.new()
+			
+			# Row 5: Merge mode dropdown and Max Height spinboxes
+			var hbox_mode := HBoxContainer.new()
+			var label_mode := Label.new()
+			label_mode.set_text("Merge Mode:")
+			label_mode.set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER)
+			label_mode.set_custom_minimum_size(Vector2(80, 25))
+			var lcc_mode := CenterContainer.new()
+			lcc_mode.set_custom_minimum_size(Vector2(80, 35))
+			lcc_mode.add_child(label_mode, true)
+			hbox_mode.add_child(lcc_mode, true)
+			var spacer_mode := Control.new()
+			spacer_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			hbox_mode.add_child(spacer_mode, true)
+			var opt := OptionButton.new()
+			opt.set_flat(true)
+			for mode_name in ["Cubic", "Polyhedron", "Rounded Polyhedron", "Semi Round", "Spherical"]:
+				opt.add_item(mode_name)
+			opt.selected = plugin.hm_merge_mode
+			opt.item_selected.connect(func(idx): _on_importer_setting_changed("hm_merge_mode", idx))
+			opt.set_custom_minimum_size(Vector2(130, 35))
+			var opt_cont := CenterContainer.new()
+			opt_cont.set_custom_minimum_size(Vector2(130, 35))
+			opt_cont.add_child(opt, true)
+			hbox_mode.add_child(opt_cont, true)
+			vbox.add_child(hbox_mode, true)
+			
+			if vbox.get_child_count() % 2 == 0:
+				list.add_child(vbox)
+				list.add_child(HSeparator.new())
+				vbox = VBoxContainer.new()
+			vbox.add_child(_make_importer_spinbox_row("Max Height:", "hm_max_height", plugin.hm_max_height, 1, 256), true)
+			if vbox.get_child_count() % 2 == 0:
+				list.add_child(vbox)
+				list.add_child(HSeparator.new())
+				vbox = VBoxContainer.new()
+			
+			# Row 6: Import button
+			var import_btn := Button.new()
+			import_btn.text = "Import Heightmap"
+			import_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			import_btn.set_custom_minimum_size(Vector2(140, 30))
+			import_btn.pressed.connect(_on_import_heightmap_pressed)
+			var btn_cont := MarginContainer.new()
+			btn_cont.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			btn_cont.add_theme_constant_override("margin_bottom", 3)
+			btn_cont.set_custom_minimum_size(Vector2(140, 35))
+			btn_cont.add_child(import_btn, true)
+			vbox.add_child(btn_cont, true)
+			if vbox.get_child_count() % 2 == 0:
+				list.add_child(vbox)
+				list.add_child(HSeparator.new())
+				vbox = VBoxContainer.new()
+			
+			# Row 7: Clear Chunks button
+			var clear_btn := Button.new()
+			clear_btn.text = "Clear Chunks"
+			clear_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			clear_btn.set_custom_minimum_size(Vector2(140, 30))
+			clear_btn.pressed.connect(_on_clear_chunks_pressed)
+			var clear_cont := MarginContainer.new()
+			clear_cont.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			clear_cont.add_theme_constant_override("margin_bottom", 3)
+			clear_cont.set_custom_minimum_size(Vector2(140, 35))
+			clear_cont.add_child(clear_btn, true)
+			vbox.add_child(clear_cont, true)
+			if vbox.get_child_count() % 2 == 0:
+				list.add_child(vbox)
+		"Export":
+			var export_vbox := VBoxContainer.new()
+			
+			# Column: Export layer checkboxes (hidden in single-file mode)
+			if not plugin.hme_single_file:
+				export_vbox.add_child(_make_exporter_checkbox_row("Heightmap", "hme_export_heightmap", plugin.hme_export_heightmap), true)
+				export_vbox.add_child(_make_exporter_checkbox_row("Grass Mask", "hme_export_grass", plugin.hme_export_grass), true)
+				export_vbox.add_child(_make_exporter_checkbox_row("Texture Index", "hme_export_texture_index", plugin.hme_export_texture_index), true)
+			else:
+				var single_label := Label.new()
+				single_label.text = "All channels packed"
+				single_label.modulate = Color(1, 1, 1, 0.5)
+				export_vbox.add_child(single_label, true)
+			list.add_child(export_vbox)
+			list.add_child(HSeparator.new())
+			export_vbox = VBoxContainer.new()
+			
+			export_vbox.add_child(_make_exporter_checkbox_row("Single File", "hme_single_file", plugin.hme_single_file), true)
+			
+			var export_btn := MarchingSquaresTerrainHeightmapExporter.new()
+			export_btn.tool_attributes = self
+			export_vbox.add_child(export_btn, true)
+			
+			list.add_child(export_vbox)
+		"Library":
+			pass
+		_:
+			printerr("Tab name does not have a matching heightmap settings list yet.")
+	
+	wrapper.add_child(list, true)
+	
+	var right_spacer := Control.new()
+	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wrapper.add_child(right_spacer, true)
+	
+	return wrapper
+>>>>>>> f1103fa (Heightmap Tools Rework)
 
 
 func _create_terrain_settings_tabs() -> Control:
@@ -1004,11 +1326,7 @@ func _get_setting_value(p_setting_name: String) -> Variant:
 			return plugin.hm_max_height
 		"hm_merge_mode":
 			return plugin.hm_merge_mode
-		"heightmap_importer":
-			pass
-		"import_heightmap":
-			pass
-		"heightmap_exporter":
+		"heightmap":
 			pass
 		_:
 			push_error("Couldn't find tool attributes setting name: " + p_setting_name)
