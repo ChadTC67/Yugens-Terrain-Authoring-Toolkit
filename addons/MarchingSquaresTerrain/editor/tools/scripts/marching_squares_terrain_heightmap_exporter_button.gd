@@ -1,6 +1,6 @@
 @tool
 extends Button
-class_name MarchingSquaresTerrainHeightmapExporter
+class_name MarchingSquaresTerrainHeightmapExporterButton
 
 
 var export_dir : String = "res://"

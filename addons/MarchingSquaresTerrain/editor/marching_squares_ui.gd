@@ -238,8 +238,13 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 		"hme_output_path":
 			if p_value is String:
 				plugin.hme_output_path = p_value
+		"selected_heightmap_mesh":
+			if p_value is MeshInstance3D:
+				plugin.current_heightmap_mesh = p_value
 		"export_terrain_heightmap":
 			plugin.run_heightmap_export()
+		"extract_mesh_heightmap":
+			plugin.run_heightmap_extraction()
 
 
 func _apply_preset_to_terrain(preset: MarchingSquaresTexturePreset, terrain: MarchingSquaresTerrain) -> void:

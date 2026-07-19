@@ -913,13 +913,15 @@ func _create_heightmap_settings_list(tab_name: String) -> Control:
 			
 			export_vbox.add_child(_make_exporter_checkbox_row("Single File", "hme_single_file", plugin.hme_single_file), true)
 			
-			var export_btn := MarchingSquaresTerrainHeightmapExporter.new()
+			var export_btn := MarchingSquaresTerrainHeightmapExporterButton.new()
 			export_btn.tool_attributes = self
 			export_vbox.add_child(export_btn, true)
 			
 			list.add_child(export_vbox)
 		"Library":
-			pass
+			var extract_btn := MarchingSquaresMeshHeightmapExtractorButton.new()
+			extract_btn.tool_attributes = self
+			list.add_child(extract_btn)
 		_:
 			printerr("Tab name does not have a matching heightmap settings list yet.")
 	
@@ -1573,10 +1575,17 @@ func _make_exporter_checkbox_row(label_text: String, setting_name: String, curre
 func on_exporter_setting_changed(p_name: String, p_value: Variant) -> void:
 	emit_signal("setting_changed", p_name, p_value)
 
+func on_extractor_setting_changed(p_name: String, p_value: Variant) -> void:
+	emit_signal("setting_changed", p_name, p_value)
 
 func export_terrain_heightmap(filename) -> void:
 	plugin.terrain_heightmap_folder_name = filename
 	emit_signal("setting_changed", "export_terrain_heightmap", true)
+
+
+func extract_mesh_heightmap(filename) -> void:
+	plugin.mesh_heightmap_name = filename
+	emit_signal("setting_changed", "extract_mesh_heightmap", true)
 
 
 func _format_constant_string(text: String) -> String:

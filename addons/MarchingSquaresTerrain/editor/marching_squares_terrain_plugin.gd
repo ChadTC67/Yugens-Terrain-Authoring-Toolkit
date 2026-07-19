@@ -81,6 +81,8 @@ var initialization_error : String = ""
 
 var current_terrain_node : MarchingSquaresTerrain
 
+var current_heightmap_mesh : MeshInstance3D
+
 var selected_chunk : MarchingSquaresTerrainChunk
 
 # Flag to prevent _set_new_textures() when syncing preset from terrain node
@@ -206,6 +208,8 @@ var hme_output_path : String = "res://"
 var hme_single_file : bool = false
 #endregion
 
+const MESH_HEIGHTMAPS_FOLDER_PATH : String = "res://addons/MarchingSquaresTerrain/resources/mesh_heightmaps/"
+
 var vertex_color_idx : int = 0:
 	set(value):
 		_vertex_color_idx = value
@@ -256,6 +260,7 @@ var base_position : Vector3
 #endregion
 
 var terrain_heightmap_folder_name : String = "new_terrain_heightmap"
+var mesh_heightmap_name : String = "new_mesh_heightmap"
 
 #region raycast variables
 # Use script-wide variables to provide data to the physics process function
@@ -1684,7 +1689,7 @@ func apply_composite_pattern_action(terrain: MarchingSquaresTerrain, patterns: D
 
 #endregion
 
-#region heightmap import
+#region heightmap related
 
 func run_heightmap_import() -> void:
 	if not current_terrain_node:
@@ -1779,16 +1784,16 @@ func run_heightmap_export() -> void:
 	if not current_terrain_node:
 		push_error("MarchingSquaresTerrainPlugin: No terrain selected for heightmap export.")
 		return
-
+	
 	var chunks_to_export : Array[Vector2i] = []
 	chunks_to_export.assign(current_terrain_node.chunks.keys())
-
+	
 	if chunks_to_export.is_empty():
 		push_warning("MarchingSquaresTerrainPlugin: No chunks to export.")
 		return
-
+	
 	var output_path := hme_output_path if not hme_output_path.is_empty() else "res://"
-
+	
 	await MarchingSquaresHeightmapExporter.run(
 		current_terrain_node,
 		chunks_to_export,
@@ -1799,6 +1804,21 @@ func run_heightmap_export() -> void:
 		self,
 		hme_single_file,
 		terrain_heightmap_folder_name
+	)
+
+
+func run_heightmap_extraction() -> void:
+	if not current_heightmap_mesh:
+		push_error("MarchingSquaresTerrainPlugin: No mesh selected for heightmap extraction.")
+		return
+	
+	var output_path := MESH_HEIGHTMAPS_FOLDER_PATH if not MESH_HEIGHTMAPS_FOLDER_PATH.is_empty() else "res://"
+	
+	await MarchingSquaresHeightmapExtractor.run(
+		current_heightmap_mesh,
+		output_path,
+		self,
+		mesh_heightmap_name
 	)
 
 #endregion
