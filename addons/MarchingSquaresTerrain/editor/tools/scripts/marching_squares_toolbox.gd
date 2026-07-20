@@ -14,6 +14,6 @@ var tools : Dictionary[MarchingSquaresTerrainPlugin.TerrainToolMode, MarchingSqu
 	# General plugin tools
 	MarchingSquaresTerrainPlugin.TerrainToolMode.DEBUG_BRUSH: preload("uid://ktb4desoyt1j"), # Debug brush tool
 	MarchingSquaresTerrainPlugin.TerrainToolMode.CHUNK_MANAGEMENT: preload("uid://ups2hlmespdm"), # Chunk manager tool
+	MarchingSquaresTerrainPlugin.TerrainToolMode.HEIGHTMAP: preload("uid://cotf6d0khe2kn"), # Heightmap tool
 	MarchingSquaresTerrainPlugin.TerrainToolMode.TERRAIN_SETTINGS: preload("uid://vh1ngh2y52b8"), # Terrain settings tool
-	MarchingSquaresTerrainPlugin.TerrainToolMode.HEIGHTMAP: preload("uid://cotf6d0khe2kn"), # Heightmap importer tool
-]
+}

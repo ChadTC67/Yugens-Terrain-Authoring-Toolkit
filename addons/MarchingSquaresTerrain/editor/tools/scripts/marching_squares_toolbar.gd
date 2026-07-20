@@ -28,16 +28,16 @@ func _ready() -> void:
 func _add_tools() -> void:
 	if not toolbox:
 		return
-
+	
 	var tools := toolbox.tools
-
+	
 	alignment = FlowContainer.ALIGNMENT_CENTER
 	for i in range(tools.size()):
-		if i == 4 or i == 6 or i == 9:
+		if i == 4 or i == 6:
 			add_child(HSeparator.new())
 		var tool := tools[i]
 		var button := Button.new()
-
+		
 		button.set_name(tool.label)
 		button.set_tooltip_text(tool.tooltip)
 		button.set_button_icon(tool.icon)
@@ -48,12 +48,12 @@ func _add_tools() -> void:
 		button.custom_minimum_size = Vector2(30, 30) * _scale
 		button.expand_icon = true
 		button.set_button_group(tool_button_group)
-
+		
 		var c_cont := CenterContainer.new()
 		c_cont.custom_minimum_size = Vector2(35, 35)
 		c_cont.add_child(button, true)
 		add_child(c_cont, true)
-
+		
 		tool_buttons[i] = button
 	add_child(HSeparator.new())
 

@@ -64,9 +64,9 @@ static func _ensure_texture_names_resource(res: Resource) -> void:
 @onready var vp_texture_names : MarchingSquaresTextureNames = EngineWrapper.load_resource("uid://dd7fens03aosa") as MarchingSquaresTextureNames
 
 # Instantiate these lazily in _safe_initialize() to avoid editor-load ordering issues.
-const GizmoPluginScript := preload("res://addons/MarchingSquaresTerrain/editor/marching_squares_terrain_gizmo_plugin.gd")
-const ToolbarScript := preload("res://addons/MarchingSquaresTerrain/editor/tools/scripts/marching_squares_toolbar.gd")
-const ToolAttributesScript := preload("res://addons/MarchingSquaresTerrain/editor/tools/scripts/marching_squares_tool_attributes.gd")
+const GizmoPluginScript := preload("uid://c4vnjk3ie0whl")
+const ToolbarScript := preload("uid://3d77dnetkeik")
+const ToolAttributesScript := preload("uid://buxevb44hutjm")
 
 var gizmo_plugin : MarchingSquaresTerrainGizmoPlugin = null
 var toolbar : MarchingSquaresToolbar = null
@@ -120,9 +120,8 @@ enum TerrainToolMode {
 	VERTEX_PAINTING = 5,
 	DEBUG_BRUSH = 6,
 	CHUNK_MANAGEMENT = 7,
-	TERRAIN_SETTINGS = 8,
-	HEIGHTMAP_IMPORTER = 9,
-	HEIGHTMAP_EXPORTER = 10,
+	HEIGHTMAP = 8,
+	TERRAIN_SETTINGS = 9,
 }
 
 var _mode : TerrainToolMode = TerrainToolMode.BRUSH
@@ -184,9 +183,6 @@ var paint_walls_mode : bool:
 		_paint_walls_mode = value
 
 var _vertex_color_idx : int = 0
-var vertex_color_idx : int:
-	get():
-		return _vertex_color_idx
 
 #region heightmap importer vars
 var hm_heightmap_image : Texture2D = null

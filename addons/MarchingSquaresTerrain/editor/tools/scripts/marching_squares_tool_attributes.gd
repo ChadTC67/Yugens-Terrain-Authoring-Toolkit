@@ -932,7 +932,6 @@ func _create_heightmap_settings_list(tab_name: String) -> Control:
 	wrapper.add_child(right_spacer, true)
 	
 	return wrapper
->>>>>>> f1103fa (Heightmap Tools Rework)
 
 
 func _create_terrain_settings_tabs() -> Control:
@@ -991,42 +990,23 @@ func _create_empty_tab(tab_name: String) -> Control:
 	page.name = tab_name
 	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	page.size_flags_vertical = Control.SIZE_FILL
-
+	
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	page.add_child(spacer, true)
-
+	
 	var label := Label.new()
 	label.text = tab_name + " settings coming soon."
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	page.add_child(label, true)
-
+	
 	var spacer_bottom := Control.new()
 	spacer_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	page.add_child(spacer_bottom, true)
-
+	
 	return page
-
-
-func _create_tab_scroll(tab_name: String, content: Control) -> Control:
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_vertical = Control.SIZE_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	scroll.set_custom_minimum_size(Vector2(0, TERRAIN_TAB_VISIBLE_HEIGHT))
-	scroll.custom_minimum_size.y = TERRAIN_TAB_VISIBLE_HEIGHT
-	scroll.add_child(content, true)
-	if _terrain_settings_scroll_positions.has(tab_name):
-		scroll.set_deferred("scroll_vertical", int(_terrain_settings_scroll_positions[tab_name]))
-	else:
-		scroll.set_deferred("scroll_vertical", 0)
-	scroll.gui_input.connect(func(_event: InputEvent):
-		_terrain_settings_scroll_positions[tab_name] = scroll.scroll_vertical
-	)
-	return scroll
 
 
 func _cache_terrain_settings_ui_state() -> void:
