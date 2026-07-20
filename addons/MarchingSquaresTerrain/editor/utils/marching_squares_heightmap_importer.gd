@@ -22,7 +22,7 @@ static func run(
 	dialog.exclusive = true
 	dialog.unresizable = true
 	var window_size := DisplayServer.window_get_size()
-	dialog.size = Vector2i(int(window_size.x * 0.3), int(window_size.y * 0.2))
+	dialog.size = Vector2i(int(window_size.x * 0.3), int(window_size.y * 0.15))
 	# Inherit the full editor theme so all child controls (Button, ProgressBar,
 	# Label) automatically match the current editor colour scheme.
 	dialog.theme = base_control.get_theme()

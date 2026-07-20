@@ -239,7 +239,7 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 			if p_value is String:
 				plugin.hme_output_path = p_value
 		"selected_heightmap_mesh":
-			if p_value is MeshInstance3D:
+			if p_value is Mesh:
 				plugin.current_heightmap_mesh = p_value
 		"export_terrain_heightmap":
 			plugin.run_heightmap_export()

@@ -81,7 +81,7 @@ var initialization_error : String = ""
 
 var current_terrain_node : MarchingSquaresTerrain
 
-var current_heightmap_mesh : MeshInstance3D
+var current_heightmap_mesh : Mesh = null
 
 var selected_chunk : MarchingSquaresTerrainChunk
 
@@ -1808,7 +1808,7 @@ func run_heightmap_export() -> void:
 
 
 func run_heightmap_extraction() -> void:
-	if not current_heightmap_mesh:
+	if current_heightmap_mesh == null:
 		push_error("MarchingSquaresTerrainPlugin: No mesh selected for heightmap extraction.")
 		return
 	

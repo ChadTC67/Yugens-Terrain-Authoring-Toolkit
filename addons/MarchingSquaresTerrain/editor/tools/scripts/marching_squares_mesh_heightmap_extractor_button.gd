@@ -16,6 +16,8 @@ func _ready() -> void:
 
 
 func _create_heightmap_extraction_dialog() -> void:
+	tool_attributes.plugin.current_heightmap_mesh == null
+	
 	filename_dialog = AcceptDialog.new()
 	filename_dialog.title = "Save Mesh Heightmap"
 	filename_dialog.unresizable = true
@@ -42,7 +44,8 @@ func _create_heightmap_extraction_dialog() -> void:
 	hbox_mesh.add_child(mesh_label)
 	
 	var mesh_selector := EditorResourcePicker.new()
-	mesh_selector.base_type = "MeshInstance3D"
+	mesh_selector.base_type = "Mesh"
+	mesh_selector.edited_resource = tool_attributes.plugin.current_heightmap_mesh
 	mesh_selector.resource_changed.connect(func(mesh):
 		tool_attributes.on_extractor_setting_changed("selected_heightmap_mesh", mesh)
 	)
@@ -53,28 +56,6 @@ func _create_heightmap_extraction_dialog() -> void:
 	filename_dialog.add_child(cont)
 	
 	add_child(filename_dialog)
-
-
-func open_exporter_folder_dialog(setting_name: String, path: String) -> void:
-	var dialog := EditorFileDialog.new()
-	dialog.exclusive = false
-	dialog.file_mode = EditorFileDialog.FILE_MODE_OPEN_DIR
-	dialog.access = EditorFileDialog.ACCESS_RESOURCES
-	dialog.title = "Select Output Directory"
-	
-	if path.is_empty():
-		dialog.current_dir = "res://"
-	else:
-		dialog.current_dir = path
-	
-	dialog.dir_selected.connect(func(dir: String):
-		tool_attributes.on_extractor_setting_changed(setting_name, dir)
-		dialog.queue_free()
-	)
-	dialog.canceled.connect(func(): dialog.queue_free())
-	
-	EditorInterface.get_base_control().add_child(dialog)
-	dialog.popup_centered(Vector2i(600, 400))
 
 
 func _extract_to_heightmap() -> void:
@@ -96,22 +77,22 @@ func _on_filename_confirmed() -> void:
 	if not dir.dir_exists(tool_attributes.plugin.MESH_HEIGHTMAPS_FOLDER_PATH):
 		dir.make_dir_recursive(tool_attributes.plugin.MESH_HEIGHTMAPS_FOLDER_PATH)
 	
-	var path := tool_attributes.plugin.MESH_HEIGHTMAPS_FOLDER_PATH + filename + ".tres"
+	var path := tool_attributes.plugin.MESH_HEIGHTMAPS_FOLDER_PATH + filename + ".png"
 	
 	if FileAccess.file_exists(path):
-		_show_overwrite_confirmation(path)
+		_show_overwrite_confirmation(path, filename)
 	else:
 		_save_heightmap(filename)
 
 
-func _show_overwrite_confirmation(path: String) -> void:
+func _show_overwrite_confirmation(path: String, filename: String) -> void:
 	var confirm_dialog = ConfirmationDialog.new()
 	confirm_dialog.title = "Overwrite File?"
 	confirm_dialog.dialog_text = "A heightmap with this name already exists.\nDo you want to overwrite it?"
 	
 	confirm_dialog.confirmed.connect(
 		func():
-			_save_heightmap(path)
+			_save_heightmap(filename)
 			confirm_dialog.queue_free()
 	)
 	
