@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b37hlf2r6ld5q"
-path="res://.godot/imported/new_mesh_heightmap_2.png-b2401036549dbd68601d829d0ff6e38b.ctex"
+path="res://.godot/imported/example_prism_heightmap.png-4a6839495b32c14c9e748bd8e7bb101a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://addons/MarchingSquaresTerrain/resources/mesh_heightmaps/new_mesh_heightmap_2.png"
-dest_files=["res://.godot/imported/new_mesh_heightmap_2.png-b2401036549dbd68601d829d0ff6e38b.ctex"]
+source_file="res://addons/MarchingSquaresTerrain/resources/mesh_heightmaps/example_prism_heightmap.png"
+dest_files=["res://.godot/imported/example_prism_heightmap.png-4a6839495b32c14c9e748bd8e7bb101a.ctex"]
 
 [params]
 

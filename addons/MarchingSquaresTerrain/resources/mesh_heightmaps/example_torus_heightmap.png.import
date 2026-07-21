@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://denucr1s8s6fd"
-path="res://.godot/imported/new_mesh_heightmap.png-f05e8f57c405c149d81f5343a2afb3cb.ctex"
+path="res://.godot/imported/example_torus_heightmap.png-d80e586f33ad19f1226cdceeff5c6ce0.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://addons/MarchingSquaresTerrain/resources/mesh_heightmaps/new_mesh_heightmap.png"
-dest_files=["res://.godot/imported/new_mesh_heightmap.png-f05e8f57c405c149d81f5343a2afb3cb.ctex"]
+source_file="res://addons/MarchingSquaresTerrain/resources/mesh_heightmaps/example_torus_heightmap.png"
+dest_files=["res://.godot/imported/example_torus_heightmap.png-d80e586f33ad19f1226cdceeff5c6ce0.ctex"]
 
 [params]
 

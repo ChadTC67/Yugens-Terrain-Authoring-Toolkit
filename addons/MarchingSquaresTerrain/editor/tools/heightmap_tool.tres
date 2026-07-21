@@ -23,6 +23,9 @@ Used to export and import heightmap data from and (un)to the terrain.
 • EXPORT MODE: Exports terrain data as greyscale PNG's (heightmap, grass mask, texture index).
 • IMPORT MODE: Imports greyscale PNG's as data for the creation of terrain chunks.
 • LIBRARY MODE: Can create heightmaps from 3D meshes and then place them onto the terrain.
-    • Handy for quickly terraforming the terrain in complex ways."
+    • Handy for quickly terraforming the terrain in complex ways.
+
+[SHORTCUTS]
+• Shift+R: Rotate the current heightmap 90 degrees clockwise."
 attributes = SubResource("Resource_he")
 metadata/_custom_type_script = "uid://brkjbcthwswel"

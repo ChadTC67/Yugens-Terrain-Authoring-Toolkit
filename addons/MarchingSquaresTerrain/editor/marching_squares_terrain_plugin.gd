@@ -402,6 +402,7 @@ func _maybe_rebuild_grass_on_scene_open() -> void:
 				# Defer the actual rebuild so editor finishes loading
 				call_deferred("_rebuild_grass_for_node", node)
 
+
 func _rebuild_grass_for_node(node: Object) -> void:
 	if not is_instance_valid(node):
 		return
@@ -409,6 +410,7 @@ func _rebuild_grass_for_node(node: Object) -> void:
 		node.rebuild_grass_texture_array()
 	if node.has_method("_request_grass_regen"):
 		node._request_grass_regen()
+
 
 func _ready():
 	if BRUSH_RADIUS_MATERIAL:
@@ -471,10 +473,10 @@ func _edit(object: Object) -> void:
 			var cb := Callable(self, "_on_chunk_dimensions_changed")
 			if current_terrain_node.has_signal("chunk_dimensions_changed") and not current_terrain_node.is_connected("chunk_dimensions_changed", cb):
 				current_terrain_node.connect("chunk_dimensions_changed", cb)
-
+			
 			if current_terrain_node.current_texture_preset == null:
 				current_terrain_node.current_texture_preset = EMPTY_TEXTURE_PRESET
-
+			
 			# Sync plugin's preset from the selected terrain's saved preset
 			# This ensures each terrain keeps its own preset on selection/reload
 			_syncing_from_terrain = true
@@ -496,56 +498,56 @@ func _edit(object: Object) -> void:
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	if not is_initialized:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
-
+	
 	var selected = EditorInterface.get_selection().get_selected_nodes()
 	# Only proceed if exactly 1 terrain system is selected
 	if not selected or len(selected) > 1:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
-
+	
 	# Handle clicks
 	if event is InputEventMouseButton or event is InputEventMouseMotion:
 		return handle_mouse(camera, event)
-
+	
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
 func _handles(object: Object) -> bool:
 	if not is_initialized:
 		return false
-
+	
 	return object is MarchingSquaresTerrain
 
 
-func handle_hotkey(keycode: int) -> bool:
-	pass
-	return false
+func _input(event: InputEvent) -> void:
+	if mode == TerrainToolMode.HEIGHTMAP and Input.is_key_pressed(KEY_SHIFT) and Input.is_key_pressed(KEY_R):
+		current_heightmap_image.rotate_90(CLOCKWISE)
 
 
 func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 	terrain_hovered = false
 	var terrain : MarchingSquaresTerrain = EditorInterface.get_selection().get_selected_nodes()[0]
-
+	
 	var mouse_pos := camera.get_viewport().get_mouse_position()
-
+	
 	var _ray_origin := camera.project_ray_origin(mouse_pos)
 	var _ray_dir := camera.project_ray_normal(mouse_pos)
-
+	
 	var shift_held := Input.is_key_pressed(KEY_SHIFT)
-
+	
 	# If not in a settings mode, perform terrain raycast
 	if mode in [TerrainToolMode.BRUSH, TerrainToolMode.GRASS_MASK, TerrainToolMode.LEVEL,
 				TerrainToolMode.SMOOTH, TerrainToolMode.BRIDGE, TerrainToolMode.VERTEX_PAINTING,
 				TerrainToolMode.DEBUG_BRUSH, TerrainToolMode.CHUNK_MANAGEMENT, TerrainToolMode.HEIGHTMAP]:
 		var draw_position
 		var draw_area_hovered : bool = false
-
+		
 		if is_setting and draw_height_set:
 			var local_ray_dir := _ray_dir * terrain.transform
 			var set_plane := Plane(Vector3(local_ray_dir.x, 0, local_ray_dir.z), base_position)
 			var set_position := set_plane.intersects_ray(terrain.to_local(_ray_origin), local_ray_dir)
 			if set_position:
 				brush_position = set_position
-
+		
 		# If there is any pattern and flatten is enabled, draw along that height plane instead of the terrain intersection
 		elif not current_draw_pattern.is_empty() and flatten:
 			var chunk_plane := Plane(Vector3.UP, Vector3(0, draw_height, 0))
@@ -553,7 +555,7 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 			if draw_position:
 				draw_position = terrain.to_local(draw_position)
 				draw_area_hovered = true
-
+		
 		else:
 			# Perform the raycast to check for intersection with a physics body (terrain)
 			_queue_raycast(_ray_origin, _ray_dir, camera)
@@ -571,34 +573,34 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 				var fallback_height := 0.0
 				if is_drawing or is_setting or not current_draw_pattern.is_empty():
 					fallback_height = draw_height
-
+				
 				var virtual_plane := Plane(Vector3.UP, Vector3(0, fallback_height, 0))
 				var plane_pos := virtual_plane.intersects_ray(ray_origin, ray_dir)
 				if plane_pos:
 					draw_position = terrain.to_local(plane_pos)
 					draw_area_hovered = true
-
+		
 		# ALT or Right Click to clear the current draw pattern. Don't clear while setting
 		var _right_clicked : bool = (
 			event is InputEventMouseButton and
 			event.button_index == MOUSE_BUTTON_RIGHT and
 			event.pressed
 		)
-
+		
 		if not is_setting:
 			if _right_clicked or Input.is_key_pressed(KEY_ALT):
 				current_draw_pattern.clear()
-
+		
 		# Check for terrain collision
 		if draw_area_hovered:
 			terrain_hovered = true
 			var chunk_x : int = floor(draw_position.x / ((terrain.dimensions.x - 1) * terrain.cell_size.x))
 			var chunk_z : int = floor(draw_position.z / ((terrain.dimensions.z - 1) * terrain.cell_size.y))
 			var chunk_coords := Vector2i(chunk_x, chunk_z)
-
+			
 			is_chunk_plane_hovered = true
 			current_hovered_chunk = chunk_coords
-
+		
 		if event is InputEventMouseButton and event.button_index == MouseButton.MOUSE_BUTTON_LEFT:
 			if event.is_pressed() and draw_area_hovered:
 				draw_height_set = false
@@ -623,7 +625,7 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 				if mode in [TerrainToolMode.LEVEL, TerrainToolMode.CHUNK_MANAGEMENT] and Input.is_key_pressed(KEY_CTRL):
 					height = brush_position.y
 					ui.tool_attributes.show_tool_attributes(ui.active_tool)
-				elif Input.is_key_pressed(KEY_SHIFT) and mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
+				elif Input.is_key_pressed(KEY_SHIFT) and mode not in [TerrainToolMode.CHUNK_MANAGEMENT, TerrainToolMode.HEIGHTMAP]:
 					is_drawing = true
 					brush_position = draw_position
 				elif mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
