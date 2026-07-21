@@ -6,6 +6,8 @@
 
 [sub_resource type="Resource" id="Resource_he"]
 script = ExtResource("1_ygjx6")
+size = true
+flatten = true
 heightmap = true
 metadata/_custom_type_script = "uid://b6jopat61dbd3"
 

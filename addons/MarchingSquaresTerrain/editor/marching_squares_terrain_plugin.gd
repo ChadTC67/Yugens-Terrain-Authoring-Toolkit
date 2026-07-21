@@ -204,7 +204,10 @@ var hme_output_path : String = "res://"
 var hme_single_file : bool = false
 #endregion
 
+#region heightmap library vars
 const MESH_HEIGHTMAPS_FOLDER_PATH : String = "res://addons/MarchingSquaresTerrain/resources/mesh_heightmaps/"
+var current_heightmap_image : Image
+#endregion
 
 var vertex_color_idx : int = 0:
 	set(value):
@@ -530,7 +533,9 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 	var shift_held := Input.is_key_pressed(KEY_SHIFT)
 
 	# If not in a settings mode, perform terrain raycast
-	if mode in [TerrainToolMode.BRUSH, TerrainToolMode.GRASS_MASK, TerrainToolMode.LEVEL, TerrainToolMode.SMOOTH, TerrainToolMode.BRIDGE, TerrainToolMode.VERTEX_PAINTING, TerrainToolMode.DEBUG_BRUSH, TerrainToolMode.CHUNK_MANAGEMENT]:
+	if mode in [TerrainToolMode.BRUSH, TerrainToolMode.GRASS_MASK, TerrainToolMode.LEVEL,
+				TerrainToolMode.SMOOTH, TerrainToolMode.BRIDGE, TerrainToolMode.VERTEX_PAINTING,
+				TerrainToolMode.DEBUG_BRUSH, TerrainToolMode.CHUNK_MANAGEMENT, TerrainToolMode.HEIGHTMAP]:
 		var draw_position
 		var draw_area_hovered : bool = false
 
@@ -611,7 +616,7 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 					curve3d_bridge_points.append(bridge_start_pos)
 				if mode in [TerrainToolMode.SMOOTH] and falloff == false:
 					falloff = true
-				if mode in [TerrainToolMode.GRASS_MASK, TerrainToolMode.DEBUG_BRUSH] and falloff == true:
+				if mode in [TerrainToolMode.GRASS_MASK, TerrainToolMode.DEBUG_BRUSH, TerrainToolMode.HEIGHTMAP] and falloff == true:
 					falloff = false
 				if mode in [TerrainToolMode.GRASS_MASK, TerrainToolMode.VERTEX_PAINTING, TerrainToolMode.DEBUG_BRUSH] and flatten == true:
 					flatten = false
@@ -1187,6 +1192,8 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 			elif mode == TerrainToolMode.CHUNK_MANAGEMENT:
 				restore_value = chunk.get_height(draw_cell_coords)
 				draw_value = chunk.get_height(draw_cell_coords)
+			elif mode == TerrainToolMode.HEIGHTMAP:
+				pass
 			else: # Brush tool:
 				restore_value = chunk.get_height(draw_cell_coords)
 				if flatten:

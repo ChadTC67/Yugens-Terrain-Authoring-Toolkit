@@ -610,6 +610,7 @@ func add_setting(p_params: Dictionary) -> void:
 		SettingType.TERRAIN:
 			hbox_container.add_child(_create_terrain_settings_tabs(), true)
 		SettingType.HEIGHTMAP:
+			emit_signal("setting_changed", "brush_type", 1)
 			hbox_container.add_child(_create_heightmap_tool_tabs(), true)
 		SettingType.ERROR: # Fallback
 			push_error("Couldn't load tool attributes setting")
@@ -922,6 +923,53 @@ func _create_heightmap_settings_list(tab_name: String) -> Control:
 			var extract_btn := MarchingSquaresMeshHeightmapExtractorButton.new()
 			extract_btn.tool_attributes = self
 			list.add_child(extract_btn)
+			
+			var s_hbox := HBoxContainer.new()
+			var s_label := Label.new()
+			s_label.text = "Heightmap:"
+			s_hbox.add_child(s_label)
+			
+			var heightmap_selector := OptionButton.new()
+			heightmap_selector.flat = true
+			
+			var dir := DirAccess.open(plugin.MESH_HEIGHTMAPS_FOLDER_PATH)
+			if dir:
+				for file in dir.get_files():
+					if file.get_extension().to_lower() in ["png", "jpg", "jpeg"]:
+						var path := plugin.MESH_HEIGHTMAPS_FOLDER_PATH + file
+						var texture := ResourceLoader.load(path) as Texture2D
+						if texture:
+							var image := texture.get_image()
+							heightmap_selector.add_item(file)
+							heightmap_selector.set_item_metadata(heightmap_selector.item_count - 1, image)
+			
+			heightmap_selector.item_selected.connect(func(index):
+					plugin.current_heightmap_image = heightmap_selector.get_item_metadata(index)
+			)
+			
+			if heightmap_selector.item_count > 0:
+				heightmap_selector.select(0)
+			
+			s_hbox.add_child(heightmap_selector)
+			list.add_child(s_hbox)
+			
+			var a_hbox := HBoxContainer.new()
+			for child in hbox_container.get_children():
+				if child is VSeparator:
+					child.queue_free()
+					continue
+				child.reparent(a_hbox)
+				if a_hbox.get_child_count() == 2:
+					if child.get_child(0) is CheckBox:
+						var spacer := Control.new()
+						spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+						a_hbox.add_child(spacer)
+						a_hbox.move_child(spacer, 1)
+					else:
+						child.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+					
+					list.add_child(a_hbox)
+					a_hbox = HBoxContainer.new()
 		_:
 			printerr("Tab name does not have a matching heightmap settings list yet.")
 	

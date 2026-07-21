@@ -156,7 +156,7 @@ func _redraw():
 		if terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING:
 			if terrain_plugin.paint_walls_mode:
 				add_mesh(terrain_plugin.BRUSH_RADIUS_VISUAL, terrain_plugin.BRUSH_RADIUS_MATERIAL, brush_transform)
-		elif terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.SMOOTH and terrain_plugin.mode != terrain_plugin.TerrainToolMode.GRASS_MASK and terrain_plugin.mode != terrain_plugin.TerrainToolMode.DEBUG_BRUSH and terrain_plugin.mode != terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
+		elif terrain_plugin.mode not in [terrain_plugin.TerrainToolMode.SMOOTH, terrain_plugin.TerrainToolMode.GRASS_MASK, terrain_plugin.TerrainToolMode.DEBUG_BRUSH, terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT, terrain_plugin.TerrainToolMode.HEIGHTMAP]:
 			add_mesh(terrain_plugin.BRUSH_RADIUS_VISUAL, terrain_plugin.BRUSH_RADIUS_MATERIAL, brush_transform)
 
 		pos = terrain_plugin.brush_position
@@ -186,6 +186,8 @@ func _redraw():
 						var use_falloff := terrain_plugin.falloff
 						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING:
 							use_falloff = (terrain_plugin.vp_falloff_mode == terrain_plugin.VertexPaintFalloffMode.DITHERED)
+						if terrain_plugin.mode in [terrain_plugin.TerrainToolMode.HEIGHTMAP, terrain_plugin.TerrainToolMode.GRASS_MASK]:
+							use_falloff = false
 						var sample : float = BrushPatternCalculator.calculate_falloff_sample(
 							world_pos, brush_pos, terrain_plugin.brush_size, terrain_plugin.current_brush_index,
 							max_distance, use_falloff, terrain_plugin.falloff_curve
