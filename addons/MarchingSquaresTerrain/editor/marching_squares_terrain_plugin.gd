@@ -1059,7 +1059,10 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 		pattern_cc[draw_chunk_coords] = {}
 		restore_pattern_cc[draw_chunk_coords] = {}
 		var draw_chunk_dict = current_draw_pattern[draw_chunk_coords]
+		var first_draw_cell : Vector2i
 		for draw_cell_coords: Vector2i in draw_chunk_dict:
+			if not first_draw_cell:
+				first_draw_cell = draw_cell_coords
 			var chunk : MarchingSquaresTerrainChunk = terrain.chunks[draw_chunk_coords]
 			var sample : float = clamp(draw_chunk_dict[draw_cell_coords], 0.0, 1.0)
 			var restore_value
@@ -1191,9 +1194,23 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 				continue
 			elif mode == TerrainToolMode.CHUNK_MANAGEMENT:
 				restore_value = chunk.get_height(draw_cell_coords)
-				draw_value = chunk.get_height(draw_cell_coords)
+				draw_value = restore_value
 			elif mode == TerrainToolMode.HEIGHTMAP:
-				pass
+				restore_value = chunk.get_height(draw_cell_coords)
+				var img_size := current_heightmap_image.get_size()
+				var index : Vector2i = draw_cell_coords - first_draw_cell
+				var scale : Vector2 = (img_size / brush_size)
+				var p_coords := Vector2i(scale * Vector2(index) + scale / 2)
+				#TODO: Change this for an actual working system
+				p_coords.x = clampi(p_coords.x, 0, img_size.x - 1)
+				p_coords.y = clampi(p_coords.y, 0, img_size.y - 1)
+				var pixel := current_heightmap_image.get_pixel(p_coords.x, p_coords.y)
+				if flatten:
+					draw_value = lerp(restore_value, brush_position.y, sample)
+				else:
+					var height_diff := brush_position.y - draw_height
+					draw_value = lerp(restore_value, restore_value + height_diff, sample)
+				draw_value += brush_size / terrain.cell_size.x * pixel.r
 			else: # Brush tool:
 				restore_value = chunk.get_height(draw_cell_coords)
 				if flatten:

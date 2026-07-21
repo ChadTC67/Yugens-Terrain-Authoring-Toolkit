@@ -948,7 +948,7 @@ func _create_heightmap_settings_list(tab_name: String) -> Control:
 			)
 			
 			if heightmap_selector.item_count > 0:
-				heightmap_selector.select(0)
+				plugin.current_heightmap_image = heightmap_selector.get_item_metadata(0)
 			
 			s_hbox.add_child(heightmap_selector)
 			list.add_child(s_hbox)
