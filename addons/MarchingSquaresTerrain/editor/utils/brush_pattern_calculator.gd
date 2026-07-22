@@ -12,34 +12,35 @@ class BrushBounds:
 
 static func calculate_bounds(pos: Vector3, brush_size: float, terrain: MarchingSquaresTerrain) -> BrushBounds:
 	var bounds := BrushBounds.new()
-
+	
 	# brush_size is treated as a radius everywhere (gizmo scale, UI). Using /2 here caused
 	# the painted region to be much smaller/sparser than the visible brush circle.
 	var pos_tl := Vector2(
-		pos.x - brush_size,
-		pos.z - brush_size
+	pos.x - brush_size,
+	pos.z - brush_size
 	)
 	var pos_br := Vector2(
 		pos.x + brush_size,
 		pos.z + brush_size
 	)
-
+	
 	var chunk_size_x : float = (terrain.dimensions.x - 1) * terrain.cell_size.x
 	var chunk_size_z : float = (terrain.dimensions.z - 1) * terrain.cell_size.y
-
+	
 	bounds.chunk_tl = Vector2i(floori(pos_tl.x / chunk_size_x), floori(pos_tl.y / chunk_size_z))
 	bounds.chunk_br = Vector2i(floori(pos_br.x / chunk_size_x), floori(pos_br.y / chunk_size_z))
-
-	bounds.cell_tl = Vector2i(
-		floori(pos_tl.x / terrain.cell_size.x - bounds.chunk_tl.x * (terrain.dimensions.x - 1)),
-		floori(pos_tl.y / terrain.cell_size.y - bounds.chunk_tl.y * (terrain.dimensions.z - 1))
-	)
+	
 	# +1 so that x_max/z_max can be used as an exclusive range bound.
+	bounds.cell_tl = Vector2i(
+		floori(pos_tl.x / terrain.cell_size.x - bounds.chunk_tl.x * (terrain.dimensions.x - 1)) + 1,
+		floori(pos_tl.y / terrain.cell_size.y - bounds.chunk_tl.y * (terrain.dimensions.z - 1)) + 1
+	)
+	
 	bounds.cell_br = Vector2i(
 		floori(pos_br.x / terrain.cell_size.x - bounds.chunk_br.x * (terrain.dimensions.x - 1)) + 1,
 		floori(pos_br.y / terrain.cell_size.y - bounds.chunk_br.y * (terrain.dimensions.z - 1)) + 1
 	)
-
+	
 	return bounds
 
 
@@ -63,14 +64,14 @@ static func calculate_falloff_sample(
 	use_falloff: bool,
 	falloff_curve: Curve
 	) -> float:
-
+	
 	var distance_squared := brush_pos.distance_squared_to(world_pos)
 	if distance_squared > max_distance:
 		return -1.0  # Outside brush
-
+	
 	if not use_falloff:
 		return 1.0
-
+	
 	var t : float = 0.0
 	match brush_index:
 		0: # Round brush (linear by radius, not squared-distance)
@@ -83,7 +84,7 @@ static func calculate_falloff_sample(
 			var uv: Vector2 = local / denom
 			var d : float = max(abs(uv.x), abs(uv.y))
 			t = 1.0 - clamp(d, 0.0, 1.0)
-
+	
 	# IMPORTANT: allow true endpoints so a full-strength stroke can reach the target.
 	# Soften falloff: apply a square-root easing to expand the brush's effective area (gentler falloff).
 	t = pow(t, 0.5)

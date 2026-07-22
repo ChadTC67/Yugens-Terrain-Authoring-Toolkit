@@ -17,7 +17,7 @@ icon = ExtResource("2_pky3j")
 label = "Heightmap"
 tooltip = "Heightmap Tool
 
-Used to export and import heightmap data from and (un)to the terrain.
+Used to export and import heightmap data from and (on)to the terrain.
 
 [INFO]
 • EXPORT MODE: Exports terrain data as greyscale PNG's (heightmap, grass mask, texture index).

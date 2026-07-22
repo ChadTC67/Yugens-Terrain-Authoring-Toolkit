@@ -207,6 +207,7 @@ var hme_single_file : bool = false
 #region heightmap library vars
 const MESH_HEIGHTMAPS_FOLDER_PATH : String = "res://addons/MarchingSquaresTerrain/resources/mesh_heightmaps/"
 var current_heightmap_image : Image
+var can_place_heightmaps : bool = false
 #endregion
 
 var vertex_color_idx : int = 0:
@@ -540,6 +541,9 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 				TerrainToolMode.DEBUG_BRUSH, TerrainToolMode.CHUNK_MANAGEMENT, TerrainToolMode.HEIGHTMAP]:
 		var draw_position
 		var draw_area_hovered : bool = false
+		
+		if mode == TerrainToolMode.HEIGHTMAP and not can_place_heightmaps:
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
 		
 		if is_setting and draw_height_set:
 			var local_ray_dir := _ray_dir * terrain.transform
@@ -1060,11 +1064,17 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 		restore_pattern[draw_chunk_coords] = {}
 		pattern_cc[draw_chunk_coords] = {}
 		restore_pattern_cc[draw_chunk_coords] = {}
+		
 		var draw_chunk_dict = current_draw_pattern[draw_chunk_coords]
 		var first_draw_cell : Vector2i
+		var last_draw_cell : Vector2i
 		for draw_cell_coords: Vector2i in draw_chunk_dict:
 			if not first_draw_cell:
 				first_draw_cell = draw_cell_coords
+			last_draw_cell.x = maxi(last_draw_cell.x, draw_cell_coords.x)
+			last_draw_cell.y = maxi(last_draw_cell.y, draw_cell_coords.y)
+		
+		for draw_cell_coords: Vector2i in draw_chunk_dict:
 			var chunk : MarchingSquaresTerrainChunk = terrain.chunks[draw_chunk_coords]
 			var sample : float = clamp(draw_chunk_dict[draw_cell_coords], 0.0, 1.0)
 			var restore_value
@@ -1201,9 +1211,10 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 				restore_value = chunk.get_height(draw_cell_coords)
 				var img_size := current_heightmap_image.get_size()
 				var index : Vector2i = draw_cell_coords - first_draw_cell
-				var scale : Vector2 = (img_size / brush_size)
+				var sample_area := last_draw_cell - first_draw_cell + Vector2i.ONE
+				var sample_size := (sample_area.x + sample_area.y) / 2.0
+				var scale : Vector2 = (img_size / sample_size)
 				var p_coords := Vector2i(scale * Vector2(index) + scale / 2)
-				#TODO: Change this for an actual working system
 				p_coords.x = clampi(p_coords.x, 0, img_size.x - 1)
 				p_coords.y = clampi(p_coords.y, 0, img_size.y - 1)
 				var pixel := current_heightmap_image.get_pixel(p_coords.x, p_coords.y)
@@ -1212,7 +1223,10 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 				else:
 					var height_diff := brush_position.y - draw_height
 					draw_value = lerp(restore_value, restore_value + height_diff, sample)
-				draw_value += brush_size / terrain.cell_size.x * pixel.r
+				if pixel.r == 0.0:
+					continue # Only draw 
+				else:
+					draw_value += brush_size / terrain.cell_size.x * pixel.r
 			else: # Brush tool:
 				restore_value = chunk.get_height(draw_cell_coords)
 				if flatten:

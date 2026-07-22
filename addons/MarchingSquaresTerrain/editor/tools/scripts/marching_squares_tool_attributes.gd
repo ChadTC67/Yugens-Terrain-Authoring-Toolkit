@@ -634,7 +634,13 @@ func _create_heightmap_tool_tabs() -> Control:
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Library")
 	
 	tabs.current_tab = clampi(_heightmap_tool_selected_tab, 0, max(tabs.get_tab_count() - 1, 0))
-	tabs.tab_changed.connect(func(tab_idx: int): _heightmap_tool_selected_tab = tab_idx)
+	tabs.tab_changed.connect(func(tab_idx: int): 
+		_heightmap_tool_selected_tab = tab_idx
+		if tab_idx == 2: # Library
+			plugin.can_place_heightmaps = true
+		else:
+			plugin.can_place_heightmaps = false
+	)
 	
 	return tabs
 
