@@ -44,16 +44,12 @@ func import_to_terrain(
 
 	var clean_albedo_dir := albedo_dir.strip_edges()
 	var clean_normal_dir := normal_dir.strip_edges()
-	if clean_albedo_dir.is_empty():
-		return {"ok": false, "error": "[MST] Choose an Albedo or Diffuse Maps folder."}
-	if DirAccess.open(clean_albedo_dir) == null:
-		return {"ok": false, "error": "[MST] Albedo or Diffuse Maps folder not found: " + clean_albedo_dir}
-	if not clean_normal_dir.is_empty() and DirAccess.open(clean_normal_dir) == null:
-		return {"ok": false, "error": "[MST] Normal Maps folder not found: " + clean_normal_dir}
+	if clean_albedo_dir.is_empty() or clean_normal_dir.is_empty():
+		return {"ok": false, "error": "[MST] Choose both an Albedo or Diffuse Maps folder and a Normal Maps folder."}
 
 	var pairs := build_texture_import_pairs(clean_albedo_dir, clean_normal_dir)
 	if pairs.is_empty():
-		return {"ok": false, "error": "[MST] No albedo or diffuse textures were found to import."}
+		return {"ok": false, "error": "[MST] No matching albedo/diffuse and normal texture pairs were found."}
 
 	var save_dir := normalize_texture_import_save_dir(raw_save_dir)
 	var preset_folder := save_dir.path_join(preset_slug)
@@ -197,15 +193,10 @@ func assign_texture_import_pair(
 	if slot_idx < 0 or slot_idx >= max_texture_slots or slot_idx == 15:
 		return false
 	var albedo_tex := ResourceLoader.load(str(pair["albedo"]), "Texture2D") as Texture2D
-	var normal_tex: Texture2D = null
-	var normal_path := str(pair.get("normal", "")).strip_edges()
-	if not normal_path.is_empty():
-		normal_tex = ResourceLoader.load(normal_path, "Texture2D") as Texture2D
-	if albedo_tex == null:
-		push_warning("[MST] Skipping unreadable albedo texture: " + str(pair))
+	var normal_tex := ResourceLoader.load(str(pair["normal"]), "Texture2D") as Texture2D
+	if albedo_tex == null or normal_tex == null:
+		push_warning("[MST] Skipping unreadable texture pair: " + str(pair))
 		return false
-	if not normal_path.is_empty() and normal_tex == null:
-		push_warning("[MST] Normal map could not be read, importing albedo only: " + normal_path)
 	if terrain.texture_slots[slot_idx] == null:
 		terrain.texture_slots[slot_idx] = texture_slot_script.new()
 	terrain.texture_slots[slot_idx].active = true
@@ -235,22 +226,23 @@ func assign_texture_import_pair(
 
 func build_texture_import_pairs(albedo_dir: String, normal_dir: String) -> Array:
 	var albedo_files := list_texture_import_files(albedo_dir)
+	var normal_files := list_texture_import_files(normal_dir)
 	var normal_by_key := {}
-	if not normal_dir.strip_edges().is_empty():
-		var normal_files := list_texture_import_files(normal_dir)
-		for path in normal_files:
-			var normal_info := texture_import_file_info(path, true)
-			var normal_key := str(normal_info["key"])
-			if not normal_by_key.has(normal_key):
-				normal_by_key[normal_key] = path
+	for path in normal_files:
+		var normal_info := texture_import_file_info(path, true)
+		var normal_key := str(normal_info["key"])
+		if not normal_by_key.has(normal_key):
+			normal_by_key[normal_key] = path
 	var pairs: Array = []
 	for albedo_path in albedo_files:
 		var albedo_info := texture_import_file_info(albedo_path, false)
 		var key := str(albedo_info["key"])
+		if not normal_by_key.has(key):
+			continue
 		pairs.append({
 			"key": key,
 			"albedo": albedo_path,
-			"normal": str(normal_by_key.get(key, "")),
+			"normal": normal_by_key[key],
 			"slot_idx": int(albedo_info["slot_idx"]),
 			"display_name": str(albedo_info["display_name"]),
 		})
@@ -373,52 +365,6 @@ func next_texture_import_slot(start_slot: int, occupied_slots: Dictionary) -> in
 			continue
 		return slot_idx
 	return -1
-
-
-func purge_unused_textures_from_terrain(terrain, save_resource_if_external: Callable) -> Dictionary:
-	if terrain == null:
-		return {"ok": false, "error": "[MST] No terrain selected for texture cleanup."}
-	var texture_library = terrain.get("texture_library") if terrain.has_method("get") else null
-	if texture_library == null:
-		return {"ok": false, "error": "[MST] Terrain has no texture library to clean."}
-	if texture_library.has_method("ensure_length"):
-		texture_library.ensure_length()
-
-	var cleared_slots: Array[int] = []
-	for slot_idx in range(max_texture_slots):
-		if slot_idx >= terrain.texture_slots.size():
-			break
-		var slot = terrain.texture_slots[slot_idx]
-		var slot_active := false
-		if slot != null and slot.get("active") != null:
-			slot_active = bool(slot.get("active"))
-		var slot_has_albedo := slot != null and slot.texture != null
-		var slot_has_grass := slot != null and slot.grass_texture != null
-		var slot_is_used := slot_idx == 0 or slot_active or slot_has_albedo or slot_has_grass
-		if slot_is_used:
-			continue
-
-		var cleared_any := false
-		if slot_idx < texture_library.albedo_textures.size() and texture_library.albedo_textures[slot_idx] != null:
-			texture_library.albedo_textures[slot_idx] = null
-			cleared_any = true
-		if slot_idx < texture_library.normal_textures.size() and texture_library.normal_textures[slot_idx] != null:
-			texture_library.normal_textures[slot_idx] = null
-			cleared_any = true
-		if slot_idx < texture_library.grass_textures.size() and texture_library.grass_textures[slot_idx] != null:
-			texture_library.grass_textures[slot_idx] = null
-			cleared_any = true
-		if cleared_any:
-			cleared_slots.append(slot_idx)
-
-	if save_resource_if_external.is_valid():
-		save_resource_if_external.call(texture_library)
-
-	return {
-		"ok": true,
-		"cleared_count": cleared_slots.size(),
-		"cleared_slots": cleared_slots,
-	}
 
 
 func _reset_terrain_texture_state(terrain, texture_library) -> void:

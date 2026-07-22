@@ -85,10 +85,7 @@ uniform sampler2D global_noise_texture : hint_default_white, repeat_enable, filt
 
 // Palette color selection always uses the global-noise texture (internally remapped).
 
-// Used to keep terrain global-noise scroll aligned with grass wind.
-uniform vec2 wind_direction = vec2(1.0, 1.0);
-uniform float wind_speed = 0.14;
-group_uniforms;
+#include "mst_global_wind.gdshaderinc"
 
 group_uniforms CellShading;
 uniform bool use_cell_shading = true;

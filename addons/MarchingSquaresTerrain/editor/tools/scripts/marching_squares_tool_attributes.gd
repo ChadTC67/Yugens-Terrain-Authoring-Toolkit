@@ -29,11 +29,17 @@ var terrain_settings_data : Dictionary = {
 	"blend_sharpness": "EditorSpinSlider",
 	"noise_hmap": "EditorResourcePicker",
 	"default_wall_texture": "OptionButton",
+	"collision_thickness": "EditorSpinSlider",
+	"nav_agent_radius": "EditorSpinSlider",
+	"nav_max_slope": "EditorSpinSlider",
+	"nav_max_step_height": "EditorSpinSlider",
+	"nav_min_region_size": "EditorSpinSlider",
 	"extra_collision_layer": "OptionButton",
 	# Grass settings
 	"animation_fps": "SpinBox",
 	"grass_subdivisions": "SpinBox",
 	"grass_size": "Vector2",
+	"grass_random_scale": "EditorSpinSlider",
 	"use_flat_normals": "CheckBox",
 	# Special texture settings
 	"use_ridge_texture": "CheckBox",
@@ -42,13 +48,25 @@ var terrain_settings_data : Dictionary = {
 	"ledge_threshold": "EditorSpinSlider",
 	"prefab_set": "EditorResourcePicker",
 	"use_cell_shading": "CheckBox",
+	"wind_direction_degrees": "EditorSpinSlider",
+	"wind_speed": "EditorSpinSlider",
+	"wind_strength": "EditorSpinSlider",
+	"wind_scale": "EditorSpinSlider",
+	"wind_gust_strength": "EditorSpinSlider",
+	"wind_gust_speed": "EditorSpinSlider",
+	"wind_mode": "OptionButton",
 }
 
 const TERRAIN_SETTINGS_CHUNK_TAB := [
 	"dimensions",
 	"cell_size",
-	"extra_collision_layer",
 	"prefab_set",
+	"extra_collision_layer",
+	"collision_thickness",
+	"nav_agent_radius",
+	"nav_max_slope",
+	"nav_max_step_height",
+	"nav_min_region_size",
 ]
 
 const TERRAIN_SETTINGS_VERTEX_PAINTER_TAB := [
@@ -65,12 +83,34 @@ const TERRAIN_SETTINGS_ENVIRONMENT_TAB := [
 	"animation_fps",
 	"grass_subdivisions",
 	"grass_size",
+	"grass_random_scale",
 	"use_flat_normals",
 	"use_cell_shading",
 ]
 
+const TERRAIN_SETTINGS_WIND_TAB := [
+	"wind_direction_degrees",
+	"wind_speed",
+	"wind_strength",
+	"wind_scale",
+	"wind_gust_strength",
+	"wind_gust_speed",
+	"wind_mode",
+]
+
 const TERRAIN_SETTINGS_LABEL_OVERRIDES := {
 	"blend_sharpness": "Blend Smoothness",
+	"collision_thickness": "Collision Thickness",
+	"nav_agent_radius": "Agent Radius",
+	"nav_max_slope": "Max Slope",
+	"nav_max_step_height": "Max Step Height",
+	"nav_min_region_size": "Min Region Size",
+	"wind_direction_degrees": "Wind Direction",
+	"wind_gust_strength": "Gust Strength",
+	"wind_gust_speed": "Gust Speed",
+	"wind_scale": "Wind Scale",
+	"wind_mode": "Wind Mode",
+	"grass_random_scale": "Grass Random Scale",
 }
 
 const TERRAIN_TAB_VISIBLE_HEIGHT := 132
@@ -196,6 +236,19 @@ func _get_vertex_paint_material_label(slot_idx: int, terrain_names: Array) -> St
 	if slot_idx >= 0 and slot_idx < terrain_names.size():
 		return str(terrain_names[slot_idx])
 	return "Texture " + str(slot_idx + 1)
+
+var plugin : MarchingSquaresTerrainPlugin
+var attribute_list : MarchingSquaresToolAttributesList
+var settings : Dictionary = {}
+
+var last_setting_type : SettingType = SettingType.ERROR
+var selected_chunk : MarchingSquaresTerrainChunk
+var current_available_chunks : Array[MarchingSquaresTerrainChunk] = []
+var _terrain_settings_selected_tab: int = 0
+var _terrain_settings_scroll_positions: Dictionary = {}
+var _wind_setting_rows: Dictionary = {}
+
+var hbox_container
 
 
 func _ready() -> void:
@@ -342,8 +395,10 @@ func add_setting(p_params: Dictionary) -> void:
 			hbox_container.add_child(cont, true)
 		SettingType.SLIDER:
 			var range_data := p_params.get("range", Vector3(1.0, 50.0, 0.5))
-			var cell_scale_factor := clamp(((plugin.current_terrain_node.cell_size.x + plugin.current_terrain_node.cell_size.y) / 4.0), 0.3, 1.0)
-			var dimensions_scale_factor := clamp((((plugin.current_terrain_node.dimensions.x / 33) + (plugin.current_terrain_node.dimensions.z / 33)) / 2.0), 0.5, 2.0)
+			var setting_cell_size: Vector2 = plugin.current_terrain_node.get("cell_size")
+			var setting_dimensions: Vector3i = plugin.current_terrain_node.get("dimensions")
+			var cell_scale_factor := clamp(((setting_cell_size.x + setting_cell_size.y) / 4.0), 0.3, 1.0)
+			var dimensions_scale_factor := clamp((((setting_dimensions.x / 33) + (setting_dimensions.z / 33)) / 2.0), 0.5, 2.0)
 			var scale_factor : float = dimensions_scale_factor * cell_scale_factor
 			var default_value := p_params.get("default", 10.0) # Fallback base value
 			if setting_name == "size":
@@ -573,9 +628,10 @@ func add_setting(p_params: Dictionary) -> void:
 			var terrain_children : Array = plugin.current_terrain_node.get_children()
 			var chunk_button := OptionButton.new()
 			for child in terrain_children:
-				if child is MarchingSquaresTerrainChunk:
-					chunk_button.add_item("Chunk " + str(child.chunk_coords))
-					current_available_chunks.append(child)
+				var terrain_chunk := child as MarchingSquaresTerrainChunk
+				if terrain_chunk != null:
+					chunk_button.add_item("Chunk " + str(terrain_chunk.chunk_coords))
+					current_available_chunks.append(terrain_chunk)
 			if not current_available_chunks.is_empty():
 				var preferred_chunk: MarchingSquaresTerrainChunk = plugin.selected_chunk
 				if preferred_chunk == null and plugin.current_terrain_node.chunks.has(plugin.current_hovered_chunk):
@@ -612,7 +668,31 @@ func add_setting(p_params: Dictionary) -> void:
 			mult_apply_button.set_custom_minimum_size(Vector2(65, 30))
 			mult_apply_button.pressed.connect(_apply_mode_to_all_chunks)
 			mult_apply_button.text = "Apply mode to all chunks"
-			
+
+			var nav_paint_button := Button.new()
+			nav_paint_button.text = "Paint"
+			nav_paint_button.toggle_mode = true
+			nav_paint_button.button_pressed = plugin.navmesh_paint_mode == MarchingSquaresTerrainPlugin.NavMeshPaintMode.PAINT
+			var nav_erase_button := Button.new()
+			nav_erase_button.text = "Erase"
+			nav_erase_button.toggle_mode = true
+			nav_erase_button.button_pressed = plugin.navmesh_paint_mode == MarchingSquaresTerrainPlugin.NavMeshPaintMode.ERASE
+			nav_paint_button.pressed.connect(func():
+				plugin.set_navmesh_paint_mode(MarchingSquaresTerrainPlugin.NavMeshPaintMode.PAINT if nav_paint_button.button_pressed else MarchingSquaresTerrainPlugin.NavMeshPaintMode.NONE)
+				nav_erase_button.button_pressed = false
+			)
+			nav_erase_button.pressed.connect(func():
+				plugin.set_navmesh_paint_mode(MarchingSquaresTerrainPlugin.NavMeshPaintMode.ERASE if nav_erase_button.button_pressed else MarchingSquaresTerrainPlugin.NavMeshPaintMode.NONE)
+				nav_paint_button.button_pressed = false
+			)
+			var bake_navmesh_button := Button.new()
+			bake_navmesh_button.text = "Bake NavMesh"
+			bake_navmesh_button.pressed.connect(func():
+				if plugin.current_terrain_node != null:
+					plugin.current_terrain_node.bake_navmesh_from_tool()
+					plugin.set_navmesh_paint_mode(MarchingSquaresTerrainPlugin.NavMeshPaintMode.NONE)
+			)
+
 			cont = CenterContainer.new()
 			cont.set_custom_minimum_size(Vector2(65, 35))
 			cont.add_child(chunk_button, true)
@@ -642,6 +722,14 @@ func add_setting(p_params: Dictionary) -> void:
 			cont.add_theme_constant_override("margin_bottom", 3)
 			cont.add_child(mult_apply_button, true)
 			hbox_container.add_child(cont, true)
+			var nav_separator := VSeparator.new()
+			hbox_container.add_child(nav_separator, true)
+			for nav_button in [bake_navmesh_button, nav_paint_button, nav_erase_button]:
+				var nav_cont := MarginContainer.new()
+				nav_cont.set_custom_minimum_size(Vector2(75, 35))
+				nav_cont.add_theme_constant_override("margin_bottom", 3)
+				nav_cont.add_child(nav_button, true)
+				hbox_container.add_child(nav_cont, true)
 		SettingType.TERRAIN:
 			hbox_container.add_child(_create_terrain_settings_tabs(), true)
 		SettingType.HEIGHTMAP:
@@ -1037,17 +1125,141 @@ func _create_terrain_settings_tabs() -> Control:
 	
 	tabs.add_child(_create_environment_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Environment")
-	
-	tabs.add_child(_create_empty_tab("Wind"))
+
+	tabs.add_child(_create_wind_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Wind")
-	
-	tabs.add_child(_create_empty_tab("Post-Processing"))
+
+	tabs.add_child(_create_post_processing_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Post-Processing")
 	
 	tabs.current_tab = clampi(_terrain_settings_selected_tab, 0, max(tabs.get_tab_count() - 1, 0))
 	tabs.tab_changed.connect(func(tab_idx: int): _terrain_settings_selected_tab = tab_idx)
 	
 	return tabs
+
+
+func _create_post_processing_tab() -> Control:
+	var page := VBoxContainer.new()
+	page.name = "PostProcessing"
+	page.add_theme_constant_override("separation", 8)
+	page.add_child(_create_tab_scroll(page.name, _create_post_processing_content()), true)
+	return page
+
+
+func _create_post_processing_content() -> Control:
+	var wrapper := HBoxContainer.new()
+	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wrapper.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	wrapper.add_theme_constant_override("separation", 18)
+	wrapper.add_child(_create_post_process_column("Surface Effects", "surface_effects"), true)
+	wrapper.add_child(_create_post_process_column("Overlay Effects", "overlay_effects"), true)
+	return wrapper
+
+
+func _create_post_process_column(title: String, array_name: String) -> Control:
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 8)
+	column.set_custom_minimum_size(Vector2(285, 0))
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var label := Label.new()
+	label.text = title
+	column.add_child(label, true)
+	var terrain = plugin.current_terrain_node if plugin != null else null
+	var count := terrain.get_post_process_slot_count(array_name) if terrain != null else 1
+	for slot_idx in range(count):
+		column.add_child(_create_post_process_effect_row(array_name, slot_idx), true)
+	var add_button := Button.new()
+	add_button.text = "+ Add Effect"
+	add_button.disabled = count >= 5
+	add_button.pressed.connect(func():
+		if terrain != null:
+			terrain.add_post_process_effect_slot(array_name)
+			show_tool_attributes(plugin.active_tool)
+	)
+	column.add_child(add_button, true)
+	return column
+
+
+func _create_post_process_effect_row(array_name: String, slot_idx: int) -> Control:
+	var terrain = plugin.current_terrain_node if plugin != null else null
+	var effect := terrain.ensure_post_process_effect(slot_idx, array_name) if terrain != null else null
+	var panel := PanelContainer.new()
+	var body := VBoxContainer.new()
+	panel.add_child(body)
+	var header := HBoxContainer.new()
+	body.add_child(header, true)
+	var slot_label := Label.new()
+	slot_label.text = "Effect " + str(slot_idx + 1)
+	header.add_child(slot_label, true)
+	var enabled := CheckBox.new()
+	enabled.text = "On"
+	enabled.button_pressed = effect.enabled if effect != null else false
+	header.add_child(enabled, true)
+	var target := OptionButton.new()
+	target.add_item("Terrain")
+	target.add_item("Grass")
+	target.add_item("Both")
+	target.selected = int(effect.target) if effect != null else 2
+	header.add_child(target, true)
+	var clear := Button.new()
+	clear.text = "Clear" if slot_idx == 0 else "Delete"
+	header.add_child(clear, true)
+	var shader_row := HBoxContainer.new()
+	var shader_label := Label.new()
+	shader_label.text = "Shader:"
+	shader_row.add_child(shader_label, true)
+	var picker := EditorResourcePicker.new()
+	picker.set_base_type("Shader")
+	picker.edited_resource = effect.shader if effect != null else null
+	picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	shader_row.add_child(picker, true)
+	body.add_child(shader_row, true)
+	var material_row := HBoxContainer.new()
+	var material_label := Label.new()
+	material_label.text = "Material Override:"
+	material_row.add_child(material_label, true)
+	var material_picker := EditorResourcePicker.new()
+	material_picker.set_base_type("Material")
+	material_picker.edited_resource = effect.material_override if effect != null else null
+	material_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	material_row.add_child(material_picker, true)
+	body.add_child(material_row, true)
+	enabled.toggled.connect(func(value: bool):
+		var current = terrain.ensure_post_process_effect(slot_idx, array_name)
+		current.enabled = value
+		terrain._rebuild_post_process_effects()
+	)
+	target.item_selected.connect(func(value: int):
+		var current = terrain.ensure_post_process_effect(slot_idx, array_name)
+		current.target = value
+		terrain._rebuild_post_process_effects()
+	)
+	picker.resource_changed.connect(func(resource: Resource):
+		var current = terrain.ensure_post_process_effect(slot_idx, array_name)
+		current.shader = resource as Shader
+		terrain._rebuild_post_process_effects()
+	)
+	picker.resource_selected.connect(func(resource: Resource, inspect: bool):
+		if inspect and resource != null:
+			EditorInterface.inspect_object(resource)
+	)
+	material_picker.resource_changed.connect(func(resource: Resource):
+		var current = terrain.ensure_post_process_effect(slot_idx, array_name)
+		current.material_override = resource as Material
+		terrain._rebuild_post_process_effects()
+	)
+	material_picker.resource_selected.connect(func(resource: Resource, inspect: bool):
+		if inspect and resource != null:
+			EditorInterface.inspect_object(resource)
+	)
+	clear.pressed.connect(func():
+		if slot_idx == 0:
+			terrain.clear_post_process_effect(slot_idx, array_name)
+		else:
+			terrain.delete_post_process_effect_slot(slot_idx, array_name)
+		show_tool_attributes(plugin.active_tool)
+	)
+	return panel
 
 
 func _create_chunk_tab() -> Control:
@@ -1072,6 +1284,25 @@ func _create_environment_tab() -> Control:
 	page.add_theme_constant_override("separation", 8)
 	page.add_child(_create_tab_scroll(page.name, _create_terrain_settings_list(TERRAIN_SETTINGS_ENVIRONMENT_TAB)), true)
 	return page
+
+
+func _create_wind_tab() -> Control:
+	var page := VBoxContainer.new()
+	page.name = "Wind"
+	page.add_theme_constant_override("separation", 8)
+	_wind_setting_rows.clear()
+	page.add_child(_create_tab_scroll(page.name, _create_terrain_settings_list(TERRAIN_SETTINGS_WIND_TAB)), true)
+	call_deferred("_update_wind_setting_visibility")
+	return page
+
+
+func _update_wind_setting_visibility() -> void:
+	var terrain = plugin.current_terrain_node if plugin != null else null
+	var mode := int(terrain.get("wind_mode")) if terrain != null else 0
+	var show_gust := mode == 1
+	for setting in ["wind_gust_speed", "wind_gust_strength"]:
+		if _wind_setting_rows.has(setting) and is_instance_valid(_wind_setting_rows[setting]):
+			_wind_setting_rows[setting].visible = show_gust
 
 
 func _create_empty_tab(tab_name: String) -> Control:
@@ -1147,21 +1378,23 @@ func _create_terrain_settings_list(setting_names: Array) -> Control:
 	var left_spacer := Control.new()
 	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wrapper.add_child(left_spacer, true)
-	
-	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 6)
-	list.set_custom_minimum_size(Vector2(520, 0))
-	list.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	list.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	
+
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 18)
+	grid.add_theme_constant_override("v_separation", 6)
+	grid.set_custom_minimum_size(Vector2(1060, 0))
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	grid.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+
 	for setting_name_variant in setting_names:
 		var setting_name := str(setting_name_variant)
 		if not terrain_settings_data.has(setting_name):
 			continue
-		list.add_child(_create_terrain_setting_row(setting_name), true)
-	
-	wrapper.add_child(list, true)
-	
+		grid.add_child(_create_terrain_setting_row(setting_name), true)
+
+	wrapper.add_child(grid, true)
+
 	var right_spacer := Control.new()
 	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wrapper.add_child(right_spacer, true)
@@ -1216,11 +1449,32 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			var spin_slider := EditorSpinSlider.new()
 			spin_slider.set_flat(true)
 			spin_slider.set_min(0.0)
-			if setting == "wall_threshold":
+			if setting == "collision_thickness":
+				spin_slider.set_max(8.0)
+				spin_slider.set_step(0.05)
+			elif setting == "nav_agent_radius" or setting == "nav_max_step_height":
+				spin_slider.set_max(8.0)
+				spin_slider.set_step(0.05)
+			elif setting == "nav_max_slope":
+				spin_slider.set_max(89.0)
+				spin_slider.set_step(0.5)
+			elif setting == "nav_min_region_size":
+				spin_slider.set_max(256.0)
+				spin_slider.set_step(0.25)
+			elif setting == "wind_direction_degrees":
+				spin_slider.set_max(360.0)
+			elif setting == "wind_speed" or setting == "wind_gust_speed":
+				spin_slider.set_max(5.0)
+			elif setting == "wind_strength" or setting == "wind_gust_strength":
+				spin_slider.set_max(2.0)
+			elif setting == "wind_scale":
+				spin_slider.set_max(4.0)
+			elif setting == "wall_threshold":
 				spin_slider.set_max(0.5)
 			else:
 				spin_slider.set_max(1.0)
-			spin_slider.set_step(0.01)
+			if setting not in ["collision_thickness", "nav_agent_radius", "nav_max_slope", "nav_max_step_height", "nav_min_region_size"]:
+				spin_slider.set_step(0.01)
 			spin_slider.set_value(s_value)
 			spin_slider.value_changed.connect(func(value): _on_terrain_setting_changed(setting, value))
 			spin_slider.set_custom_minimum_size(Vector2(120, 35))
@@ -1279,6 +1533,10 @@ func _create_terrain_setting_row(setting: String) -> Control:
 					option_button.set_item_metadata(option_button.item_count - 1, slot_idx)
 			elif setting == "blend_mode":
 				option_button.add_item("Smoothed")
+			elif setting == "wind_mode":
+				option_button.add_item("Smooth")
+				option_button.add_item("Gusty")
+				option_button.add_item("Turbulent")
 			elif setting == "extra_collision_layer":
 				for i in range(24):
 					option_button.add_item(str(i + 9))
@@ -1295,6 +1553,8 @@ func _create_terrain_setting_row(setting: String) -> Control:
 				option_button.selected = selected_idx
 			elif setting == "blend_mode":
 				option_button.selected = 0
+			elif setting == "wind_mode":
+				option_button.selected = clampi(int(plugin.current_terrain_node.get(setting)), 0, 2)
 			else:
 				option_button.selected = plugin.current_terrain_node.get(setting)
 			
@@ -1346,6 +1606,8 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			ts_cont = Control.new()
 	
 	hbox.add_child(ts_cont, true)
+	if setting in ["wind_gust_speed", "wind_gust_strength"]:
+		_wind_setting_rows[setting] = hbox
 	return hbox
 
 
@@ -1440,6 +1702,8 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 
 func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 	emit_signal("terrain_setting_changed", p_setting_name, p_value)
+	if p_setting_name == "wind_mode":
+		call_deferred("_update_wind_setting_visibility")
 
 
 func _on_chunk_selected(option_button: OptionButton, grass_mode_button: OptionButton, p_chunk: String) -> void:
@@ -1473,9 +1737,10 @@ func _apply_mode_to_all_chunks() -> void:
 	if selected_chunk == null:
 		return
 	for child in plugin.current_terrain_node.get_children():
-		if child is MarchingSquaresTerrainChunk:
-			_change_chunk_mode(child, int(selected_chunk.merge_mode))
-			_change_chunk_grass_mode(child, int(selected_chunk.grass_mode))
+		var terrain_chunk := child as MarchingSquaresTerrainChunk
+		if terrain_chunk != null:
+			_change_chunk_mode(terrain_chunk, int(selected_chunk.merge_mode))
+			_change_chunk_grass_mode(terrain_chunk, int(selected_chunk.grass_mode))
 
 
 func _on_populator_selected(p_populator: String) -> void:

@@ -4,7 +4,16 @@ class_name MarchingSquaresTerrain
 
 const MSTVertexColorHelper := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_vertex_color_helper.gd")
 const MarchingSquaresTerrainHelpers := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_helpers.gd")
+const MSTMaterialControllerScript := preload("res://addons/MarchingSquaresTerrain/algorithm/controllers/mst_material_controller.gd")
+const MSTCollisionControllerScript := preload("res://addons/MarchingSquaresTerrain/algorithm/controllers/mst_collision_controller.gd")
+const MSTNavMeshControllerScript := preload("res://addons/MarchingSquaresTerrain/algorithm/controllers/mst_navmesh_controller.gd")
+const MSTPostProcessControllerScript := preload("res://addons/MarchingSquaresTerrain/algorithm/controllers/mst_post_process_controller.gd")
+const MSTNavMeshScript := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_navmesh.gd")
 const DEFAULT_TEXTURE_PRESET_PATH := "res://addons/MarchingSquaresTerrain/resources/empty_project.tres"
+var _material_controller := MSTMaterialControllerScript.new(self)
+var _collision_controller := MSTCollisionControllerScript.new(self)
+var _nav_controller := MSTNavMeshControllerScript.new(self)
+var _post_process_controller := MSTPostProcessControllerScript.new(self)
 
 # Uses global class_name MSTDataHandler (static utility).
 
@@ -19,6 +28,10 @@ enum StorageMode {
 	## This is overkill for most games.
 	## (slower load, smallest files).
 	RUNTIME,
+}
+
+enum CollisionMode {
+	SIMPLIFIED_PROXY,
 }
 
 @export_category("Storage Options")
@@ -64,9 +77,21 @@ var _bake_collision : bool = true
 			chunk.mark_dirty()
 
 
+@export_storage var collision_mode: CollisionMode = CollisionMode.SIMPLIFIED_PROXY
+
+
 ## The folder where this terrain's data is saved.
 ## If left empty, it automatically fills with a folder name relative to your scene file.
 ## Note: Manually setting a path locks the save location even if you rename the terrain node later.
+var _collision_thickness: float = 0.0
+@export_range(0.0, 8.0, 0.05) var collision_thickness: float:
+	get:
+		return _collision_thickness
+	set(value):
+		_collision_thickness = clampf(float(value), 0.0, 8.0)
+		_schedule_collision_refresh()
+
+
 var _data_directory : String = ""
 @export_dir var data_directory : String = "":
 	get():
@@ -313,6 +338,67 @@ var flat_normals : bool = false:
 		_sync_global_noise_to_grass()
 
 
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wind_noise_texture: Texture2D = EngineWrapper.load_resource("uid://dk1t5hy2tiil7") as Texture2D:
+	set(value):
+		wind_noise_texture = value
+		_sync_wind_state()
+
+var _is_syncing_wind_state := false
+
+@export_custom(PROPERTY_HINT_RANGE, "0.0, 360.0, 0.1", PROPERTY_USAGE_STORAGE) var wind_direction_degrees: float = 45.0:
+	set(value):
+		wind_direction_degrees = wrapf(float(value), 0.0, 360.0)
+		if _is_syncing_wind_state:
+			return
+		_is_syncing_wind_state = true
+		wind_direction = _material_controller.direction_vector_from_degrees(wind_direction_degrees)
+		_is_syncing_wind_state = false
+		_sync_wind_state()
+
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var wind_direction: Vector2 = Vector2(0.70710677, 0.70710677):
+	set(value):
+		var dir := value
+		if dir.length_squared() <= 0.000001:
+			dir = _material_controller.direction_vector_from_degrees(wind_direction_degrees)
+		wind_direction = dir.normalized()
+		if _is_syncing_wind_state:
+			return
+		_is_syncing_wind_state = true
+		wind_direction_degrees = _material_controller.direction_degrees_from_vector(wind_direction)
+		_is_syncing_wind_state = false
+		_sync_wind_state()
+
+@export_custom(PROPERTY_HINT_RANGE, "0.0, 5.0, 0.01", PROPERTY_USAGE_STORAGE) var wind_speed: float = 0.14:
+	set(value):
+		wind_speed = clampf(float(value), 0.0, 5.0)
+		_sync_wind_state()
+
+@export_custom(PROPERTY_HINT_RANGE, "0.0, 2.0, 0.01", PROPERTY_USAGE_STORAGE) var wind_strength: float = 1.0:
+	set(value):
+		wind_strength = clampf(float(value), 0.0, 2.0)
+		_sync_wind_state()
+
+@export_custom(PROPERTY_HINT_RANGE, "0.001, 4.0, 0.001", PROPERTY_USAGE_STORAGE) var wind_scale: float = 1.0:
+	set(value):
+		wind_scale = clampf(float(value), 0.001, 4.0)
+		_sync_wind_state()
+
+@export_custom(PROPERTY_HINT_RANGE, "0.0, 2.0, 0.01", PROPERTY_USAGE_STORAGE) var wind_gust_strength: float = 0.35:
+	set(value):
+		wind_gust_strength = clampf(float(value), 0.0, 2.0)
+		_sync_wind_state()
+
+@export_custom(PROPERTY_HINT_RANGE, "0.0, 5.0, 0.01", PROPERTY_USAGE_STORAGE) var wind_gust_speed: float = 0.35:
+	set(value):
+		wind_gust_speed = clampf(float(value), 0.0, 5.0)
+		_sync_wind_state()
+
+@export_custom(PROPERTY_HINT_ENUM, "Smooth,Gusty,Turbulent", PROPERTY_USAGE_STORAGE) var wind_mode: int = 0:
+	set(value):
+		wind_mode = clampi(int(value), 0, 2)
+		_sync_wind_state()
+
+
 ## Used to generate smooth initial heights for more natural-looking terrain.
 ## If null, initial terrain will be flat.
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var noise_hmap : Noise
@@ -321,7 +407,9 @@ var flat_normals : bool = false:
 @export_custom(PROPERTY_HINT_RANGE, "0, 30", PROPERTY_USAGE_STORAGE) var animation_fps : int = 0: # Also applies to flowers from the FlowerPlanter
 	set(value):
 		animation_fps = clamp(value, 0, 30)
-		var grass_mat := grass_mesh.material as ShaderMaterial
+		var grass_mat: ShaderMaterial = null
+		if grass_mesh != null:
+			grass_mat = grass_mesh.material as ShaderMaterial
 		if grass_mat != null:
 			grass_mat.set_shader_parameter("fps", animation_fps)
 			grass_mat.set_shader_parameter("animate_active", true)
@@ -329,6 +417,12 @@ var flat_normals : bool = false:
 				if child is MarchingSquaresFlowerPlanter and child.multimesh:
 					var flower_mat := child.multimesh.mesh.surface_get_material(0) as ShaderMaterial
 					flower_mat.set_shader_parameter("fps", clamp(value, 0, 30))
+@export_custom(PROPERTY_HINT_RANGE, "0.0, 1.0, 0.01", PROPERTY_USAGE_STORAGE) var grass_random_scale: float = 0.0:
+	set(value):
+		grass_random_scale = clampf(float(value), 0.0, 1.0)
+		if not _grass_random_scale_apply_queued:
+			_grass_random_scale_apply_queued = true
+			call_deferred("_apply_grass_random_scale")
 @export_custom(PROPERTY_HINT_RANGE, "0, 4", PROPERTY_USAGE_STORAGE) var grass_subdivisions := 3:
 	set(value):
 		grass_subdivisions = value
@@ -793,6 +887,222 @@ var grass_mesh : QuadMesh = null
 var is_batch_updating : bool = false
 
 var chunks : Dictionary = {}
+var collision_triangle_count_debug: int = 0
+var _grass_random_scale_apply_queued := false
+var navmesh_painting_enabled: bool = false
+const POST_PROCESS_SLOT_COUNT := 5
+@export_storage var surface_effects: Array[Resource] = []
+@export_storage var overlay_effects: Array[Resource] = []
+@export_storage var surface_effect_slot_count: int = 1
+@export_storage var overlay_effect_slot_count: int = 1
+enum NavBakeMode { WALKABLE_SURFACE_ONLY, WALKABLE_REGION_CLEANUP, WALKABLE_REGION_CLEANUP_AGENT_CLEARANCE }
+@export var nav_bake_mode: NavBakeMode = NavBakeMode.WALKABLE_REGION_CLEANUP_AGENT_CLEARANCE
+@export_range(0.0, 8.0, 0.05) var nav_agent_radius: float = 1.0
+@export_range(0.0, 89.0, 0.5) var nav_max_slope: float = 45.0
+@export_range(0.0, 8.0, 0.05) var nav_max_step_height: float = 0.5
+@export_range(0.0, 256.0, 0.25) var nav_min_region_size: float = 2.0
+var navmesh_needs_bake: bool:
+	get:
+		return _nav_controller.needs_bake
+var navmesh_preview_revision: int:
+	get:
+		return _nav_controller.preview_revision
+
+
+func get_post_process_effects(array_name: String = "surface_effects") -> Array:
+	var effects: Array = get(array_name)
+	while effects.size() < POST_PROCESS_SLOT_COUNT:
+		effects.append(null)
+	return effects
+
+
+func get_post_process_slot_count(array_name: String = "surface_effects") -> int:
+	var count_name := "surface_effect_slot_count" if array_name == "surface_effects" else "overlay_effect_slot_count"
+	return clampi(int(get(count_name)), 1, POST_PROCESS_SLOT_COUNT)
+
+
+func get_post_process_effect(slot_idx: int, array_name: String = "surface_effects") -> Resource:
+	var effects := get_post_process_effects(array_name)
+	return effects[slot_idx] if slot_idx >= 0 and slot_idx < effects.size() else null
+
+
+func ensure_post_process_effect(slot_idx: int, array_name: String = "surface_effects") -> Resource:
+	var effects := get_post_process_effects(array_name)
+	if slot_idx < 0 or slot_idx >= POST_PROCESS_SLOT_COUNT:
+		return null
+	if effects[slot_idx] == null:
+		effects[slot_idx] = preload("res://addons/MarchingSquaresTerrain/resources/marching_squares_post_process_effect.gd").new()
+		set(array_name, effects)
+	_rebuild_post_process_effects()
+	return effects[slot_idx]
+
+
+func add_post_process_effect_slot(array_name: String = "surface_effects") -> int:
+	var count_name := "surface_effect_slot_count" if array_name == "surface_effects" else "overlay_effect_slot_count"
+	var count := mini(get_post_process_slot_count(array_name) + 1, POST_PROCESS_SLOT_COUNT)
+	set(count_name, count)
+	ensure_post_process_effect(count - 1, array_name)
+	return count - 1
+
+
+func clear_post_process_effect(slot_idx: int, array_name: String = "surface_effects") -> void:
+	var effects := get_post_process_effects(array_name)
+	if slot_idx >= 0 and slot_idx < effects.size():
+		effects[slot_idx] = null
+		set(array_name, effects)
+		_rebuild_post_process_effects()
+
+
+func delete_post_process_effect_slot(slot_idx: int, array_name: String = "surface_effects") -> void:
+	clear_post_process_effect(slot_idx, array_name)
+	var count_name := "surface_effect_slot_count" if array_name == "surface_effects" else "overlay_effect_slot_count"
+	set(count_name, maxi(get_post_process_slot_count(array_name) - 1, 1))
+
+
+func _rebuild_post_process_effects(refresh_chunks: bool = true) -> void:
+	_post_process_controller.rebuild(refresh_chunks)
+
+
+func _refresh_chunk_collisions(mark_dirty: bool = false, rebuild_from_source: bool = false) -> void:
+	_collision_controller.refresh_chunks(mark_dirty, rebuild_from_source)
+
+
+func _refresh_collision_stats() -> void:
+	if _collision_controller != null:
+		_collision_controller._refresh_stats()
+
+
+func _queue_chunk_collision_rebuild(chunk_coords: Vector2i, rebuild_from_source: bool = false) -> void:
+	_collision_controller.queue_chunk(chunk_coords, rebuild_from_source)
+
+
+func _schedule_collision_refresh() -> void:
+	_collision_controller.schedule_refresh()
+
+
+func _flush_scheduled_collision_refresh() -> void:
+	_collision_controller.flush_scheduled_refresh()
+
+
+func invalidate_navmesh_preview() -> void:
+	_nav_controller.invalidate_preview()
+
+
+func invalidate_navmesh_chunk(chunk_coords: Vector2i) -> void:
+	_nav_controller.invalidate_chunk(chunk_coords)
+
+
+func invalidate_all_navmesh_chunks() -> void:
+	_nav_controller.invalidate_all()
+
+
+func bake_navmesh_from_tool() -> void:
+	_nav_controller.bake()
+
+
+func clear_baked_navmesh() -> void:
+	_nav_controller.clear_baked()
+
+
+func _clear_nav_debug_mesh() -> void:
+	_nav_controller.clear_debug_mesh()
+
+
+func _clear_nav_source_root() -> void:
+	var source_root := get_node_or_null("TerrainNavSources")
+	if source_root != null:
+		source_root.queue_free()
+
+
+func _get_navmesh_bake_signature() -> String:
+	return "%s|%s|%.4f|%.4f|%.4f|%.4f" % [
+		str(navmesh_painting_enabled),
+		str(nav_bake_mode),
+		nav_agent_radius,
+		nav_max_slope,
+		nav_max_step_height,
+		nav_min_region_size,
+	]
+
+
+func _ensure_nav_chunks_ready_for_bake() -> void:
+	for chunk: MarchingSquaresTerrainChunk in chunks.values():
+		if not is_instance_valid(chunk) or not chunk.cell_geometry.is_empty():
+			continue
+		if not data_directory.is_empty() and MSTDataHandler.metadata_exists(data_directory, chunk.chunk_coords):
+			MSTDataHandler.load_chunk_from_directory(self, chunk.chunk_coords)
+		if chunk.cell_geometry.is_empty():
+			chunk.regenerate_all_cells(false)
+
+
+func _get_or_create_navmesh_region(scene_root: Node) -> NavigationRegion3D:
+	var region := get_node_or_null("TerrainNavMesh") as NavigationRegion3D
+	if region == null:
+		region = MSTNavMeshScript.new()
+		region.name = "TerrainNavMesh"
+		add_child(region)
+		if EngineWrapper.instance.is_editor():
+			region.owner = scene_root
+	elif region.get_script() == null and EngineWrapper.instance.is_editor():
+		region.set_script(MSTNavMeshScript)
+	region.visible = false
+	return region
+
+
+func _configure_navigation_mesh(nav_mesh: NavigationMesh) -> void:
+	nav_mesh.agent_max_slope = nav_max_slope
+	nav_mesh.agent_max_climb = nav_max_step_height
+	nav_mesh.agent_radius = nav_agent_radius if nav_bake_mode == NavBakeMode.WALKABLE_REGION_CLEANUP_AGENT_CLEARANCE else 0.0
+	nav_mesh.region_min_size = nav_min_region_size if nav_bake_mode != NavBakeMode.WALKABLE_SURFACE_ONLY else 0.0
+
+
+func _build_navigation_mesh_from_walkable_faces(nav_mesh: NavigationMesh) -> Dictionary:
+	var vertices := PackedVector3Array()
+	var indices := PackedInt32Array()
+	var lookup := {}
+	var seen_triangles := {}
+	var epsilon := maxf(minf(cell_size.x, cell_size.y) * 0.001, 0.0001)
+	var rebuild_all := _nav_controller.chunk_face_cache.is_empty()
+	for chunk: MarchingSquaresTerrainChunk in chunks.values():
+		if not is_instance_valid(chunk):
+			continue
+		var faces: PackedVector3Array
+		if rebuild_all or _nav_controller.dirty_chunks.has(chunk.chunk_coords) or not _nav_controller.chunk_face_cache.has(chunk.chunk_coords):
+			var permission = chunk.navmesh_permission if navmesh_painting_enabled else null
+			faces = chunk.get_nav_walkable_faces_for_permission(nav_max_slope, permission)
+			_nav_controller.chunk_face_cache[chunk.chunk_coords] = faces
+		else:
+			faces = _nav_controller.chunk_face_cache[chunk.chunk_coords]
+		for index in range(0, faces.size(), 3):
+			if index + 2 >= faces.size():
+				break
+			var a := chunk.global_transform * faces[index]
+			var b := chunk.global_transform * faces[index + 1]
+			var c := chunk.global_transform * faces[index + 2]
+			var triangle_key := _nav_controller.triangle_key(a, b, c, epsilon)
+			if seen_triangles.has(triangle_key):
+				continue
+			seen_triangles[triangle_key] = true
+			var tri := [a, b, c]
+			var tri_indices := PackedInt32Array()
+			for vertex in tri:
+				tri_indices.append(_nav_controller.add_vertex(lookup, vertices, vertex, epsilon))
+			indices.append_array(tri_indices)
+	if vertices.is_empty() or indices.is_empty():
+		return {"polygon_count": 0}
+	if nav_mesh.has_method("set_vertices") and nav_mesh.has_method("add_polygon"):
+		nav_mesh.set_vertices(vertices)
+		for index in range(0, indices.size(), 3):
+			nav_mesh.add_polygon(PackedInt32Array([indices[index], indices[index + 1], indices[index + 2]]))
+	elif nav_mesh.has_method("create_from_mesh"):
+		var source_mesh := ArrayMesh.new()
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = vertices
+		arrays[Mesh.ARRAY_INDEX] = indices
+		source_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		nav_mesh.create_from_mesh(source_mesh)
+	return {"polygon_count": int(indices.size() / 3)}
 
 
 func _sync_global_noise_to_grass() -> void:
@@ -804,13 +1114,44 @@ func _sync_global_noise_to_grass() -> void:
 	grass_mat.set_shader_parameter("global_noise_texture", global_noise_texture)
 	grass_mat.set_shader_parameter("chunk_size", dimensions)
 	grass_mat.set_shader_parameter("cell_size", cell_size)
+	grass_mat.set_shader_parameter("grass_random_scale", grass_random_scale)
+	grass_mat.set_shader_parameter("fps", animation_fps)
+	grass_mat.set_shader_parameter("animate_active", true)
 	grass_mat.set_shader_parameter("vc_floor_tex_array", _runtime_texture_array)
 	grass_mat.set_shader_parameter("use_floor_tex_array", _runtime_texture_array != null)
 	for p in ["global_noise_scale", "global_noise_strength", "global_noise_scroll", "wind_direction", "wind_speed"]:
 		var v := terrain_material.get_shader_parameter(p)
 		if v != null:
 			grass_mat.set_shader_parameter(p, v)
+	_apply_grass_random_scale()
 	_sync_prefab_material_state()
+
+
+func _apply_grass_random_scale() -> void:
+	_grass_random_scale_apply_queued = false
+	var materials: Array[ShaderMaterial] = []
+	if grass_mesh != null and grass_mesh.material is ShaderMaterial:
+		materials.append(grass_mesh.material as ShaderMaterial)
+	for chunk: MarchingSquaresTerrainChunk in chunks.values():
+		if not is_instance_valid(chunk) or chunk.grass_planter == null:
+			continue
+		var multimesh := chunk.grass_planter.multimesh
+		if multimesh == null or not (multimesh.mesh is QuadMesh):
+			continue
+		if multimesh.mesh.material is ShaderMaterial:
+			var material := multimesh.mesh.material as ShaderMaterial
+			if not materials.has(material):
+				materials.append(material)
+	for material: ShaderMaterial in materials:
+		material.set_shader_parameter("global_noise_texture", global_noise_texture)
+		material.set_shader_parameter("global_noise_scale", global_noise_scale)
+		material.set_shader_parameter("grass_random_scale", grass_random_scale)
+		material.set_shader_parameter("fps", animation_fps)
+		material.set_shader_parameter("animate_active", true)
+
+
+func _sync_wind_state(refresh_chunks: bool = true) -> void:
+	_material_controller.sync_wind_state(refresh_chunks)
 
 
 func _sync_prefab_material_state() -> void:
@@ -829,6 +1170,20 @@ func _validate_property(property: Dictionary) -> void:
 	if property.name in ["bake_grass", "bake_collision"]:
 		if storage_mode != StorageMode.BAKED:
 			property.usage = PROPERTY_USAGE_NO_EDITOR
+	if property.name in [
+		"collision_mode",
+		"collision_thickness",
+		"nav_bake_mode",
+		"nav_agent_radius",
+		"nav_max_slope",
+		"nav_max_step_height",
+		"nav_min_region_size",
+		"surface_effects",
+		"overlay_effects",
+		"surface_effect_slot_count",
+		"overlay_effect_slot_count",
+	]:
+		property.usage = PROPERTY_USAGE_NO_EDITOR
 	if property.name in ["enable_runtime_texture_baking", "polygon_texture_resolution", "bake_material_override"]:
 		property.usage = PROPERTY_USAGE_NO_EDITOR
 	if property.name == "blend_noise_enabled":
@@ -851,6 +1206,7 @@ func _init() -> void:
 	grass_mesh = base_grass_mesh.duplicate(true)
 	grass_mesh.material = base_grass_mesh.material.duplicate(true)
 	_sync_global_noise_to_grass()
+	_sync_wind_state(false)
 	print_verbose("Last storage mode: ", _last_storage_mode)
 
 	# Sync shader state for scenes/presets that set flat normals.
@@ -1078,6 +1434,12 @@ func _notification(what: int) -> void:
 		_restore_runtime_texture_arrays_after_scene_save()
 
 
+func _process(_delta: float) -> void:
+	if _collision_controller != null:
+		_collision_controller.process_queue()
+		_collision_controller.process_scheduled_refresh()
+
+
 func _enter_tree() -> void:
 	_deferred_enter_tree.call_deferred()
 
@@ -1123,10 +1485,11 @@ func _repair_chunk_storage() -> void:
 		return
 	chunks.clear()
 	for child in get_children():
-		if child is MarchingSquaresTerrainChunk:
-			chunks[child.chunk_coords] = child
-			child.terrain_system = self
-			child.mark_dirty()
+		var terrain_chunk := child as MarchingSquaresTerrainChunk
+		if terrain_chunk != null:
+			chunks[terrain_chunk.chunk_coords] = terrain_chunk
+			terrain_chunk.terrain_system = self
+			terrain_chunk.mark_dirty()
 	if MSTDataHandler.save_all_chunks(self):
 		_storage_initialized = true
 		EditorInterface.mark_scene_as_unsaved()
@@ -1171,6 +1534,7 @@ func _deferred_enter_tree() -> void:
 	# IMPORTANT: do this BEFORE chunk initialization so runtime texture baking sees correct uniforms.
 	migrate_colors_to_palette()
 	force_batch_update()
+	_rebuild_post_process_effects(false)
 
 	# One-time editor migrations: regenerate meshes so new wall tagging/material selection is present in geometry.
 
@@ -1336,6 +1700,7 @@ func remove_chunk(x: int, z: int, plugin):
 	var chunk_coords := Vector2i(x, z)
 	var chunk : MarchingSquaresTerrainChunk = chunks[chunk_coords]
 	chunks.erase(chunk_coords)  # Use chunk_coords, not chunk object
+	_nav_controller.invalidate_chunk(chunk_coords)
 	chunk.free()
 
 	if plugin.selected_chunk and plugin.selected_chunk.chunk_coords == chunk.chunk_coords:
@@ -1343,8 +1708,9 @@ func remove_chunk(x: int, z: int, plugin):
 		temp_chunk.chunk_coords = Vector2i(99999, 99999)
 		plugin.selected_chunk = temp_chunk
 		for child in get_children():
-			if child is MarchingSquaresTerrainChunk:
-				plugin.selected_chunk = child
+			var terrain_chunk := child as MarchingSquaresTerrainChunk
+			if terrain_chunk != null:
+				plugin.selected_chunk = terrain_chunk
 				break
 	plugin.ui.tool_attributes.show_tool_attributes(plugin.TerrainToolMode.CHUNK_MANAGEMENT)
 	plugin.gizmo_plugin.trigger_redraw(self)
@@ -1373,6 +1739,7 @@ func remove_chunk_from_tree(x: int, z: int, plugin):
 	var chunk_coords := Vector2i(x, z)
 	var chunk : MarchingSquaresTerrainChunk = chunks[chunk_coords]
 	chunks.erase(chunk_coords)  # Use chunk_coords, not chunk object
+	_nav_controller.invalidate_chunk(chunk_coords)
 	chunk._skip_save_on_exit = true  # Prevent mesh save during undo/redo
 	remove_child(chunk)
 	chunk.owner = null
@@ -1382,8 +1749,9 @@ func remove_chunk_from_tree(x: int, z: int, plugin):
 		temp_chunk.chunk_coords = Vector2i(99999, 99999)
 		plugin.selected_chunk = temp_chunk
 		for child in get_children():
-			if child is MarchingSquaresTerrainChunk:
-				plugin.selected_chunk = child
+			var terrain_chunk := child as MarchingSquaresTerrainChunk
+			if terrain_chunk != null:
+				plugin.selected_chunk = terrain_chunk
 				break
 	plugin.ui.tool_attributes.show_tool_attributes(plugin.TerrainToolMode.CHUNK_MANAGEMENT)
 	plugin.gizmo_plugin.trigger_redraw(self)
@@ -1412,6 +1780,7 @@ func add_chunk(coords: Vector2i, chunk: MarchingSquaresTerrainChunk, plugin, reg
 	chunk._skip_save_on_exit = false  # Reset flag when chunk is re-added (undo restores chunk)
 	add_child(chunk)
 	chunks[coords] = chunk
+	_nav_controller.invalidate_chunk(coords)
 
 	# Use position instead of global_position to avoid "is_inside_tree()" errors.
 	# This matters when multiple scenes with MarchingSquaresTerrain are open in editor tabs.
@@ -1424,6 +1793,9 @@ func add_chunk(coords: Vector2i, chunk: MarchingSquaresTerrainChunk, plugin, reg
 
 	EngineWrapper.instance.set_owner_recursive(chunk)
 	chunk.initialize_terrain(regenerate_mesh)
+	# Rebuild all chunk proxies after insertion so flat regions can merge
+	# across the newly completed chunk grid.
+	_schedule_collision_refresh()
 	print_verbose("[MST] Added new chunk to terrain system at ", chunk)
 	if plugin:
 		if not plugin.selected_chunk or plugin.selected_chunk.chunk_coords == Vector2i(99999, 99999):

@@ -10,6 +10,8 @@ var addchunk_material : Material
 var removechunk_material : Material
 var highlightchunk_material : Material
 var brush_material : Material
+var _navmesh_overlay_cache: ArrayMesh
+var _navmesh_overlay_revision: int = -1
 
 var terrain_plugin : MarchingSquaresTerrainPlugin
 
@@ -21,6 +23,7 @@ func _redraw():
 	removechunk_material = get_plugin().get_material("removechunk", self)
 	highlightchunk_material = get_plugin().get_material("highlightchunk", self)
 	brush_material = get_plugin().get_material("brush", self)
+	var navmesh_material := get_plugin().get_material("navmesh_permission", self)
 
 	var terrain_system := get_node_3d()
 	terrain_plugin = MarchingSquaresTerrainPlugin.instance
@@ -34,6 +37,15 @@ func _redraw():
 		return
 	if EditorInterface.get_selection().get_selected_nodes()[0] !=  terrain_system:
 		return
+
+	var nav_paint_mode = terrain_plugin.navmesh_paint_mode
+	if nav_paint_mode != terrain_plugin.NavMeshPaintMode.NONE and bool(terrain_system.get("navmesh_painting_enabled")):
+		var revision := int(terrain_system.get("navmesh_preview_revision"))
+		if _navmesh_overlay_cache == null or revision != _navmesh_overlay_revision:
+			_navmesh_overlay_cache = _build_navmesh_permission_overlay(terrain_system.get("chunks"), terrain_system.get("dimensions"), terrain_system.get("cell_size"))
+			_navmesh_overlay_revision = revision
+		if _navmesh_overlay_cache != null:
+			add_mesh(_navmesh_overlay_cache, navmesh_material, Transform3D.IDENTITY)
 
 	var chunks_var := terrain_system.get("chunks")
 	if not (chunks_var is Dictionary):
@@ -350,6 +362,55 @@ func _redraw():
 				var draw_position = Vector3(draw_x, draw_y, draw_z)
 				var draw_transform = Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
 				add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
+
+
+func _build_navmesh_permission_overlay(chunks: Dictionary, dims: Vector3i, cell_size: Vector2) -> ArrayMesh:
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var indices := PackedInt32Array()
+	var width := maxi(dims.x - 1, 1)
+	var depth := maxi(dims.z - 1, 1)
+	for chunk_coords: Vector2i in chunks.keys():
+		var chunk: MarchingSquaresTerrainChunk = chunks[chunk_coords]
+		if chunk.navmesh_permission.is_empty():
+			continue
+		for index in chunk.navmesh_permission.size():
+			if chunk.navmesh_permission[index] == 0:
+				continue
+			var local_x: int = index % width
+			var local_z: int = int(index / width)
+			if local_x >= width or local_z >= depth:
+				continue
+			var x0 := float(chunk_coords.x * width + local_x) * cell_size.x
+			var z0 := float(chunk_coords.y * depth + local_z) * cell_size.y
+			var x1 := x0 + cell_size.x
+			var z1 := z0 + cell_size.y
+			var base := vertices.size()
+			vertices.append(Vector3(x0, _navmesh_preview_height(chunk, local_x, local_z) + 0.035, z0))
+			vertices.append(Vector3(x1, _navmesh_preview_height(chunk, local_x + 1, local_z) + 0.035, z0))
+			vertices.append(Vector3(x1, _navmesh_preview_height(chunk, local_x + 1, local_z + 1) + 0.035, z1))
+			vertices.append(Vector3(x0, _navmesh_preview_height(chunk, local_x, local_z + 1) + 0.035, z1))
+			for _corner in 4:
+				normals.append(Vector3.UP)
+			indices.append_array(PackedInt32Array([base, base + 1, base + 2, base, base + 2, base + 3]))
+	if vertices.is_empty():
+		return null
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+func _navmesh_preview_height(chunk: MarchingSquaresTerrainChunk, x: int, z: int) -> float:
+	if z < 0 or z >= chunk.height_map.size() or not (chunk.height_map[z] is Array):
+		return 0.0
+	if x < 0 or x >= chunk.height_map[z].size():
+		return 0.0
+	return float(chunk.height_map[z][x])
 
 
 func _create_brush_basis(normal: Vector3, brush_size: float) -> Basis:

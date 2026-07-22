@@ -98,8 +98,8 @@ func _create_texture_import_dialog() -> void:
 	texture_import_albedo_dir_input = cont.get_child(cont.get_child_count() - 1).get_meta("path_input")
 	
 	cont.add_child(_build_texture_import_path_row(
-		"Normal Maps Folder (Optional):",
-		"Select the folder that contains normal textures. Leave this empty to import albedo or diffuse maps only.",
+		"Normal Maps Folder:",
+		"Select the folder that contains normal textures.",
 		func(line_edit: LineEdit): _open_texture_import_folder_dialog(line_edit, "Select Normal Maps Folder")
 	))
 	texture_import_normal_dir_input = cont.get_child(cont.get_child_count() - 1).get_meta("path_input")
@@ -779,18 +779,6 @@ func add_texture_settings() -> void:
 	import_texture_folder_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	import_texture_folder_btn.pressed.connect(_open_texture_import_dialog)
 	vbox.add_child(import_texture_folder_btn, true)
-
-	var purge_unused_textures_btn := Button.new()
-	purge_unused_textures_btn.text = "Delete Unused Textures"
-	purge_unused_textures_btn.tooltip_text = "Clears unused texture references from the active texture library/preset without deleting the original image files."
-	purge_unused_textures_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	purge_unused_textures_btn.add_theme_font_size_override("font_size", 11)
-	purge_unused_textures_btn.custom_minimum_size = Vector2(0, 22)
-	purge_unused_textures_btn.pressed.connect(_purge_unused_texture_library_entries)
-	var purge_unused_textures_center := CenterContainer.new()
-	purge_unused_textures_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	purge_unused_textures_center.add_child(purge_unused_textures_btn)
-	vbox.add_child(purge_unused_textures_center, true)
 	
 	vbox.add_child(HSeparator.new())
 	
@@ -1522,33 +1510,6 @@ func _on_texture_import_confirmed() -> void:
 	if plugin != null:
 		plugin.current_texture_preset = imported_preset
 	EditorInterface.mark_scene_as_unsaved()
-
-
-func _purge_unused_texture_library_entries() -> void:
-	var terrain := plugin.current_terrain_node if plugin != null else null
-	if terrain == null:
-		push_error("[MST] No terrain selected for texture cleanup.")
-		return
-	if not _ensure_terrain_arrays(terrain):
-		return
-	var importer := MarchingSquaresTextureImportHelper.new(
-		MAX_TEXTURE_SLOTS,
-		TEXTURE_PRESET_DIR,
-		_TEXTURE_SLOT_SCRIPT,
-		MSTextureLibraryScript,
-		vp_tex_names
-	)
-	var result := importer.purge_unused_textures_from_terrain(
-		terrain,
-		Callable(self, "_save_resource_if_external")
-	)
-	if not bool(result.get("ok", false)):
-		push_error(str(result.get("error", "[MST] Texture cleanup failed.")))
-		return
-	if terrain.current_texture_preset != null and not terrain.current_texture_preset.resource_path.is_empty():
-		terrain.save_to_preset()
-	EditorInterface.mark_scene_as_unsaved()
-	call_deferred("add_texture_settings")
 
 
 func _bake_texture_arrays_for_terrain(terrain) -> bool:

@@ -125,6 +125,8 @@ enum TerrainToolMode {
 	TERRAIN_SETTINGS = 10,
 }
 
+enum NavMeshPaintMode { NONE, PAINT, ERASE }
+
 var _mode : TerrainToolMode = TerrainToolMode.BRUSH
 var mode : TerrainToolMode:
 	get():
@@ -133,6 +135,23 @@ var mode : TerrainToolMode:
 		_mode = value
 		current_draw_pattern.clear()
 		_update_falloff_visual()
+
+var navmesh_paint_mode: NavMeshPaintMode = NavMeshPaintMode.NONE
+var _navmesh_stroke_undo: Dictionary = {}
+var _navmesh_stroke_do: Dictionary = {}
+var _navmesh_previous_tool_mode: TerrainToolMode = TerrainToolMode.TERRAIN_SETTINGS
+
+
+func set_navmesh_paint_mode(value: NavMeshPaintMode) -> void:
+	if value != NavMeshPaintMode.NONE and navmesh_paint_mode == NavMeshPaintMode.NONE:
+		_navmesh_previous_tool_mode = mode
+		navmesh_paint_mode = value
+		mode = TerrainToolMode.BRUSH
+	elif value == NavMeshPaintMode.NONE and navmesh_paint_mode != NavMeshPaintMode.NONE:
+		navmesh_paint_mode = value
+		mode = _navmesh_previous_tool_mode
+	else:
+		navmesh_paint_mode = value
 #endregion
 
 #region tool attribute vars
@@ -613,7 +632,28 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 			
 			is_chunk_plane_hovered = true
 			current_hovered_chunk = chunk_coords
-		
+		if event is InputEventMouseButton and event.button_index == MouseButton.MOUSE_BUTTON_LEFT and navmesh_paint_mode != NavMeshPaintMode.NONE:
+			if event.is_pressed() and draw_area_hovered:
+				_navmesh_stroke_undo.clear()
+				_navmesh_stroke_do.clear()
+				update_draw_pattern(draw_position)
+				_apply_navmesh_pattern(terrain, current_draw_pattern)
+				is_drawing = true
+			else:
+				is_drawing = false
+				_commit_navmesh_stroke(terrain)
+				current_draw_pattern.clear()
+			gizmo_plugin.trigger_redraw(terrain)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+		if event is InputEventMouseMotion and navmesh_paint_mode != NavMeshPaintMode.NONE and is_drawing and draw_area_hovered:
+			brush_position = draw_position
+			update_draw_pattern(draw_position)
+			_apply_navmesh_pattern(terrain, current_draw_pattern)
+			current_draw_pattern.clear()
+			gizmo_plugin.trigger_redraw(terrain)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+
 		if event is InputEventMouseButton and event.button_index == MouseButton.MOUSE_BUTTON_LEFT:
 			if event.is_pressed() and draw_area_hovered:
 				draw_height_set = false
@@ -705,7 +745,11 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 
 		if draw_area_hovered and event is InputEventMouseMotion:
 			brush_position = draw_position
-			if mode == TerrainToolMode.VERTEX_PAINTING and paint_walls_mode and (is_drawing or is_setting):
+			if navmesh_paint_mode != NavMeshPaintMode.NONE and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+				draw_pattern(terrain)
+				_apply_navmesh_pattern(terrain, current_draw_pattern)
+				current_draw_pattern.clear()
+			elif mode == TerrainToolMode.VERTEX_PAINTING and paint_walls_mode and (is_drawing or is_setting):
 				if _should_sample_wall_paint_stroke(brush_position):
 					_sample_wall_paint_stroke(terrain)
 			elif is_drawing and mode in [TerrainToolMode.SMOOTH]:
@@ -792,7 +836,7 @@ func update_draw_pattern(b_pos: Vector3):
 	for chunk_z in range(bounds.chunk_tl.y, bounds.chunk_br.y + 1):
 		for chunk_x in range(bounds.chunk_tl.x, bounds.chunk_br.x + 1):
 			var cursor_chunk_coords : Vector2i = Vector2i(chunk_x, chunk_z)
-			if not terrain_system.chunks.has(cursor_chunk_coords):
+			if not (terrain_system.get("chunks") as Dictionary).has(cursor_chunk_coords):
 				continue
 
 			var cell_range : Dictionary = BrushPatternCalculator.get_cell_range_for_chunk(cursor_chunk_coords, bounds, terrain_system)
@@ -883,7 +927,7 @@ func rebuild_bridge_line_pattern(end_pos: Vector3) -> void:
 	for chunk_z in range(min_chunk_z, max_chunk_z + 1):
 		for chunk_x in range(min_chunk_x, max_chunk_x + 1):
 			var cursor_chunk_coords := Vector2i(chunk_x, chunk_z)
-			if not terrain_system.chunks.has(cursor_chunk_coords):
+			if not (terrain_system.get("chunks") as Dictionary).has(cursor_chunk_coords):
 				continue
 
 			var chunk_origin_x: float = float(chunk_x) * chunk_span_x
@@ -1054,6 +1098,68 @@ func _update_falloff_visual() -> void:
 		BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", _vp_falloff_mode == VertexPaintFalloffMode.DITHERED)
 	else:
 		BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", falloff)
+
+
+func _ensure_navmesh_permission(chunk: MarchingSquaresTerrainChunk) -> void:
+	var cell_count := maxi((chunk.dimensions.x - 1) * (chunk.dimensions.z - 1), 0)
+	if chunk.navmesh_permission.size() != cell_count:
+		chunk.navmesh_permission.resize(cell_count)
+
+
+func _apply_navmesh_pattern(terrain: MarchingSquaresTerrain, pattern: Dictionary) -> void:
+	if terrain == null:
+		return
+	terrain.navmesh_painting_enabled = true
+	for chunk_coords: Vector2i in pattern.keys():
+		var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(chunk_coords)
+		if chunk == null:
+			continue
+		_ensure_navmesh_permission(chunk)
+		var width := maxi(chunk.dimensions.x - 1, 1)
+		if not _navmesh_stroke_undo.has(chunk_coords):
+			_navmesh_stroke_undo[chunk_coords] = {}
+		if not _navmesh_stroke_do.has(chunk_coords):
+			_navmesh_stroke_do[chunk_coords] = {}
+		for cell_coords: Vector2i in pattern[chunk_coords].keys():
+			var index: int = cell_coords.y * width + cell_coords.x
+			if index < 0 or index >= chunk.navmesh_permission.size():
+				continue
+			if not _navmesh_stroke_undo[chunk_coords].has(index):
+				_navmesh_stroke_undo[chunk_coords][index] = chunk.navmesh_permission[index]
+			var value := 1 if navmesh_paint_mode == NavMeshPaintMode.PAINT else 0
+			chunk.navmesh_permission[index] = value
+			_navmesh_stroke_do[chunk_coords][index] = value
+		chunk.mark_dirty()
+
+
+func _commit_navmesh_stroke(terrain: MarchingSquaresTerrain) -> void:
+	if terrain == null or _navmesh_stroke_do.is_empty():
+		_navmesh_stroke_undo.clear()
+		_navmesh_stroke_do.clear()
+		return
+	var undo_redo := get_undo_redo()
+	undo_redo.create_action("terrain NavMesh paint")
+	undo_redo.add_do_method(self, "apply_navmesh_permission_action", terrain, _navmesh_stroke_do.duplicate(true))
+	undo_redo.add_undo_method(self, "apply_navmesh_permission_action", terrain, _navmesh_stroke_undo.duplicate(true))
+	undo_redo.commit_action()
+	_navmesh_stroke_undo.clear()
+	_navmesh_stroke_do.clear()
+
+
+func apply_navmesh_permission_action(terrain: MarchingSquaresTerrain, states: Dictionary) -> void:
+	if terrain == null:
+		return
+	terrain.navmesh_painting_enabled = true
+	for chunk_coords: Vector2i in states.keys():
+		var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(chunk_coords)
+		if chunk == null:
+			continue
+		_ensure_navmesh_permission(chunk)
+		for index in states[chunk_coords].keys():
+			var cell_index := int(index)
+			if cell_index >= 0 and cell_index < chunk.navmesh_permission.size():
+				chunk.navmesh_permission[cell_index] = int(states[chunk_coords][index])
+		chunk.mark_dirty()
 
 
 func draw_pattern(terrain: MarchingSquaresTerrain):
@@ -1953,8 +2059,9 @@ func get_cell_normal(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -> Vect
 	var h_below := chunk.get_height(Vector2i(cell.x, y0))
 	var h_above := chunk.get_height(Vector2i(cell.x, y1))
 
-	var sx := (h_right - h_left) / (2.0 * current_terrain_node.cell_size.x)
-	var sz := (h_above - h_below) / (2.0 * current_terrain_node.cell_size.y)
+	var terrain_cell_size: Vector2 = current_terrain_node.get("cell_size")
+	var sx := (h_right - h_left) / (2.0 * terrain_cell_size.x)
+	var sz := (h_above - h_below) / (2.0 * terrain_cell_size.y)
 
 	var normal := Vector3(-sx, 1.0, -sz).normalized()
 	return normal

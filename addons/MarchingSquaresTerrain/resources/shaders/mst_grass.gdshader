@@ -58,17 +58,19 @@ group_uniforms;
 group_uniforms Effects.Experimental;
 uniform bool is_merge_round = false;
 uniform float blade_variation : hint_range(0.0, 1.0, 0.01) = 1.0;
+uniform float grass_random_scale : hint_range(0.0, 1.0, 0.01) = 0.0;
 uniform float wall_threshold : hint_range(0.0, 0.5) = 0.0;
 group_uniforms;
 
 group_uniforms Effects.GlobalNoise;
 uniform float global_noise_scale = 0.037;
-uniform vec2 wind_direction = vec2(1.0, 1.0);
-uniform float wind_speed = 0.14;
+uniform float global_noise_strength : hint_range(0.0, 1.0, 0.01) = 1.0;
+uniform float global_noise_scroll = 0.0;
 uniform sampler2D global_noise_texture : hint_default_white, repeat_enable, filter_linear;
 
+#include "mst_global_wind.gdshaderinc"
+
 // Palette color selection always uses the global-noise texture (internally remapped).
-group_uniforms;
 
 group_uniforms CellShading;
 uniform bool use_cell_shading = true;
@@ -359,6 +361,12 @@ void vertex() {
 	float h = fract(sin(float(INSTANCE_ID) * 12.9898) * 43758.5453);
 	float height_mult = mix(0.75, 1.25, h);
 	sloty *= mix(1.0, height_mult, blade_variation);
+	vec2 random_scale_uv = fract(instance_origin.xz * max(global_noise_scale, 0.001));
+	float global_random = texture(global_noise_texture, random_scale_uv).r;
+	float random_range = clamp(grass_random_scale, 0.0, 1.0);
+	float min_random_height = mix(1.0, 0.25, random_range);
+	float max_random_height = mix(1.0, 3.0, random_range);
+	sloty *= mix(min_random_height, max_random_height, global_random);
 
 	vec3 scaled_local = vec3(VERTEX.x * slotx, VERTEX.y * sloty, VERTEX.z * slotz);
 	if (animate_active && scaled_local.y > 0.0) {
@@ -366,18 +374,10 @@ void vertex() {
 		float sway_strength = 0.18;
 		float seed = fract(sin(float(INSTANCE_ID) * 91.137 + slotx * 17.0 + slotz * 7.0) * 43758.5453);
 		if (fps > 0.0) {
-			float stepped_time = floor((TIME + seed) * fps) / fps;
-			float sway = sin(stepped_time * 2.6 + seed * 6.28318) * sway_strength;
-			scaled_local.x += sway * bend_factor;
-		} else {
-			float wind_time = TIME * wind_speed;
-			vec2 wind_uv = fract(
-				instance_origin.xz * max(global_noise_scale, 0.001) +
-				(wind_direction * wind_time) +
-				vec2(seed, seed * 0.73)
-			);
-			float wind_value = texture(global_noise_texture, wind_uv).r * 2.0 - 1.0;
-			scaled_local.x += wind_value * sway_strength * bend_factor;
+			float stepped_time = floor(TIME * fps) / fps;
+			vec2 wind_vec = mst_sample_wind_vector_at_time(instance_origin.xz, seed, stepped_time);
+			scaled_local.x += wind_vec.x * sway_strength * bend_factor;
+			scaled_local.z += wind_vec.y * sway_strength * bend_factor;
 		}
 	}
 	vec3 billboarded_vertex = spherical_billboard * scaled_local;

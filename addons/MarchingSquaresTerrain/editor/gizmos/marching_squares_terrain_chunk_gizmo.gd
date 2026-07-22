@@ -8,7 +8,9 @@ class_name MarchingSquaresTerrainChunkGizmo
 func _redraw():
 	clear()
 
-	var terrain : MarchingSquaresTerrainChunk = get_node_3d()
+	var terrain := get_node_3d() as MarchingSquaresTerrainChunk
+	if terrain == null:
+		return
 	# height_map can be empty while a chunk is initializing or after load errors.
 	if terrain.height_map.is_empty():
 		return
@@ -41,7 +43,9 @@ func _get_handle_name(handle_id: int, secondary: bool) -> String:
 
 
 func _get_handle_value(handle_id: int, secondary: bool) -> Variant:
-	var terrain: MarchingSquaresTerrainChunk = get_node_3d()
+	var terrain := get_node_3d() as MarchingSquaresTerrainChunk
+	if terrain == null:
+		return 0.0
 	if terrain.height_map.is_empty():
 		return 0.0
 	var z = handle_id / terrain.dimensions.x
@@ -52,7 +56,9 @@ func _get_handle_value(handle_id: int, secondary: bool) -> Variant:
 
 
 func _commit_handle(handle_id: int, secondary: bool, restore: Variant, cancel: bool) -> void:
-	var terrain: MarchingSquaresTerrainChunk = get_node_3d()
+	var terrain := get_node_3d() as MarchingSquaresTerrainChunk
+	if terrain == null:
+		return
 	if terrain.height_map.is_empty():
 		return
 	var z = handle_id / terrain.dimensions.x
@@ -102,7 +108,9 @@ func notify_needs_update(terrain: MarchingSquaresTerrainChunk, z: int, x: int):
 
 
 func _set_handle(handle_id: int, secondary: bool, camera: Camera3D, screen_pos: Vector2) -> void:
-	var terrain: MarchingSquaresTerrainChunk = get_node_3d()
+	var terrain := get_node_3d() as MarchingSquaresTerrainChunk
+	if terrain == null:
+		return
 	if terrain.height_map.is_empty():
 		return
 	var z = handle_id / terrain.dimensions.x

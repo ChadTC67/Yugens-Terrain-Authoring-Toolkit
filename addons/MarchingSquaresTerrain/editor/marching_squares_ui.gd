@@ -355,6 +355,9 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 		"grass_size":
 			if p_value is Vector2:
 				terrain.grass_size = p_value
+		"grass_random_scale":
+			if p_value is float or p_value is int:
+				terrain.grass_random_scale = float(p_value)
 		"use_flat_normals":
 			if p_value is bool:
 				terrain.use_flat_normals = p_value
@@ -381,6 +384,30 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 				# +1 because collision layers don't start from 0 like indexed items
 				# +8 because the selectable collision layers range from 9 to 32
 				terrain.extra_collision_layer = p_value + 9
+		"collision_thickness":
+			terrain.collision_thickness = float(p_value)
+		"nav_agent_radius":
+			terrain.nav_agent_radius = float(p_value)
+		"nav_max_slope":
+			terrain.nav_max_slope = float(p_value)
+		"nav_max_step_height":
+			terrain.nav_max_step_height = float(p_value)
+		"nav_min_region_size":
+			terrain.nav_min_region_size = float(p_value)
+		"wind_direction_degrees":
+			terrain.wind_direction_degrees = float(p_value)
+		"wind_speed":
+			terrain.wind_speed = float(p_value)
+		"wind_strength":
+			terrain.wind_strength = float(p_value)
+		"wind_scale":
+			terrain.wind_scale = float(p_value)
+		"wind_gust_strength":
+			terrain.wind_gust_strength = float(p_value)
+		"wind_gust_speed":
+			terrain.wind_gust_speed = float(p_value)
+		"wind_mode":
+			terrain.wind_mode = int(p_value)
 		"prefab_set":
 			if p_value is MarchingSquaresPrefabSet:
 				if p_value.has_method("has_required_pieces") and not p_value.has_required_pieces():
