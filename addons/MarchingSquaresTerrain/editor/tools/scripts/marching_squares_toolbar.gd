@@ -36,10 +36,10 @@ func _add_tools() -> void:
 		if i == 4 or i == 6:
 			add_child(HSeparator.new())
 		var tool := tools[i]
-		var button := Button.new()
+		var button := MarchingSquaresToolbarButton.new()
 		
 		button.set_name(tool.label)
-		button.set_tooltip_text(tool.tooltip)
+		button.tooltip = tool.tooltip
 		button.set_button_icon(tool.icon)
 		button.set_meta("Index", i)
 		button.set_flat(true)
