@@ -15,17 +15,16 @@ metadata/_custom_type_script = "uid://b6jopat61dbd3"
 script = ExtResource("3_byjpg")
 icon = ExtResource("2_pky3j")
 label = "Heightmap"
-tooltip = "Heightmap Tool
+tooltip = "Exports and imports heightmap data from and (on)to the terrain.
 
-Used to export and import heightmap data from and (on)to the terrain.
+[b]Info[/b]:
+The [EDITOR_ACCENT]Export Tab[/EDITOR_ACCENT] allows for the exporting of terrain data as greyscale PNG's (heightmap, grass mask, texture index).
 
-[INFO]
-• EXPORT MODE: Exports terrain data as greyscale PNG's (heightmap, grass mask, texture index).
-• IMPORT MODE: Imports greyscale PNG's as data for the creation of terrain chunks.
-• LIBRARY MODE: Can create heightmaps from 3D meshes and then place them onto the terrain.
-    • Handy for quickly terraforming the terrain in complex ways.
+The [EDITOR_ACCENT]Import Tab[/EDITOR_ACCENT] can then utilise these greyscale PNG's as data for the creation of terrain chunks.
 
-[SHORTCUTS]
-• Shift+R: Rotate the current heightmap 90 degrees clockwise."
+The [EDITOR_ACCENT]Library Tab[/EDITOR_ACCENT] differs in that it can create heightmaps from 3D meshes and then place them onto the terrain via a heightmap brush. It's best used for quickly terraforming the terrain in complex ways.
+
+[b]Shortcuts[/b]:
+[ul]Shift+R: Rotate the current heightmap 90 degrees clockwise.[/ul]"
 attributes = SubResource("Resource_he")
 metadata/_custom_type_script = "uid://brkjbcthwswel"

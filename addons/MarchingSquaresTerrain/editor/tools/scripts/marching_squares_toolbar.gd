@@ -39,7 +39,9 @@ func _add_tools() -> void:
 		var button := MarchingSquaresToolbarButton.new()
 		
 		button.set_name(tool.label)
+		button.tool_name = tool.label
 		button.tooltip = tool.tooltip
+		button.tool_index = str(i)
 		button.set_button_icon(tool.icon)
 		button.set_meta("Index", i)
 		button.set_flat(true)

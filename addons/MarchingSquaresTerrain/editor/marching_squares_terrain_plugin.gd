@@ -183,6 +183,7 @@ var paint_walls_mode : bool:
 		_paint_walls_mode = value
 
 var _vertex_color_idx : int = 0
+#endregion
 
 #region heightmap importer vars
 var hm_heightmap_image : Texture2D = null
@@ -1200,8 +1201,8 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 			elif mode == TerrainToolMode.DEBUG_BRUSH:
 				var g_pos := chunk.to_global(Vector3(float(draw_cell_coords.x), chunk.get_height(draw_cell_coords), float(draw_cell_coords.y)))
 				var normal := get_cell_normal(chunk, draw_cell_coords)
-				print("MST debug brush: global pos = " + str(g_pos) +
-					", color id = " + str(chunk.get_color_0(draw_cell_coords)) + " " + str(chunk.get_color_1(draw_cell_coords)) +
+				print("MST debug brush: global_pos = " + str(g_pos) +
+					", vertex_color_idx = " + str(MSTVertexColorHelper.get_texture_index_from_colors(chunk.get_color_0(draw_cell_coords), chunk.get_color_1(draw_cell_coords))) +
 					", normal = " + str(normal))
 				continue
 			elif mode == TerrainToolMode.CHUNK_MANAGEMENT:

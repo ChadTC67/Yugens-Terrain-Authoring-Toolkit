@@ -13,17 +13,15 @@ metadata/_custom_type_script = "uid://b6jopat61dbd3"
 script = ExtResource("1_b2ltq")
 icon = ExtResource("1_pnnl0")
 label = "Terrain Settings"
-tooltip = "Terrain Settings Tool
+tooltip = "Allows the user to tweak existing and add custom global terrain settings.
 
-Used to tweak global terrain settings.
+[b]Info[/b]:
+Inside the [EDITOR_ACCENT]Chunk Tab[/EDITOR_ACCENT] settings such as the [EDITOR_KEYWORD]chunk_dimensions[/EDITOR_KEYWORD] and [EDITOR_KEYWORD]cell_size[/EDITOR_KEYWORD] can be changed. Additionally, this is where prefabs can be applied.
 
-[INFO]
-• \"Smoothness\" controls how soft or sharp the smoothed material transitions appear.
-• \"Blend Noise Enabled\" toggles subtle boundary waviness (on) vs clean/flat blending (off).
-• Setting a \"Noise Hmap\" makes the base chunk height generation procedural instead of flat.
-• Setting the \"Animation Fps\" value to more than 0 makes the grass sprites move with limited fps.
-    • Keeping it at 0 gives the grass a smooth wind based effect.
-• \"Ridge Threshold\" controls how far wall texture pushes back across the terrace top.
-• \"Ledge Threshold\" controls how far wall texture rolls forward over the terrace lip."
+The [EDITOR_ACCENT]Vertex Painter Tab[/EDITOR_ACCENT] is mainly used for changing texture blending related settings.
+
+The [EDITOR_ACCENT]Environment Tab[/EDITOR_ACCENT] and [EDITOR_ACCENT]Wind Tab[/EDITOR_ACCENT] can be used to alter terrain generation and the feel of vegetation.
+
+Finally, the [EDITOR_ACCENT]Post-Processing Tab[/EDITOR_ACCENT] allows for custom shaders to be applied to the terrain and/or built-in vegetation systems."
 attributes = SubResource("Resource_vnd2o")
 metadata/_custom_type_script = "uid://brkjbcthwswel"

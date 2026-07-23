@@ -13,19 +13,22 @@ metadata/_custom_type_script = "uid://b6jopat61dbd3"
 script = ExtResource("1_j1t8c")
 icon = ExtResource("1_ir1w2")
 label = "Chunk Manager"
-tooltip = "Chunk Management Tool
+tooltip = "Manages the creation, deletion and changing of individual chunk settings. Chunk dimensions and cell related settings can be changed in the [u][EDITOR_ACCENT]Terrain Settings[/EDITOR_ACCENT][/u] tool.
 
-Used to create, delete and change individual chunk settings.
+[b]Info:[/b]
+Chunk cell merge modes can be used to alter the merge thresholds of neighbouring vertices. These have the biggest impact on the overall [i]feel[/i] of the terrain.
 
-[INFO]
-Chunk cell merge modes:
-• CUBIC: The most blocky of all the modes. Has minimal smoothing between cells.
-• POLYHEDRON: Blocky terrain with slight cell smoothing (DEFAULT CHUNK STATE).
-• ROUNDED_POLYHEDRON: A good 50/50 mix between having smooth and blocky terrain.
-• SEMI_ROUND: Mostly smooth terrain with the occasional blocky cells.
-• SPHERICAL: All the terrain will become smooth. This mode looks the most unnatural for the algorithm.
+[ul][EDITOR_ACCENT]Cubic[/EDITOR_ACCENT]: The most blocky of all the modes. Has minimal smoothing between cells;[/ul]
 
-[SHORTCUTS]
-• CTRL+LMB: Change the currently selected chunk to the hovered chunk."
+[ul][EDITOR_ACCENT]Polyhedron[/EDITOR_ACCENT]: Blocky terrain with slight cell smoothing;[/ul]
+
+[ul][EDITOR_ACCENT]Rounded Polyhedron[/EDITOR_ACCENT]: A 50/50 mix between having smooth and blocky terrain;[/ul]
+
+[ul][EDITOR_ACCENT]Semi Round[/EDITOR_ACCENT]: Mostly smooth terrain with occasional blocky cells;[/ul]
+
+[ul][EDITOR_ACCENT]Spherical[/EDITOR_ACCENT]: All the terrain will become smooth. This mode looks the most unnatural for the marching squares algorithm.[/ul]
+
+[b]Shortcuts:[/b]
+[ul]CTRL+LMB: Change the currently selected chunk to the hovered chunk.[/ul]"
 attributes = SubResource("Resource_w6p77")
 metadata/_custom_type_script = "uid://brkjbcthwswel"
