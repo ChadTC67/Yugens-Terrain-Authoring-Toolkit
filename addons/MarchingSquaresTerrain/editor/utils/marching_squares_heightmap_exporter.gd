@@ -170,7 +170,7 @@ static func run(
 					var h_norm := clamp(h / float(dims.y), 0.0, 1.0)
 					var slot : int = 0
 					if chunk.color_map_0.size() > vi:
-						slot = _colors_to_slot(chunk.color_map_0[vi], chunk.color_map_1[vi])
+						slot = MarchingSquaresTerrainVertexColorHelper.get_texture_index_from_colors(chunk.color_map_0[vi], chunk.color_map_1[vi])
 					var grass_b : float = 1.0
 					if chunk.grass_mask_map.size() > vi:
 						grass_b = 1.0 if chunk.grass_mask_map[vi].r > 0.5 else 0.0
@@ -195,9 +195,9 @@ static func run(
 					if tex_img:
 						var slot : int = 0
 						if chunk.color_map_0.size() > vi:
-							slot = _colors_to_slot(chunk.color_map_0[vi], chunk.color_map_1[vi])
-						# Map slot 0-15 to pixel value 0-255 (x17, so 15x17 = 255)
-						var val : float = float(slot * 17) / 255.0
+							slot = MarchingSquaresTerrainVertexColorHelper.get_texture_index_from_colors(chunk.color_map_0[vi], chunk.color_map_1[vi])
+						# Map vertex_color_idx 0-255 to pixel value 0-255
+						var val : float = float(slot) / 255.0
 						tex_img.set_pixel(px, pz, Color(val, val, val, 1.0))
 		
 		progress_bar.value = chunk_idx * step_pct
@@ -257,21 +257,3 @@ static func run(
 	
 	EditorInterface.get_resource_filesystem().scan()
 	finish_ok.call(files_saved)
-
-
-static func _colors_to_slot(c0: Color, c1: Color) -> int:
-	# Determine the dominant channel for each colour map entry.
-	# Replicates the encoding used by MSTDataHandler._colors_to_texture_idx.
-	var c0_idx := 0
-	var c0_max := c0.r
-	if c0.g > c0_max: c0_max = c0.g; c0_idx = 1
-	if c0.b > c0_max: c0_max = c0.b; c0_idx = 2
-	if c0.a > c0_max: c0_idx = 3
-	
-	var c1_idx := 0
-	var c1_max := c1.r
-	if c1.g > c1_max: c1_max = c1.g; c1_idx = 1
-	if c1.b > c1_max: c1_max = c1.b; c1_idx = 2
-	if c1.a > c1_max: c1_idx = 3
-	
-	return c0_idx * 4 + c1_idx
