@@ -114,42 +114,42 @@ A diagonal continues with a Orthogonal ledge forming a 135° angle
 
 ### Flat
 
-    - Flat full
-    - Flat half
+	- Flat full
+	- Flat half
 
 ### Diagonal
 
-    - Top Floor
-    - Bottom Floor
-    - Wall Top
-    - Wall
+	- Top Floor
+	- Bottom Floor
+	- Wall Top
+	- Wall
 
 ### Orthogonal
 
-    - Top Floor
-    - Bottom Floor
-    - Wall Top
-    - Wall
-    - Orthogonal-Straigt Cap Left Floor
-    - Orthogonal-Straigt Cap Left Wall
-    - Orthogonal-Straigt Cap Right Floor
-    - Orthogonal-Straigt Cap Right Wall
+	- Top Floor
+	- Bottom Floor
+	- Wall Top
+	- Wall
+	- Orthogonal-Straigt Cap Left Floor
+	- Orthogonal-Straigt Cap Left Wall
+	- Orthogonal-Straigt Cap Right Floor
+	- Orthogonal-Straigt Cap Right Wall
 
 ### Filler
 
-    - Top Floor
-    - Half Floor
-    - Bottom Floor
-    - Wall Top
-    - Wall
-    - Diagonal-Diagonal Cap Left Floor
-    - Diagonal-Diagonal Cap Right Floor
-    - Diagonal-Diagonal Cap Left Wall
-    - Diagonal-Diagonal Cap Right Wall
-    - Diagonal-Orthogonal Cap Left Floor
-    - Diagonal-Orthogonal Cap Right Floor
-    - Diagonal-Orthogonal Cap Left Wall
-    - Diagonal-Orthogonal Cap Right Wall
+	- Top Floor
+	- Half Floor
+	- Bottom Floor
+	- Wall Top
+	- Wall
+	- Diagonal-Diagonal Cap Left Floor
+	- Diagonal-Diagonal Cap Right Floor
+	- Diagonal-Diagonal Cap Left Wall
+	- Diagonal-Diagonal Cap Right Wall
+	- Diagonal-Orthogonal Cap Left Floor
+	- Diagonal-Orthogonal Cap Right Floor
+	- Diagonal-Orthogonal Cap Left Wall
+	- Diagonal-Orthogonal Cap Right Wall
 
 ## Resources
 
@@ -188,4 +188,3 @@ I would recomend [this blender extension](https://extensions.blender.org/add-ons
 
 ![example1](textures2.png)
 ![example2](example2.png)
-
