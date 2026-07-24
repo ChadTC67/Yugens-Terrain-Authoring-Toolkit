@@ -167,7 +167,7 @@ var current_texture_preset : MarchingSquaresTexturePreset:
 		if value == null:
 			value = EMPTY_TEXTURE_PRESET
 		_current_texture_preset = value
-		current_quick_paint = null
+		#current_quick_paint = null
 		if not _syncing_from_terrain:
 			_set_new_textures(value)
 

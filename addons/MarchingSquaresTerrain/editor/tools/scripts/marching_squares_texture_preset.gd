@@ -26,7 +26,7 @@ class_name MarchingSquaresTexturePreset
 @export var apply_grass_settings: bool = true
 @export var terrain_settings: Dictionary = {}
 
-@export_group("")
+@export_group("Texture Settings")
 @export var visible_texture_slot_count: int = 6
 @export var slot_color_indices: Array = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
 
