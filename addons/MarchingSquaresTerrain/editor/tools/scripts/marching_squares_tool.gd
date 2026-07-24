@@ -8,5 +8,3 @@ class_name MarchingSquaresTool
 @export var label : String
 @export_multiline var tooltip : String
 @export var attributes : MarchingSquaresToolAttributeSettings
-
-

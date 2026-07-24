@@ -64,9 +64,9 @@ static func _ensure_texture_names_resource(res: Resource) -> void:
 @onready var vp_texture_names : MarchingSquaresTextureNames = EngineWrapper.load_resource("uid://dd7fens03aosa") as MarchingSquaresTextureNames
 
 # Instantiate these lazily in _safe_initialize() to avoid editor-load ordering issues.
-const GizmoPluginScript := preload("res://addons/MarchingSquaresTerrain/editor/marching_squares_terrain_gizmo_plugin.gd")
-const ToolbarScript := preload("res://addons/MarchingSquaresTerrain/editor/tools/scripts/marching_squares_toolbar.gd")
-const ToolAttributesScript := preload("res://addons/MarchingSquaresTerrain/editor/tools/scripts/marching_squares_tool_attributes.gd")
+const GizmoPluginScript := preload("uid://c4vnjk3ie0whl")
+const ToolbarScript := preload("uid://3d77dnetkeik")
+const ToolAttributesScript := preload("uid://buxevb44hutjm")
 
 var gizmo_plugin : MarchingSquaresTerrainGizmoPlugin = null
 var toolbar : MarchingSquaresToolbar = null
@@ -80,6 +80,8 @@ var is_initialized : bool = false
 var initialization_error : String = ""
 
 var current_terrain_node : MarchingSquaresTerrain
+
+var current_heightmap_mesh : Mesh = null
 
 var selected_chunk : MarchingSquaresTerrainChunk
 
@@ -118,7 +120,8 @@ enum TerrainToolMode {
 	VERTEX_PAINTING = 5,
 	DEBUG_BRUSH = 6,
 	CHUNK_MANAGEMENT = 7,
-	TERRAIN_SETTINGS = 8,
+	HEIGHTMAP = 8,
+	TERRAIN_SETTINGS = 9,
 }
 
 var _mode : TerrainToolMode = TerrainToolMode.BRUSH
@@ -180,9 +183,35 @@ var paint_walls_mode : bool:
 		_paint_walls_mode = value
 
 var _vertex_color_idx : int = 0
-var vertex_color_idx : int:
-	get():
-		return _vertex_color_idx
+#endregion
+
+#region heightmap importer vars
+var hm_heightmap_image : Texture2D = null
+var hm_grass_image : Texture2D = null
+var hm_texture_image : Texture2D = null
+var hm_chunks_x : int = 4
+var hm_chunks_z : int = 4
+var hm_max_height : int = 32
+var hm_merge_mode : int = 1
+var hm_single_file_import : bool = false
+var hm_combined_image : Texture2D = null
+#endregion
+
+#region heightmap exporter vars
+var hme_export_heightmap : bool = true
+var hme_export_grass : bool = true
+var hme_export_texture_index : bool = false
+var hme_output_path : String = "res://"
+var hme_single_file : bool = false
+#endregion
+
+#region heightmap library vars
+const MESH_HEIGHTMAPS_FOLDER_PATH : String = "res://addons/MarchingSquaresTerrain/resources/mesh_heightmaps/"
+var current_heightmap_image : Image
+var can_place_heightmaps : bool = false
+#endregion
+
+var vertex_color_idx : int = 0:
 	set(value):
 		_vertex_color_idx = value
 		_set_vertex_colors(value)
@@ -230,6 +259,9 @@ var bridge_start_chunk_coords : Vector2i
 # The point where the height drag started
 var base_position : Vector3
 #endregion
+
+var terrain_heightmap_folder_name : String = "new_terrain_heightmap"
+var mesh_heightmap_name : String = "new_mesh_heightmap"
 
 #region raycast variables
 # Use script-wide variables to provide data to the physics process function
@@ -372,6 +404,7 @@ func _maybe_rebuild_grass_on_scene_open() -> void:
 				# Defer the actual rebuild so editor finishes loading
 				call_deferred("_rebuild_grass_for_node", node)
 
+
 func _rebuild_grass_for_node(node: Object) -> void:
 	if not is_instance_valid(node):
 		return
@@ -379,6 +412,7 @@ func _rebuild_grass_for_node(node: Object) -> void:
 		node.rebuild_grass_texture_array()
 	if node.has_method("_request_grass_regen"):
 		node._request_grass_regen()
+
 
 func _ready():
 	if BRUSH_RADIUS_MATERIAL:
@@ -441,10 +475,10 @@ func _edit(object: Object) -> void:
 			var cb := Callable(self, "_on_chunk_dimensions_changed")
 			if current_terrain_node.has_signal("chunk_dimensions_changed") and not current_terrain_node.is_connected("chunk_dimensions_changed", cb):
 				current_terrain_node.connect("chunk_dimensions_changed", cb)
-
+			
 			if current_terrain_node.current_texture_preset == null:
 				current_terrain_node.current_texture_preset = EMPTY_TEXTURE_PRESET
-
+			
 			# Sync plugin's preset from the selected terrain's saved preset
 			# This ensures each terrain keeps its own preset on selection/reload
 			_syncing_from_terrain = true
@@ -466,54 +500,59 @@ func _edit(object: Object) -> void:
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	if not is_initialized:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
-
+	
 	var selected = EditorInterface.get_selection().get_selected_nodes()
 	# Only proceed if exactly 1 terrain system is selected
 	if not selected or len(selected) > 1:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
-
+	
 	# Handle clicks
 	if event is InputEventMouseButton or event is InputEventMouseMotion:
 		return handle_mouse(camera, event)
-
+	
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
 func _handles(object: Object) -> bool:
 	if not is_initialized:
 		return false
-
+	
 	return object is MarchingSquaresTerrain
 
 
-func handle_hotkey(keycode: int) -> bool:
-	pass
-	return false
+func _input(event: InputEvent) -> void:
+	if mode == TerrainToolMode.HEIGHTMAP and Input.is_key_pressed(KEY_SHIFT) and Input.is_key_pressed(KEY_R):
+		current_heightmap_image.rotate_90(CLOCKWISE)
 
 
 func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 	terrain_hovered = false
 	var terrain : MarchingSquaresTerrain = EditorInterface.get_selection().get_selected_nodes()[0]
-
+	
 	var mouse_pos := camera.get_viewport().get_mouse_position()
-
+	
 	var _ray_origin := camera.project_ray_origin(mouse_pos)
 	var _ray_dir := camera.project_ray_normal(mouse_pos)
-
+	
 	var shift_held := Input.is_key_pressed(KEY_SHIFT)
-
+	
 	# If not in a settings mode, perform terrain raycast
-	if mode in [TerrainToolMode.BRUSH, TerrainToolMode.GRASS_MASK, TerrainToolMode.LEVEL, TerrainToolMode.SMOOTH, TerrainToolMode.BRIDGE, TerrainToolMode.VERTEX_PAINTING, TerrainToolMode.DEBUG_BRUSH, TerrainToolMode.CHUNK_MANAGEMENT]:
+	if mode in [TerrainToolMode.BRUSH, TerrainToolMode.GRASS_MASK, TerrainToolMode.LEVEL,
+				TerrainToolMode.SMOOTH, TerrainToolMode.BRIDGE, TerrainToolMode.VERTEX_PAINTING,
+				TerrainToolMode.DEBUG_BRUSH, TerrainToolMode.CHUNK_MANAGEMENT, TerrainToolMode.HEIGHTMAP]:
 		var draw_position
 		var draw_area_hovered : bool = false
-
+		
+		if mode == TerrainToolMode.HEIGHTMAP and not can_place_heightmaps:
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
+		
 		if is_setting and draw_height_set:
 			var local_ray_dir := _ray_dir * terrain.transform
 			var set_plane := Plane(Vector3(local_ray_dir.x, 0, local_ray_dir.z), base_position)
 			var set_position := set_plane.intersects_ray(terrain.to_local(_ray_origin), local_ray_dir)
 			if set_position:
 				brush_position = set_position
-
+		
 		# If there is any pattern and flatten is enabled, draw along that height plane instead of the terrain intersection
 		elif not current_draw_pattern.is_empty() and flatten:
 			var chunk_plane := Plane(Vector3.UP, Vector3(0, draw_height, 0))
@@ -521,7 +560,7 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 			if draw_position:
 				draw_position = terrain.to_local(draw_position)
 				draw_area_hovered = true
-
+		
 		else:
 			# Perform the raycast to check for intersection with a physics body (terrain)
 			_queue_raycast(_ray_origin, _ray_dir, camera)
@@ -539,34 +578,34 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 				var fallback_height := 0.0
 				if is_drawing or is_setting or not current_draw_pattern.is_empty():
 					fallback_height = draw_height
-
+				
 				var virtual_plane := Plane(Vector3.UP, Vector3(0, fallback_height, 0))
 				var plane_pos := virtual_plane.intersects_ray(ray_origin, ray_dir)
 				if plane_pos:
 					draw_position = terrain.to_local(plane_pos)
 					draw_area_hovered = true
-
+		
 		# ALT or Right Click to clear the current draw pattern. Don't clear while setting
 		var _right_clicked : bool = (
 			event is InputEventMouseButton and
 			event.button_index == MOUSE_BUTTON_RIGHT and
 			event.pressed
 		)
-
+		
 		if not is_setting:
 			if _right_clicked or Input.is_key_pressed(KEY_ALT):
 				current_draw_pattern.clear()
-
+		
 		# Check for terrain collision
 		if draw_area_hovered:
 			terrain_hovered = true
 			var chunk_x : int = floor(draw_position.x / ((terrain.dimensions.x - 1) * terrain.cell_size.x))
 			var chunk_z : int = floor(draw_position.z / ((terrain.dimensions.z - 1) * terrain.cell_size.y))
 			var chunk_coords := Vector2i(chunk_x, chunk_z)
-
+			
 			is_chunk_plane_hovered = true
 			current_hovered_chunk = chunk_coords
-
+		
 		if event is InputEventMouseButton and event.button_index == MouseButton.MOUSE_BUTTON_LEFT:
 			if event.is_pressed() and draw_area_hovered:
 				draw_height_set = false
@@ -584,14 +623,14 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 					curve3d_bridge_points.append(bridge_start_pos)
 				if mode in [TerrainToolMode.SMOOTH] and falloff == false:
 					falloff = true
-				if mode in [TerrainToolMode.GRASS_MASK, TerrainToolMode.DEBUG_BRUSH] and falloff == true:
+				if mode in [TerrainToolMode.GRASS_MASK, TerrainToolMode.DEBUG_BRUSH, TerrainToolMode.HEIGHTMAP] and falloff == true:
 					falloff = false
 				if mode in [TerrainToolMode.GRASS_MASK, TerrainToolMode.VERTEX_PAINTING, TerrainToolMode.DEBUG_BRUSH] and flatten == true:
 					flatten = false
 				if mode in [TerrainToolMode.LEVEL, TerrainToolMode.CHUNK_MANAGEMENT] and Input.is_key_pressed(KEY_CTRL):
 					height = brush_position.y
 					ui.tool_attributes.show_tool_attributes(ui.active_tool)
-				elif Input.is_key_pressed(KEY_SHIFT) and mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
+				elif Input.is_key_pressed(KEY_SHIFT) and mode not in [TerrainToolMode.CHUNK_MANAGEMENT, TerrainToolMode.HEIGHTMAP]:
 					is_drawing = true
 					brush_position = draw_position
 				elif mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
@@ -1026,7 +1065,16 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 		restore_pattern[draw_chunk_coords] = {}
 		pattern_cc[draw_chunk_coords] = {}
 		restore_pattern_cc[draw_chunk_coords] = {}
+		
 		var draw_chunk_dict = current_draw_pattern[draw_chunk_coords]
+		var first_draw_cell : Vector2i
+		var last_draw_cell : Vector2i
+		for draw_cell_coords: Vector2i in draw_chunk_dict:
+			if not first_draw_cell:
+				first_draw_cell = draw_cell_coords
+			last_draw_cell.x = maxi(last_draw_cell.x, draw_cell_coords.x)
+			last_draw_cell.y = maxi(last_draw_cell.y, draw_cell_coords.y)
+		
 		for draw_cell_coords: Vector2i in draw_chunk_dict:
 			var chunk : MarchingSquaresTerrainChunk = terrain.chunks[draw_chunk_coords]
 			var sample : float = clamp(draw_chunk_dict[draw_cell_coords], 0.0, 1.0)
@@ -1153,13 +1201,33 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 			elif mode == TerrainToolMode.DEBUG_BRUSH:
 				var g_pos := chunk.to_global(Vector3(float(draw_cell_coords.x), chunk.get_height(draw_cell_coords), float(draw_cell_coords.y)))
 				var normal := get_cell_normal(chunk, draw_cell_coords)
-				print("MST debug brush: global pos = " + str(g_pos) +
-					", color id = " + str(chunk.get_color_0(draw_cell_coords)) + " " + str(chunk.get_color_1(draw_cell_coords)) +
+				print("MST debug brush: global_pos = " + str(g_pos) +
+					", vertex_color_idx = " + str(MSTVertexColorHelper.get_texture_index_from_colors(chunk.get_color_0(draw_cell_coords), chunk.get_color_1(draw_cell_coords))) +
 					", normal = " + str(normal))
 				continue
 			elif mode == TerrainToolMode.CHUNK_MANAGEMENT:
 				restore_value = chunk.get_height(draw_cell_coords)
-				draw_value = chunk.get_height(draw_cell_coords)
+				draw_value = restore_value
+			elif mode == TerrainToolMode.HEIGHTMAP:
+				restore_value = chunk.get_height(draw_cell_coords)
+				var img_size := current_heightmap_image.get_size()
+				var index : Vector2i = draw_cell_coords - first_draw_cell
+				var sample_area := last_draw_cell - first_draw_cell + Vector2i.ONE
+				var sample_size := (sample_area.x + sample_area.y) / 2.0
+				var scale : Vector2 = (img_size / sample_size)
+				var p_coords := Vector2i(scale * Vector2(index) + scale / 2)
+				p_coords.x = clampi(p_coords.x, 0, img_size.x - 1)
+				p_coords.y = clampi(p_coords.y, 0, img_size.y - 1)
+				var pixel := current_heightmap_image.get_pixel(p_coords.x, p_coords.y)
+				if flatten:
+					draw_value = lerp(restore_value, brush_position.y, sample)
+				else:
+					var height_diff := brush_position.y - draw_height
+					draw_value = lerp(restore_value, restore_value + height_diff, sample)
+				if pixel.r == 0.0:
+					continue # Only draw 
+				else:
+					draw_value += brush_size / terrain.cell_size.x * pixel.r
 			else: # Brush tool:
 				restore_value = chunk.get_height(draw_cell_coords)
 				if flatten:
@@ -1655,6 +1723,140 @@ func apply_composite_pattern_action(terrain: MarchingSquaresTerrain, patterns: D
 	# Regenerate mesh ONCE for each affected chunk (instead of 6 times!)
 	for chunk in affected_chunks.values():
 		chunk.regenerate_mesh()
+
+#endregion
+
+#region heightmap related
+
+func run_heightmap_import() -> void:
+	if not current_terrain_node:
+		push_error("MarchingSquaresTerrainPlugin: No terrain selected for heightmap import.")
+		return
+	var terrain := current_terrain_node
+
+	# Calculate which coords the import will touch (mirrors the importer's offset logic)
+	@warning_ignore("integer_division")
+	var offset_x : int = -(hm_chunks_x / 2)
+	@warning_ignore("integer_division")
+	var offset_z : int = -(hm_chunks_z / 2)
+	var import_coords : Array = []
+	for cz in hm_chunks_z:
+		for cx in hm_chunks_x:
+			import_coords.append(Vector2i(cx + offset_x, cz + offset_z))
+
+	# Snapshot existing chunks at those coords before the import
+	var before_snapshot : Dictionary = {}
+	for coords in import_coords:
+		if terrain.chunks.has(coords):
+			before_snapshot[coords] = MSTDataHandler.export_chunk_data(terrain.chunks[coords])
+
+	await MarchingSquaresHeightmapImporter.run(
+		terrain,
+		hm_heightmap_image,
+		hm_chunks_x,
+		hm_chunks_z,
+		hm_max_height,
+		hm_merge_mode,
+		hm_grass_image,
+		hm_texture_image,
+		self,
+		hm_combined_image if hm_single_file_import else null
+	)
+
+	# Snapshot newly created chunks after the import
+	var after_snapshot : Dictionary = {}
+	for coords in import_coords:
+		if terrain.chunks.has(coords):
+			after_snapshot[coords] = MSTDataHandler.export_chunk_data(terrain.chunks[coords])
+
+	var undo_redo := get_undo_redo()
+	undo_redo.create_action("heightmap import")
+	undo_redo.add_do_method(self, "_replace_chunks_action", terrain, import_coords, after_snapshot)
+	undo_redo.add_undo_method(self, "_replace_chunks_action", terrain, import_coords, before_snapshot)
+	undo_redo.commit_action(false)
+
+
+func run_clear_chunks() -> void:
+	if not current_terrain_node:
+		push_error("MarchingSquaresTerrainPlugin: No terrain selected for clear chunks.")
+		return
+	var terrain := current_terrain_node
+	if terrain.chunks.is_empty():
+		return
+
+	var coords_to_clear : Array = terrain.chunks.keys().duplicate()
+
+	# Snapshot all current chunks before clearing
+	var before_snapshot : Dictionary = {}
+	for coords in coords_to_clear:
+		before_snapshot[coords] = MSTDataHandler.export_chunk_data(terrain.chunks[coords])
+
+	var undo_redo := get_undo_redo()
+	undo_redo.create_action("clear all chunks")
+	undo_redo.add_do_method(self, "_replace_chunks_action", terrain, coords_to_clear, {})
+	undo_redo.add_undo_method(self, "_replace_chunks_action", terrain, coords_to_clear, before_snapshot)
+	undo_redo.commit_action()
+
+
+# Removes all chunks at coords_to_clear, then reconstructs from snapshot data.
+# Used by undo/redo for heightmap import and clear-all-chunks operations.
+func _replace_chunks_action(terrain: MarchingSquaresTerrain, coords_to_clear: Array, snapshot: Dictionary) -> void:
+	for coords in coords_to_clear:
+		if terrain.chunks.has(coords):
+			var chunk : MarchingSquaresTerrainChunk = terrain.chunks[coords]
+			terrain.chunks.erase(coords)
+			chunk.queue_free()
+	for coords in snapshot.keys():
+		var data : MSTChunkData = snapshot[coords]
+		var chunk := MarchingSquaresTerrainChunk.new()
+		chunk.name = "Chunk %s" % str(coords)
+		chunk.terrain_system = terrain
+		MSTDataHandler.import_chunk_data(chunk, data)
+		chunk._data_dirty = true
+		terrain.add_chunk(coords, chunk, null, true)
+	gizmo_plugin.trigger_redraw(terrain)
+
+
+func run_heightmap_export() -> void:
+	if not current_terrain_node:
+		push_error("MarchingSquaresTerrainPlugin: No terrain selected for heightmap export.")
+		return
+	
+	var chunks_to_export : Array[Vector2i] = []
+	chunks_to_export.assign(current_terrain_node.chunks.keys())
+	
+	if chunks_to_export.is_empty():
+		push_warning("MarchingSquaresTerrainPlugin: No chunks to export.")
+		return
+	
+	var output_path := hme_output_path if not hme_output_path.is_empty() else "res://"
+	
+	await MarchingSquaresHeightmapExporter.run(
+		current_terrain_node,
+		chunks_to_export,
+		hme_export_heightmap,
+		hme_export_grass,
+		hme_export_texture_index,
+		output_path,
+		self,
+		hme_single_file,
+		terrain_heightmap_folder_name
+	)
+
+
+func run_heightmap_extraction() -> void:
+	if current_heightmap_mesh == null:
+		push_error("MarchingSquaresTerrainPlugin: No mesh selected for heightmap extraction.")
+		return
+	
+	var output_path := MESH_HEIGHTMAPS_FOLDER_PATH if not MESH_HEIGHTMAPS_FOLDER_PATH.is_empty() else "res://"
+	
+	await MarchingSquaresHeightmapExtractor.run(
+		current_heightmap_mesh,
+		output_path,
+		self,
+		mesh_heightmap_name
+	)
 
 #endregion
 

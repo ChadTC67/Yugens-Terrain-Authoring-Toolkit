@@ -156,8 +156,12 @@ func _redraw():
 		if terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING:
 			if terrain_plugin.paint_walls_mode:
 				add_mesh(terrain_plugin.BRUSH_RADIUS_VISUAL, terrain_plugin.BRUSH_RADIUS_MATERIAL, brush_transform)
-		elif terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.SMOOTH and terrain_plugin.mode != terrain_plugin.TerrainToolMode.GRASS_MASK and terrain_plugin.mode != terrain_plugin.TerrainToolMode.DEBUG_BRUSH and terrain_plugin.mode != terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
+		elif terrain_plugin.mode not in [terrain_plugin.TerrainToolMode.SMOOTH, terrain_plugin.TerrainToolMode.GRASS_MASK, terrain_plugin.TerrainToolMode.DEBUG_BRUSH, terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT, terrain_plugin.TerrainToolMode.HEIGHTMAP]:
 			add_mesh(terrain_plugin.BRUSH_RADIUS_VISUAL, terrain_plugin.BRUSH_RADIUS_MATERIAL, brush_transform)
+		
+		var already_set_once : bool = false
+		if not terrain_plugin.current_draw_pattern.is_empty():
+			already_set_once = true
 
 		pos = terrain_plugin.brush_position
 
@@ -171,9 +175,12 @@ func _redraw():
 				if not chunks.has(cursor_chunk_coords):
 					continue
 				var chunk : MarchingSquaresTerrainChunk = chunks[cursor_chunk_coords]
-
+				
 				var cell_range : Dictionary = BrushPatternCalculator.get_cell_range_for_chunk(cursor_chunk_coords, bounds, terrain_system)
-
+				
+				var first_cell : Vector2i = Vector2i(cell_range.x_min, cell_range.z_min)
+				var last_cell : Vector2i = Vector2i(cell_range.x_max, cell_range.z_max) - Vector2i.ONE
+				
 				for z in range(cell_range.z_min, cell_range.z_max):
 					for x in range(cell_range.x_min, cell_range.x_max):
 						cursor_cell_coords = Vector2i(x, z)
@@ -186,6 +193,8 @@ func _redraw():
 						var use_falloff := terrain_plugin.falloff
 						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING:
 							use_falloff = (terrain_plugin.vp_falloff_mode == terrain_plugin.VertexPaintFalloffMode.DITHERED)
+						if terrain_plugin.mode in [terrain_plugin.TerrainToolMode.HEIGHTMAP, terrain_plugin.TerrainToolMode.GRASS_MASK]:
+							use_falloff = false
 						var sample : float = BrushPatternCalculator.calculate_falloff_sample(
 							world_pos, brush_pos, terrain_plugin.brush_size, terrain_plugin.current_brush_index,
 							max_distance, use_falloff, terrain_plugin.falloff_curve
@@ -220,13 +229,34 @@ func _redraw():
 								y = chunk.height_map[z][x]
 							else:
 								y = 0.0
+						
+						var pixel : Color
+						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP:
+							if terrain_plugin.flatten:
+								y = terrain_plugin.brush_position.y
+							var img_size := terrain_plugin.current_heightmap_image.get_size()
+							var index : Vector2i = cursor_cell_coords - first_cell
+							var sample_area := last_cell - first_cell + Vector2i.ONE
+							var sample_size := (sample_area.x + sample_area.y) / 2.0
+							var scale : Vector2 = (img_size / sample_size)
+							var p_coords := Vector2i(scale * Vector2(index) + scale / 2)
+							p_coords.x = clampi(p_coords.x, 0, img_size.x - 1)
+							p_coords.y = clampi(p_coords.y, 0, img_size.y - 1)
+							pixel = terrain_plugin.current_heightmap_image.get_pixel(p_coords.x, p_coords.y)
+							y += terrain_plugin.brush_size / terrain_system.cell_size.x * pixel.r
 
 						var draw_position := Vector3(world_pos.x, y, world_pos.y)
 						var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
 						# Only draw ground brush squares if NOT in wall paint mode
-						if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
-							add_mesh(terrain_plugin.BRUSH_VISUAL, brush_material, draw_transform)
-
+						if not is_wall_painting and terrain_plugin.mode != terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
+							if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and pixel.r == 0.0:
+								pass
+							else:
+								add_mesh(terrain_plugin.BRUSH_VISUAL, brush_material, draw_transform)
+						
+						if terrain_plugin.mode in [terrain_plugin.TerrainToolMode.HEIGHTMAP] and already_set_once:
+							continue
+						
 						# Draw to current pattern
 						if terrain_plugin.is_drawing:
 							if not terrain_plugin.current_draw_pattern.has(cursor_chunk_coords):
@@ -246,6 +276,15 @@ func _redraw():
 		for draw_chunk_coords : Vector2i in terrain_plugin.current_draw_pattern:
 			var chunk = chunks[draw_chunk_coords]
 			var draw_chunk_dict : Dictionary = terrain_plugin.current_draw_pattern[draw_chunk_coords]
+			
+			var first_draw_cell : Vector2i
+			var last_draw_cell : Vector2i
+			for draw_cell_coords: Vector2i in draw_chunk_dict:
+				if not first_draw_cell:
+					first_draw_cell = draw_cell_coords
+				last_draw_cell.x = maxi(last_draw_cell.x, draw_cell_coords.x)
+				last_draw_cell.y = maxi(last_draw_cell.y, draw_cell_coords.y)
+			
 			for draw_coords: Vector2i in draw_chunk_dict:
 				var draw_x: float = (float(draw_chunk_coords.x) * float(dims.x - 1) + float(draw_coords.x)) * cell_size.x
 				var draw_z: float = (float(draw_chunk_coords.y) * float(dims.z - 1) + float(draw_coords.y)) * cell_size.y
@@ -253,22 +292,41 @@ func _redraw():
 				if not terrain_plugin.flatten:
 					var dz := draw_coords.y
 					var dx := draw_coords.x
-					if chunk.height_map.size() > dz and dz >=  0 and chunk.height_map[dz].size() > dx and dx >= 0:
+					if chunk.height_map.size() > dz and dz >= 0 and chunk.height_map[dz].size() > dx and dx >= 0:
 						draw_y = chunk.height_map[dz][dx]
-
+				
+				var pixel : Color
+				if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP:
+					var img_size := terrain_plugin.current_heightmap_image.get_size()
+					var index : Vector2i = draw_coords - first_draw_cell
+					var sample_area := last_draw_cell - first_draw_cell + Vector2i.ONE
+					var sample_size := (sample_area.x + sample_area.y) / 2.0
+					var scale : Vector2 = (img_size / sample_size)
+					var p_coords := Vector2i(scale * Vector2(index) + scale / 2)
+					p_coords.x = clampi(p_coords.x, 0, img_size.x - 1)
+					p_coords.y = clampi(p_coords.y, 0, img_size.y - 1)
+					pixel = terrain_plugin.current_heightmap_image.get_pixel(p_coords.x, p_coords.y)
+					draw_y += terrain_plugin.brush_size / terrain_system.cell_size.x * pixel.r
+				
 				var sample : float = draw_chunk_dict[draw_coords]
-
+				
 				# If setting, also show a square at the height to set to
 				if terrain_plugin.is_setting and terrain_plugin.draw_height_set:
 					var draw_position := Vector3(draw_x, draw_y + height_diff * sample, draw_z)
 					var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
 					if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
-						add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
+						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and pixel.r == 0.0:
+							pass
+						else:
+							add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
 				else:
 					var draw_position := Vector3(draw_x, draw_y, draw_z)
 					var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
 					if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
-						add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
+						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and pixel.r == 0.0:
+							pass
+						else:
+							add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
 
 
 func _create_brush_basis(normal: Vector3, brush_size: float) -> Basis:

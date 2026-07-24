@@ -193,6 +193,58 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 		"paint_walls":
 			if p_value is bool:
 				plugin.paint_walls_mode = p_value
+		"hm_heightmap_image":
+			plugin.hm_heightmap_image = p_value if p_value is Texture2D else null
+		"hm_grass_image":
+			plugin.hm_grass_image = p_value if p_value is Texture2D else null
+		"hm_texture_image":
+			plugin.hm_texture_image = p_value if p_value is Texture2D else null
+		"hm_chunks_x":
+			if p_value is int or p_value is float:
+				plugin.hm_chunks_x = int(p_value)
+		"hm_chunks_z":
+			if p_value is int or p_value is float:
+				plugin.hm_chunks_z = int(p_value)
+		"hm_max_height":
+			if p_value is int or p_value is float:
+				plugin.hm_max_height = int(p_value)
+		"hm_merge_mode":
+			if p_value is int:
+				plugin.hm_merge_mode = p_value
+		"hm_single_file_import":
+			if p_value is bool:
+				plugin.hm_single_file_import = p_value
+				tool_attributes.show_tool_attributes(active_tool)
+		"hm_combined_image":
+			if p_value is Texture2D or p_value == null:
+				plugin.hm_combined_image = p_value
+		"import_heightmap":
+			plugin.run_heightmap_import()
+		"clear_chunks":
+			plugin.run_clear_chunks()
+		"hme_export_heightmap":
+			if p_value is bool:
+				plugin.hme_export_heightmap = p_value
+		"hme_export_grass":
+			if p_value is bool:
+				plugin.hme_export_grass = p_value
+		"hme_export_texture_index":
+			if p_value is bool:
+				plugin.hme_export_texture_index = p_value
+		"hme_single_file":
+			if p_value is bool:
+				plugin.hme_single_file = p_value
+				tool_attributes.show_tool_attributes(active_tool)
+		"hme_output_path":
+			if p_value is String:
+				plugin.hme_output_path = p_value
+		"selected_heightmap_mesh":
+			if p_value is Mesh:
+				plugin.current_heightmap_mesh = p_value
+		"export_terrain_heightmap":
+			plugin.run_heightmap_export()
+		"extract_mesh_heightmap":
+			plugin.run_heightmap_extraction()
 
 
 func _apply_preset_to_terrain(preset: MarchingSquaresTexturePreset, terrain: MarchingSquaresTerrain) -> void:

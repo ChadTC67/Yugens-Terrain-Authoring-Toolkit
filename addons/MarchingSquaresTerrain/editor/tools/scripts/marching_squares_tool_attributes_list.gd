@@ -123,6 +123,12 @@ var terrain_settings : Dictionary = {
 	"label": "Terrain Settings",
 }
 
+var heightmap : Dictionary = {
+	"name": "heightmap",
+	"type": "heightmap",
+	"label": "Heightmap",
+}
+
 """
 # Example Attribute Entries
 	"name": "",
