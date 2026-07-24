@@ -18,13 +18,10 @@ class_name MarchingSquaresTexturePreset
 @export var baked_grass_array_path : String = ""
 @export var baked_dense_slot_lookup: PackedInt32Array = PackedInt32Array()
 
-# If enabled, the preset also stores/applies selected global terrain settings (beyond just colors/textures).
+# In the future could include terrain/chunk settings
 @export_group("Global Settings")
-@export var apply_terrain_settings: bool = false
-@export var apply_chunk_settings: bool = false # Recommended off (can trigger heavy rebuilds).
 @export var apply_vertex_painter_settings: bool = true
 @export var apply_grass_settings: bool = true
-@export var terrain_settings: Dictionary = {}
 
 @export_group("Texture Settings")
 @export var visible_texture_slot_count: int = 6
