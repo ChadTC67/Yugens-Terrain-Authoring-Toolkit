@@ -1380,7 +1380,7 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 		undo_redo.add_undo_method(self, "draw_grass_mask_pattern_action", terrain, restore_pattern)
 		undo_redo.commit_action()
 	elif mode == TerrainToolMode.POPULATE:
-		var action_name := "terrain flower mask draw" if current_populator is MarchingSquaresFlowerPlanter else "terrain vegetation mask draw"
+		var action_name := "terrain flower mask draw" if current_populator is MarchingSquaresFlowerPlanter else "unknown populator type mask draw"
 		undo_redo.create_action(action_name)
 		undo_redo.add_do_method(self, "draw_populator_mask_pattern_action", terrain, pattern, remove_selection)
 		undo_redo.add_undo_method(self, "draw_populator_mask_pattern_action", terrain, restore_pattern, remove_selection)
@@ -1751,6 +1751,31 @@ func apply_composite_pattern_action(terrain: MarchingSquaresTerrain, patterns: D
 						break ## TODO: Make this cell based instead of chunk based
 
 
+# Stores chunk and mask data for FlowerPlanters directly in the instance
+func draw_populator_mask_pattern_action(terrain: MarchingSquaresTerrain, pattern: Dictionary , is_erase: bool) -> void:
+	if current_populator == null:
+		printerr("No valid populator selected")
+		return
+	elif current_populator is MarchingSquaresFlowerPlanter:
+		var flower_planter := current_populator as MarchingSquaresFlowerPlanter
+		for chunk_coords in pattern:
+			if not terrain.chunks.has(chunk_coords):
+				continue
+			
+			var chunk : MarchingSquaresTerrainChunk = terrain.chunks[chunk_coords]
+			for cell_coords in pattern[chunk_coords]:
+				if is_erase:
+					flower_planter.remove_flowers_from_cell(chunk, cell_coords)
+					continue
+				else:
+					flower_planter.add_flowers_to_cell(chunk, cell_coords)
+		
+		flower_planter.setup(false)
+		flower_planter.regenerate_flowers()
+	else:
+		printerr("Couldn't identify a known populator type to draw to")
+		return
+
 #region heightmap related
 
 func run_heightmap_import() -> void:
@@ -1887,54 +1912,6 @@ func run_heightmap_extraction() -> void:
 
 #region vertex/texture setters and getters
 
-# Stores chunk and mask data for FlowerPlanters and VegetationPlanters directly in the instance
-func draw_populator_mask_pattern_action(terrain: MarchingSquaresTerrain, pattern: Dictionary , is_erase: bool) -> void:
-	if current_populator == null:
-		printerr("No valid populator selected")
-		return
-	elif current_populator is MarchingSquaresFlowerPlanter:
-		var flower_planter := current_populator as MarchingSquaresFlowerPlanter
-		for chunk_coords in pattern:
-			if not terrain.chunks.has(chunk_coords):
-				continue
-			
-			var chunk : MarchingSquaresTerrainChunk = terrain.chunks[chunk_coords]
-			for cell_coords in pattern[chunk_coords]:
-				if is_erase:
-					flower_planter.remove_flowers_from_cell(chunk, cell_coords)
-					continue
-				else:
-					flower_planter.add_flowers_to_cell(chunk, cell_coords)
-				
-				flower_planter.cell_data[chunk][cell_coords] = _get_flower_cell_data(chunk, cell_coords)
-		
-		flower_planter.setup(false)
-		flower_planter.regenerate_flowers()
-	elif current_populator is MarchingSquaresVegetationContainer:
-		for child in current_populator.get_children():
-			pass
-	else:
-		printerr("Couldn't identify a known populator type to draw to")
-		return
-
-#endregion
-
-func _get_flower_cell_data(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -> Dictionary:
-	if not chunk.cell_geometry or not chunk.cell_geometry.has(cell):
-		return {}
-	
-	var cell_data_copy := {}
-	var geo_data = chunk.cell_geometry[cell]
-	
-	cell_data_copy["verts"] = geo_data["verts"]
-	cell_data_copy["uvs"] = geo_data["uvs"]
-	cell_data_copy["custom_1_values"] = geo_data["custom_1_values"]
-	cell_data_copy["is_floor"] = geo_data["is_floor"]
-	
-	return cell_data_copy
-
-#region vertex/texture setters and getters
-
 func _set_vertex_colors(vc_idx: int) -> void:
 	var encoded_colors : Array = MSTVertexColorHelper.texture_index_to_colors(vc_idx)
 	vertex_color_0 = encoded_colors[0]
@@ -1977,6 +1954,21 @@ func get_cell_normal(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -> Vect
 
 	var normal := Vector3(-sx, 1.0, -sz).normalized()
 	return normal
+
+
+func _get_flower_cell_data(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -> Dictionary:
+	if not chunk.cell_geometry or not chunk.cell_geometry.has(cell):
+		return {}
+	
+	var cell_data_copy := {}
+	var geo_data = chunk.cell_geometry[cell]
+	
+	cell_data_copy["verts"] = geo_data["verts"]
+	cell_data_copy["uvs"] = geo_data["uvs"]
+	cell_data_copy["custom_1_values"] = geo_data["custom_1_values"]
+	cell_data_copy["is_floor"] = geo_data["is_floor"]
+	
+	return cell_data_copy
 
 
 func _find_closest_curve_offset(curve: Curve3D, pos: Vector2) -> float:

@@ -17,19 +17,14 @@ metadata/_custom_type_script = "uid://b6jopat61dbd3"
 script = ExtResource("1_i0i0y")
 icon = ExtResource("2_pkm8f")
 label = "Populate"
-tooltip = "Populate Tool
+tooltip = "A brush that paints meshes onto the terrain. Right now it only features a [EDITOR_ACCENT]FlowerPlanter[/EDITOR_ACCENT] system but more will be added in the future...
 
-Allows the user to populate the terrain with either a FlowerPlanter or VegetationPlanter custom node.
+[b]Info[/b]:
+The [EDITOR_ACCENT]FlowerPlanter[/EDITOR_ACCENT] creates a multi-chunk [EDITOR_ACCENT]MultiMeshInstance3D[/EDITOR_ACCENT] node. Important settings include that colors can be controlled via a custom 1D gradient texture and that billboarding can be switched on and off for a distinct look.
 
-[INFO]
-• The FlowerPlanter allows you to...
-• The VegetationPlanter allows you to...
+[u]Warning[/u]: Singular planters shouldn't be used to paint a whole terrain with flowers as GPU instancing would render all instances at once instead of per chunk.
 
-[SHORTCUTS]
-Flowers:
-• Ctrl: Show the current multi-chunk cell pattern occupied by the selected FlowerPlanter.
-
-Vegetation:
-• -: ..."
+[b]Shortcuts[/b]:
+[ul]Ctrl: Show the current multi-chunk cell pattern occupied by the selected [EDITOR_ACCENT]FlowerPlanter[/EDITOR_ACCENT].[/ul]"
 attributes = SubResource("Resource_pkm8f")
 metadata/_custom_type_script = "uid://brkjbcthwswel"

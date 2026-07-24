@@ -45,45 +45,6 @@ const FLOWER_VAR_DATA : Array[Dictionary] = [
 	},
 ]
 
-const VEGETATION_VAR_DATA : Array[Dictionary] = [
-	{
-	"name": "vegetation_mesh",
-	"label": "Vegetation Mesh",
-	"type": "EditorResourcePicker",
-	},
-	{
-	"name": "mesh_size",
-	"label": "Mesh Size",
-	"type": "Vector3",
-	},
-	{
-	"name": "mesh_position",
-	"label": "Mesh Position",
-	"type": "Vector3",
-	},
-	{
-	"name": "mesh_rotation",
-	"label": "Mesh Rotation",
-	"type": "Vector3",
-	},
-	# Outline variables
-	{
-	"name": "use_outlines",
-	"label": "Use Outlines",
-	"type": "CheckBox",
-	},
-	{
-	"name": "inner_outline_color",
-	"label": "Inner Outline Color",
-	"type": "ColorPickerButton",
-	},
-	{
-	"name": "outer_outline_color",
-	"label": "Outer Outline Color",
-	"type": "ColorPickerButton",
-	},
-]
-
 
 func _ready() -> void:
 	set_custom_minimum_size(Vector2(168, 0))
@@ -101,8 +62,6 @@ func add_populator_settings() -> void:
 	var var_data : Array[Dictionary]
 	if selected_populator is MarchingSquaresFlowerPlanter:
 		var_data = FLOWER_VAR_DATA.duplicate()
-	elif selected_populator is MarchingSquaresVegetationContainer:
-		var_data = VEGETATION_VAR_DATA.duplicate()
 	else: # Null or invalid
 		return
 	

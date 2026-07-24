@@ -6,7 +6,7 @@ class_name MarchingSquaresUI
 @onready var TOOLBAR : Script = EngineWrapper.load_resource("uid://3d77dnetkeik") as Script
 @onready var TOOL_ATTRIBUTES : Script = EngineWrapper.load_resource("uid://buxevb44hutjm") as Script
 @onready var TEXTURE_SETTINGS : Script = EngineWrapper.load_resource("uid://blvx0jk6wxk5p") as Script
-@onready var POPULATOR_SETTINGS : Script = EngineWrapper.load_resource("uid://3d77dnetkeik") as Script
+@onready var POPULATOR_SETTINGS : Script = EngineWrapper.load_resource("uid://twlshh2i85w1") as Script
 
 #region texture setting property maps
 # Property names that map directly to terrain properties with same name
@@ -105,16 +105,16 @@ func set_visible(is_visible: bool) -> void:
 		texture_settings.set_visible(is_visible)
 	if populator_settings != null and is_instance_valid(populator_settings) and populator_settings.has_method("set_visible"):
 		populator_settings.set_visible(is_visible)
-
+	
 	if is_visible:
 		await get_tree().create_timer(.01).timeout
-
+	
 		if active_tool == null:
 			active_tool = 0
-
+	
 		if toolbar and toolbar.tool_buttons.has(active_tool):
 			toolbar.tool_buttons[active_tool].set_pressed(true)
-
+	
 		tool_attributes.show()
 		_on_tool_changed(active_tool)
 
@@ -122,30 +122,32 @@ func set_visible(is_visible: bool) -> void:
 
 func _on_tool_changed(tool_index: int) -> void:
 	active_tool = tool_index
-
+	
+	texture_settings.hide()
+	populator_settings.hide()
+	
 	if tool_index == 5: # Vertex Painting:
 		tool_attributes.attribute_list = MarchingSquaresToolAttributesList.new()
 		texture_settings.show()
 		if not texture_settings.has_method("is_built_for_current_terrain") or not texture_settings.is_built_for_current_terrain():
 			texture_settings.add_texture_settings()
-	elif: tool_index == 6: # Populator:
+	elif tool_index == 6: # Populator:
 		tool_attributes.attribute_list = MarchingSquaresToolAttributesList.new()
 		populator_settings.show()
 		if not populator_settings.has_method("is_built_for_current_terrain") or not populator_settings.is_built_for_current_terrain():
 			populator_settings.add_populator_settings()
-	else:
-		texture_settings.hide()
-		populator_settings.hide()
-
+	
 	if tool_index == 3: # Bridge tool:
 		plugin.falloff = false
 		plugin.BRUSH_RADIUS_MATERIAL.set_shader_parameter("falloff_visible", false)
-
+	
 	plugin.active_tool = tool_index
 	plugin.mode = tool_index
+	
 	# Keep the user's selected material; only clamp to a valid range.
 	if tool_index == 5:
 		plugin.vertex_color_idx = clampi(plugin.vertex_color_idx, 0, plugin.MAX_TEXTURE_SLOTS - 1)
+	
 	tool_attributes.show_tool_attributes(active_tool)
 
 
@@ -269,7 +271,7 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 
 func _apply_preset_to_terrain(preset: MarchingSquaresTexturePreset, terrain: MarchingSquaresTerrain) -> void:
 	var t := preset.new_textures
-
+	
 	# Terrain textures
 	terrain.texture_1  = t.terrain_textures[0]
 	terrain.texture_2  = t.terrain_textures[1]
@@ -396,7 +398,7 @@ func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 	if not terrain:
 		push_error("No current terrain node to apply texture settings to")
 		return
-
+	
 	# Texture properties (Texture2D or null)
 	if p_setting_name in TEXTURE_PROPERTIES:
 		if p_value is Texture2D or p_value == null:
@@ -413,9 +415,8 @@ func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 	elif p_setting_name in TEXTURE_SCALE_PROPERTIES:
 		if p_value is float or p_value is int:
 			terrain.set(p_setting_name, float(p_value))
-
+	
 	if terrain.current_texture_preset !=  null and not terrain.current_texture_preset.resource_path.is_empty():
 		terrain.save_to_preset()
-
 
 #endregion

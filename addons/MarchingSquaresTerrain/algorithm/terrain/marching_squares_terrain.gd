@@ -1139,34 +1139,28 @@ func _deferred_enter_tree() -> void:
 	_initialize_data_directory()
 	if blend_mode != 0:
 		blend_mode = 0
-
+	
 	_ensure_default_texture_preset_bound()
-
+	
 	print_verbose("Terrain data dir: ", data_directory)
-
+	
 	# Populate chunks dictionary from scene children
 	# NOTE: Chunks can legitimately be "dirty" in editor (e.g. after property edits).
 	# Never abort initialization because that prevents terrain from loading/rendering.
-	for chunk in get_children():
-		if chunk is MarchingSquaresTerrainChunk:
-			pass
 	chunks.clear()
-	for chunk in get_children():
-		if chunk is MarchingSquaresTerrainChunk:
-			chunks[chunk.chunk_coords] = chunk
-			chunk.terrain_system = self
-			chunk.grass_planter = null
+	for child in get_children():
+		if child is MarchingSquaresTerrainChunk:
+			chunks[child.chunk_coords] = child
+			child.terrain_system = self
+			child.grass_planter = null
 		elif child is MarchingSquaresPopulator: # Prep the populators
 			child.terrain_system = self
-
-	for child in get_children():
-		if child is MarchingSquaresPopulator:
 			child.rebuild_cell_data()
 			if child is MarchingSquaresFlowerPlanter:
 				child.regenerate_flowers()
-
+	
 	_warn_storage_expectations()
-
+	
 	# Load external data if storage was previously initialized
 	if _storage_initialized:
 		MSTDataHandler.load_terrain_data(self)

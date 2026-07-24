@@ -12,7 +12,7 @@ var tools : Dictionary[MarchingSquaresTerrainPlugin.TerrainToolMode, MarchingSqu
 	# Terrain visuals tools
 	MarchingSquaresTerrainPlugin.TerrainToolMode.GRASS_MASK : preload("uid://c3rtgj17vcsk6"), # Grass mask tool
 	MarchingSquaresTerrainPlugin.TerrainToolMode.VERTEX_PAINTING : preload("uid://bhf01bmk6l3gv"), # Vertex paint tool
-	MarchingSquaresTerrainPlugin.TerrainToolMode.POPULATE : preload("uid://c5n8v9y4k7q2"), # Populate tool
+	MarchingSquaresTerrainPlugin.TerrainToolMode.POPULATE : preload("uid://bikg2xu4h6ulo"), # Populate tool
 	# General plugin tools
 	MarchingSquaresTerrainPlugin.TerrainToolMode.DEBUG_BRUSH : preload("uid://ktb4desoyt1j"), # Debug brush tool
 	MarchingSquaresTerrainPlugin.TerrainToolMode.CHUNK_MANAGEMENT : preload("uid://ups2hlmespdm"), # Chunk manager tool

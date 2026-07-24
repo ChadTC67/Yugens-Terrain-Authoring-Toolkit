@@ -3,7 +3,6 @@
 extends MarchingSquaresPlanter
 class_name MarchingSquaresFlowerPlanter
 
-## TODO: Add size variations for the sprites
 
 var terrain_system : MarchingSquaresTerrain
 
@@ -97,7 +96,7 @@ func _init() -> void:
 
 
 func regenerate_flowers() -> void:
-	if not planted_chunks.is_empty() and not cell_data and not MarchingSquaresTerrainPlugin.instance.remove_selection:
+	if not planted_chunks.is_empty() and cell_data.is_empty() and not MarchingSquaresTerrainPlugin.instance.remove_selection:
 		printerr("No cell data set while regenerating cells")
 		return
 	

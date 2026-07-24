@@ -3,11 +3,10 @@ extends Button
 class_name MarchingSquaresPopulateButton
 
 
-enum PopulatorType {FLOWER, VEGETATION}
+enum PopulatorType {FLOWER}
 
 const POPULATOR_TYPE = {
 	PopulatorType.FLOWER: preload("uid://demjm5kq2kdpa"),
-	PopulatorType.VEGETATION: preload("uid://jud8opcg5py5"),
 }
 
 var current_terrain_node : MarchingSquaresTerrain

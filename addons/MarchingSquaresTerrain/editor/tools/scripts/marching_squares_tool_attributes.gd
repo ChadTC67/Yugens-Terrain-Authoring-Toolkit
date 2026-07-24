@@ -90,7 +90,6 @@ var _terrain_settings_scroll_positions: Dictionary = {}
 var _heightmap_tool_selected_tab : int = 0
 var _heightmap_tool_scroll_positions : Dictionary = {}
 
-var selected_planter : MarchingSquaresPopulator
 var selected_populator : MarchingSquaresPopulator
 
 var hbox_container
@@ -268,21 +267,19 @@ func show_tool_attributes(tool_index: int) -> void:
 		new_attributes.append(attribute_list.quick_paint_selection)
 	if tool_attributes.paint_walls:
 		new_attributes.append(attribute_list.paint_walls)
-	if tool_attributes.chunk_management:
-		new_attributes.append(attribute_list.chunk_management)
-	if tool_attributes.terrain_settings:
-		new_attributes.append(attribute_list.terrain_settings)
-	if tool_attributes.heightmap:
-		new_attributes.append(attribute_list.heightmap)
-	if tool_attributes.planter:
-		new_attributes.append(attribute_list.planter)
 	if tool_attributes.populator:
 		new_attributes.append(attribute_list.populator)
 	if tool_attributes.remove_selection:
 		new_attributes.append(attribute_list.remove_selection)
 	if tool_attributes.populate_terrain:
 		new_attributes.append(attribute_list.populate_terrain)
-
+	if tool_attributes.chunk_management:
+		new_attributes.append(attribute_list.chunk_management)
+	if tool_attributes.heightmap:
+		new_attributes.append(attribute_list.heightmap)
+	if tool_attributes.terrain_settings:
+		new_attributes.append(attribute_list.terrain_settings)
+	
 	# Rebuild material names from the preset or fallback to defaults
 	var terrain_names : Array = []
 	if plugin.current_terrain_node and plugin.current_terrain_node.current_texture_preset and plugin.current_terrain_node.current_texture_preset.new_tex_names:
@@ -299,10 +296,10 @@ func show_tool_attributes(tool_index: int) -> void:
 		if setting_dict.has("type") and setting_dict["type"] is String:
 			setting_dict["type"] = type_map.get(setting_dict["type"], SettingType.ERROR)
 		add_setting(setting_dict)
-
+	
 	add_child(hbox_container)
 	last_setting_type = SettingType.ERROR # Reset the setting type for correct VSeparators
-
+	
 	plugin.gizmo_plugin.trigger_redraw(plugin.current_terrain_node)
 
 
@@ -310,13 +307,13 @@ func add_setting(p_params: Dictionary) -> void:
 	var setting_name : String = p_params.get("name", "")
 	var setting_type : SettingType = p_params.get("type", SettingType.ERROR)
 	var label_text : String = p_params.get("label", setting_name)
-
+	
 	if last_setting_type != SettingType.ERROR:
 		if last_setting_type == SettingType.SLIDER and setting_type == SettingType.SLIDER:
 			pass
 		elif last_setting_type != setting_type:
 			hbox_container.add_child(VSeparator.new())
-
+	
 	var add_label := true
 	if setting_type in [SettingType.CHUNK, SettingType.TERRAIN, SettingType.HEIGHTMAP]:
 		add_label = false
@@ -330,7 +327,7 @@ func add_setting(p_params: Dictionary) -> void:
 		c_cont.set_custom_minimum_size(Vector2(50, 35))
 		c_cont.add_child(label, true)
 		hbox_container.add_child(c_cont, true)
-
+	
 	var cont
 	var saved_setting_value := _get_setting_value(setting_name)
 	match setting_type:
@@ -342,7 +339,7 @@ func add_setting(p_params: Dictionary) -> void:
 				checkbox.button_pressed = saved_setting_value
 			checkbox.toggled.connect(func(pressed): _on_setting_changed(setting_name, pressed))
 			checkbox.set_custom_minimum_size(Vector2(25, 25))
-
+			
 			cont = CenterContainer.new()
 			cont.set_custom_minimum_size(Vector2(35, 35))
 			cont.add_child(checkbox, true)
@@ -361,7 +358,7 @@ func add_setting(p_params: Dictionary) -> void:
 			var range_step = range_data.z
 			if saved_setting_value is not String and str(saved_setting_value) !=  "ERROR":
 				default_value = saved_setting_value
-
+			
 			cont = MarginContainer.new()
 			cont.set_custom_minimum_size(Vector2(80, 35))
 			if setting_name == "height" or setting_name == "ease_value" or setting_name == "size":
@@ -375,7 +372,7 @@ func add_setting(p_params: Dictionary) -> void:
 				spin_slider.set_value(default_value)
 				spin_slider.value_changed.connect(func(value): _on_setting_changed(setting_name, value))
 				spin_slider.set_custom_minimum_size(Vector2(110, 35))
-
+				
 				cont.add_theme_constant_override("margin_top", -5)
 				cont.add_child(spin_slider, true)
 			else:
@@ -386,7 +383,7 @@ func add_setting(p_params: Dictionary) -> void:
 				hslider.set_value(default_value)
 				hslider.value_changed.connect(func(value): _on_setting_changed(setting_name, value))
 				hslider.set_custom_minimum_size(Vector2(80, 35))
-
+				
 				cont.add_theme_constant_override("margin_right", 10)
 				cont.add_theme_constant_override("margin_left", -3)
 				cont.add_child(hslider, true)
@@ -395,35 +392,27 @@ func add_setting(p_params: Dictionary) -> void:
 			var options : Array = p_params.get("options", [])
 			var option_button := OptionButton.new()
 			var material_slots: Array[int] = []
+			var default_value = p_params.get("default", 0) # Fallback base value
 			if setting_name == "material":
 				material_slots = _get_vertex_paint_material_slots()
 				for idx in range(mini(options.size(), material_slots.size())):
 					option_button.add_item(str(options[idx]))
 					option_button.set_item_metadata(option_button.item_count - 1, material_slots[idx])
-			elif setting_name == "planter":
-				for option in options:
-					option_button.add_item(option)
-			if setting_name == "populator":
-				for child in plugin.current_terrain_node.get_children():
-					if child is MarchingSquaresPopulator:
-						option_button.add_item(str(child.name))
-						if plugin.current_populator == null:
-							plugin.current_populator = child
-			var default_value
-			if setting_name == "populator" and selected_populator:
-				var index : int = -1
+			elif setting_name == "populator":
+				var index := -1
 				for child in plugin.current_terrain_node.get_children():
 					if child is MarchingSquaresPopulator:
 						index += 1
+						option_button.add_item(child.name)
 						if child == selected_populator:
 							default_value = index
-							break
 			else:
 				for option in options:
 					option_button.add_item(option)
-			var default_value := p_params.get("default", 0) # Fallback base value
-			if saved_setting_value is not String and str(saved_setting_value) !=  "ERROR":
+			
+			if saved_setting_value is not String and str(saved_setting_value) != "ERROR":
 				default_value = saved_setting_value
+			
 			if setting_name == "material":
 				var selected_idx := 0
 				for item_idx in range(option_button.item_count):
@@ -431,37 +420,38 @@ func add_setting(p_params: Dictionary) -> void:
 						selected_idx = item_idx
 						break
 				option_button.selected = selected_idx
+			elif setting_name == "populator":
+				option_button.selected = default_value
+				if option_button.item_count > 0:
+					_on_populator_selected(option_button.get_item_text(default_value))
 			else:
 				option_button.selected = default_value
-
+			
 			option_button.set_flat(true)
 			if setting_name == "material":
 				option_button.item_selected.connect(func(index):
 					var slot_idx = option_button.get_item_metadata(index)
 					_on_setting_changed(setting_name, int(slot_idx))
 				)
-			elif setting_name == "planter":
-				option_button.item_selected.connect(func(planter):
-					option_button.item_selected.connect(func(index): _on_setting_changed(setting_name, index))
-					_on_populator_selected(option_button.get_item_text(planter))
-				)
 			elif setting_name == "populator":
 				option_button.item_selected.connect(func(populator):
-					var selected_populator = null
+					selected_populator = null
 					var index : int = -1
 					for child in plugin.current_terrain_node.get_children():
 						if child is MarchingSquaresPopulator:
 							index += 1
 							if index == populator:
 								selected_populator = child
+								plugin.current_populator = child
 								break
-					plugin.current_populator = selected_populator
 					_on_setting_changed(setting_name, selected_populator)
+					_on_populator_selected(option_button.get_item_text(populator))
 				)
 			else:
 				option_button.item_selected.connect(func(index): _on_setting_changed(setting_name, index))
+			
 			option_button.set_custom_minimum_size(Vector2(65, 35))
-
+			
 			cont = CenterContainer.new()
 			cont.set_custom_minimum_size(Vector2(65, 35))
 			cont.add_child(option_button, true)
@@ -474,7 +464,7 @@ func add_setting(p_params: Dictionary) -> void:
 			line_edit.text_submitted.connect(func(new_text): _on_setting_changed(setting_name, new_text))
 			line_edit.text_submitted.connect(func(_text): line_edit.clear())
 			line_edit.set_custom_minimum_size(Vector2(25, 25))
-
+			
 			cont = CenterContainer.new()
 			cont.set_custom_minimum_size(Vector2(35, 35))
 			cont.add_child(line_edit, true)
@@ -494,7 +484,7 @@ func add_setting(p_params: Dictionary) -> void:
 			preset_button.set_item_metadata(0, null)
 			if setting_name == "texture_preset":
 				_add_texture_preset_options(preset_button, TEXTURE_PRESETS_PATH)
-
+				
 				preset_button.set_flat(true)
 				preset_button.item_selected.connect(func(index):
 					var selected_texture_preset = preset_button.get_item_metadata(index)
@@ -503,7 +493,7 @@ func add_setting(p_params: Dictionary) -> void:
 					_on_setting_changed(setting_name, selected_texture_preset)
 				)
 				preset_button.set_custom_minimum_size(Vector2(100, 35))
-
+				
 				# Sync dropdown selection with current plugin.current_texture_preset
 				var terrain := MarchingSquaresTerrainPlugin.instance.current_terrain_node
 				var current_texture_preset = terrain.current_texture_preset if terrain else null
@@ -521,7 +511,7 @@ func add_setting(p_params: Dictionary) -> void:
 						if matches_current:
 							preset_button.select(i)
 							break
-
+				
 				cont = CenterContainer.new()
 				cont.set_custom_minimum_size(Vector2(100, 35))
 				cont.add_child(preset_button, true)
@@ -532,7 +522,7 @@ func add_setting(p_params: Dictionary) -> void:
 			var quick_paint_button := OptionButton.new()
 			quick_paint_button.add_item("None")  # First option is no paint. #TODO Doesn't seem to work right now and needs to be fixed later.
 			quick_paint_button.set_item_metadata(0, null)
-
+			
 			# 1. Load GLOBAL quick paints from folder (always available)
 			var dir := DirAccess.open(GLOBAL_QUICK_PAINTS_PATH)
 			if dir:
@@ -545,7 +535,7 @@ func add_setting(p_params: Dictionary) -> void:
 						quick_paint_button.set_item_metadata(quick_paint_button.item_count - 1, quick_paint_path)
 					file_name = dir.get_next()
 				dir.list_dir_end()
-
+			
 			# 2. Load PRESET-SPECIFIC quick paints (if preset is selected and has any)
 			var terrain := MarchingSquaresTerrainPlugin.instance.current_terrain_node
 			if terrain and terrain.current_texture_preset:
@@ -556,7 +546,7 @@ func add_setting(p_params: Dictionary) -> void:
 						if quick_paint:
 							quick_paint_button.add_item(quick_paint.paint_name)
 							quick_paint_button.set_item_metadata(quick_paint_button.item_count - 1, quick_paint)
-
+			
 			quick_paint_button.set_flat(true)
 			quick_paint_button.item_selected.connect(func(index):
 				var selected_quick_paint = quick_paint_button.get_item_metadata(index)
@@ -565,7 +555,7 @@ func add_setting(p_params: Dictionary) -> void:
 				_on_setting_changed(setting_name, selected_quick_paint)
 			)
 			quick_paint_button.set_custom_minimum_size(Vector2(100, 35))
-
+			
 			# Sync dropdown selection with current plugin.current_quick_paint
 			var current_quick_paint = _get_setting_value(setting_name)
 			if current_quick_paint == null:
@@ -582,7 +572,7 @@ func add_setting(p_params: Dictionary) -> void:
 					if matches_current:
 						quick_paint_button.select(i)
 						break
-
+			
 			cont = CenterContainer.new()
 			cont.set_custom_minimum_size(Vector2(100, 35))
 			cont.add_child(quick_paint_button, true)
@@ -590,9 +580,9 @@ func add_setting(p_params: Dictionary) -> void:
 		SettingType.CHUNK:
 			if plugin.current_terrain_node.get_child_count() == 0:
 				return
-
+			
 			current_available_chunks.clear()
-
+			
 			var terrain_children : Array = plugin.current_terrain_node.get_children()
 			var chunk_button := OptionButton.new()
 			for child in terrain_children:
@@ -610,7 +600,7 @@ func add_setting(p_params: Dictionary) -> void:
 				chunk_button.selected = current_available_chunks.find(preferred_chunk)
 			else:
 				chunk_button.selected = -1
-
+			
 			var option_button := OptionButton.new()
 			option_button.set_flat(true)
 			option_button.set_custom_minimum_size(Vector2(65, 35))
@@ -618,7 +608,7 @@ func add_setting(p_params: Dictionary) -> void:
 				option_button.add_item(_format_constant_string(mode))
 			option_button.selected = plugin.selected_chunk.merge_mode if not current_available_chunks.is_empty() and plugin.selected_chunk else -1
 			option_button.item_selected.connect(_on_chunk_mode_changed)
-
+			
 			var grass_mode_button := OptionButton.new()
 			grass_mode_button.set_flat(true)
 			grass_mode_button.set_custom_minimum_size(Vector2(85, 35))
@@ -626,40 +616,40 @@ func add_setting(p_params: Dictionary) -> void:
 			grass_mode_button.add_item("Grassless")
 			grass_mode_button.selected = plugin.selected_chunk.grass_mode if not current_available_chunks.is_empty() and plugin.selected_chunk else -1
 			grass_mode_button.item_selected.connect(_on_chunk_grass_mode_changed)
-
+			
 			chunk_button.set_flat(true)
 			chunk_button.item_selected.connect(func(chunk): _on_chunk_selected(option_button, grass_mode_button, chunk_button.get_item_text(chunk)))
 			chunk_button.set_custom_minimum_size(Vector2(65, 35))
-
+			
 			var mult_apply_button := Button.new()
 			mult_apply_button.set_custom_minimum_size(Vector2(65, 30))
 			mult_apply_button.pressed.connect(_apply_mode_to_all_chunks)
 			mult_apply_button.text = "Apply mode to all chunks"
-
+			
 			cont = CenterContainer.new()
 			cont.set_custom_minimum_size(Vector2(65, 35))
 			cont.add_child(chunk_button, true)
 			hbox_container.add_child(cont, true)
-
+			
 			var v_sep := VSeparator.new()
 			hbox_container.add_child(v_sep, true)
-
+			
 			cont = CenterContainer.new()
 			cont.set_custom_minimum_size(Vector2(65, 35))
 			cont.add_child(option_button, true)
 			hbox_container.add_child(cont, true)
-
+			
 			v_sep = VSeparator.new()
 			hbox_container.add_child(v_sep, true)
-
+			
 			cont = CenterContainer.new()
 			cont.set_custom_minimum_size(Vector2(85, 35))
 			cont.add_child(grass_mode_button, true)
 			hbox_container.add_child(cont, true)
-
+			
 			v_sep = VSeparator.new()
 			hbox_container.add_child(v_sep, true)
-
+			
 			cont = MarginContainer.new()
 			cont.set_custom_minimum_size(Vector2(65, 35))
 			cont.add_theme_constant_override("margin_bottom", 3)
@@ -1051,25 +1041,25 @@ func _create_terrain_settings_tabs() -> Control:
 	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tabs.size_flags_vertical = Control.SIZE_FILL
 	tabs.set_custom_minimum_size(Vector2(0, TERRAIN_TAB_VISIBLE_HEIGHT + 36))
-
+	
 	tabs.add_child(_create_chunk_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Chunks")
-
+	
 	tabs.add_child(_create_vertex_painter_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Vertex Painter")
-
+	
 	tabs.add_child(_create_environment_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Environment")
-
+	
 	tabs.add_child(_create_empty_tab("Wind"))
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Wind")
-
+	
 	tabs.add_child(_create_empty_tab("Post-Processing"))
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Post-Processing")
-
+	
 	tabs.current_tab = clampi(_terrain_settings_selected_tab, 0, max(tabs.get_tab_count() - 1, 0))
 	tabs.tab_changed.connect(func(tab_idx: int): _terrain_settings_selected_tab = tab_idx)
-
+	
 	return tabs
 
 
@@ -1125,7 +1115,7 @@ func _cache_terrain_settings_ui_state() -> void:
 	var tabs := _find_terrain_settings_tabs()
 	if tabs == null:
 		return
-
+	
 	_terrain_settings_selected_tab = tabs.current_tab
 	for page in tabs.get_children():
 		if page is Control:
@@ -1166,54 +1156,54 @@ func _create_terrain_settings_list(setting_names: Array) -> Control:
 	var wrapper := HBoxContainer.new()
 	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wrapper.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-
+	
 	var left_spacer := Control.new()
 	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wrapper.add_child(left_spacer, true)
-
+	
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 6)
 	list.set_custom_minimum_size(Vector2(520, 0))
 	list.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	list.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-
+	
 	for setting_name_variant in setting_names:
 		var setting_name := str(setting_name_variant)
 		if not terrain_settings_data.has(setting_name):
 			continue
 		list.add_child(_create_terrain_setting_row(setting_name), true)
-
+	
 	wrapper.add_child(list, true)
-
+	
 	var right_spacer := Control.new()
 	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wrapper.add_child(right_spacer, true)
-
+	
 	return wrapper
 
 
 func _create_terrain_setting_row(setting: String) -> Control:
 	var editor_setting = terrain_settings_data[setting]
 	var s_value := plugin.current_terrain_node.get(setting)
-
+	
 	var hbox := HBoxContainer.new()
 	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
+	
 	var label := Label.new()
 	var label_text := TERRAIN_SETTINGS_LABEL_OVERRIDES.get(setting, _make_editor_name(setting))
 	label.set_text(str(label_text) + ':')
 	label.set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER)
 	label.set_custom_minimum_size(Vector2(170, 25))
-
+	
 	var label_c_cont := CenterContainer.new()
 	label_c_cont.set_custom_minimum_size(Vector2(170, 35))
 	label_c_cont.add_child(label, true)
 	hbox.add_child(label_c_cont, true)
-
+	
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hbox.add_child(spacer)
-
+	
 	var ts_cont : Control
 	match editor_setting:
 		"Vector2":
@@ -1231,7 +1221,7 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			spin_box.value = plugin.current_terrain_node.get(setting)
 			spin_box.value_changed.connect(func(value): _on_terrain_setting_changed(setting, value))
 			spin_box.set_custom_minimum_size(Vector2(70, 25))
-
+			
 			ts_cont = CenterContainer.new()
 			ts_cont.set_custom_minimum_size(Vector2(80, 35))
 			ts_cont.add_child(spin_box, true)
@@ -1247,7 +1237,7 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			spin_slider.set_value(s_value)
 			spin_slider.value_changed.connect(func(value): _on_terrain_setting_changed(setting, value))
 			spin_slider.set_custom_minimum_size(Vector2(120, 35))
-
+			
 			ts_cont = MarginContainer.new()
 			ts_cont.set_custom_minimum_size(Vector2(120, 35))
 			ts_cont.add_theme_constant_override("margin_top", -5)
@@ -1264,7 +1254,7 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			_hide_textures(editor_r_picker)
 			editor_r_picker.resource_changed.connect(func(resource): _on_terrain_setting_changed(setting, resource))
 			editor_r_picker.set_custom_minimum_size(Vector2(120, 25))
-
+			
 			ts_cont = CenterContainer.new()
 			ts_cont.set_custom_minimum_size(Vector2(130, 35))
 			ts_cont.add_child(editor_r_picker, true)
@@ -1273,7 +1263,7 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			c_pick_button.color = plugin.current_terrain_node.get(setting)
 			c_pick_button.color_changed.connect(func(color): _on_terrain_setting_changed(setting, color))
 			c_pick_button.set_custom_minimum_size(Vector2(105, 25))
-
+			
 			ts_cont = CenterContainer.new()
 			ts_cont.set_custom_minimum_size(Vector2(115, 35))
 			ts_cont.add_child(c_pick_button, true)
@@ -1283,7 +1273,7 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			checkbox.button_pressed = plugin.current_terrain_node.get(setting)
 			checkbox.toggled.connect(func(pressed): _on_terrain_setting_changed(setting, pressed))
 			checkbox.set_custom_minimum_size(Vector2(25, 25))
-
+			
 			ts_cont = CenterContainer.new()
 			ts_cont.set_custom_minimum_size(Vector2(35, 35))
 			ts_cont.add_child(checkbox, true)
@@ -1305,7 +1295,7 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			elif setting == "extra_collision_layer":
 				for i in range(24):
 					option_button.add_item(str(i + 9))
-
+			
 			if setting == "extra_collision_layer":
 				option_button.selected = plugin.current_terrain_node.get(setting) - 9
 			elif setting == "default_wall_texture":
@@ -1320,7 +1310,7 @@ func _create_terrain_setting_row(setting: String) -> Control:
 				option_button.selected = 0
 			else:
 				option_button.selected = plugin.current_terrain_node.get(setting)
-
+			
 			if setting == "default_wall_texture":
 				option_button.item_selected.connect(func(index):
 					_on_terrain_setting_changed(setting, int(option_button.get_item_metadata(index)))
@@ -1328,7 +1318,7 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			else:
 				option_button.item_selected.connect(func(index): _on_terrain_setting_changed(setting, index))
 			option_button.set_custom_minimum_size(Vector2(120, 35))
-
+			
 			ts_cont = CenterContainer.new()
 			ts_cont.set_custom_minimum_size(Vector2(130, 35))
 			ts_cont.add_child(option_button, true)
@@ -1339,14 +1329,14 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			line_edit.placeholder_text = "(auto - scene relative)"
 			line_edit.text_submitted.connect(func(new_text): _on_terrain_setting_changed(setting, new_text))
 			line_edit.set_custom_minimum_size(Vector2(200, 25))
-
+			
 			ts_cont = CenterContainer.new()
 			ts_cont.set_custom_minimum_size(Vector2(210, 35))
 			ts_cont.add_child(line_edit, true)
 		"FolderPicker":
 			var folder_hbox := HBoxContainer.new()
 			folder_hbox.add_theme_constant_override("separation", 4)
-
+			
 			var path_edit := LineEdit.new()
 			path_edit.set_flat(true)
 			path_edit.text = str(plugin.current_terrain_node.get(setting))
@@ -1354,20 +1344,20 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			path_edit.text_submitted.connect(func(new_text): _on_terrain_setting_changed(setting, new_text))
 			path_edit.set_custom_minimum_size(Vector2(180, 25))
 			folder_hbox.add_child(path_edit, true)
-
+			
 			var browse_btn := Button.new()
 			browse_btn.text = "..."
 			browse_btn.tooltip_text = "Browse for folder"
 			browse_btn.set_custom_minimum_size(Vector2(30, 25))
 			browse_btn.pressed.connect(func(): _open_folder_dialog(setting, path_edit))
 			folder_hbox.add_child(browse_btn, true)
-
+			
 			ts_cont = CenterContainer.new()
 			ts_cont.set_custom_minimum_size(Vector2(220, 35))
 			ts_cont.add_child(folder_hbox, true)
 		_:
 			ts_cont = Control.new()
-
+	
 	hbox.add_child(ts_cont, true)
 	return hbox
 
@@ -1438,21 +1428,21 @@ func _open_folder_dialog(setting_name: String, path_edit: LineEdit) -> void:
 	dialog.file_mode = EditorFileDialog.FILE_MODE_OPEN_DIR
 	dialog.access = EditorFileDialog.ACCESS_RESOURCES
 	dialog.title = "Select Directory"
-
+	
 	# Set initial path from current value or project root
 	var current_path : String = path_edit.text
 	if current_path.is_empty():
 		dialog.current_dir = "res://"
 	else:
 		dialog.current_dir = current_path.get_base_dir()
-
+	
 	dialog.dir_selected.connect(func(dir: String):
 		path_edit.text = dir
 		_on_terrain_setting_changed(setting_name, dir)
 		dialog.queue_free()
 	)
 	dialog.canceled.connect(func(): dialog.queue_free())
-
+	
 	# Add to editor base control for proper modal behavior
 	EditorInterface.get_base_control().add_child(dialog)
 	dialog.popup_centered(Vector2i(600, 400))
@@ -1475,7 +1465,7 @@ func _on_chunk_selected(option_button: OptionButton, grass_mode_button: OptionBu
 		option_button.selected = -1
 		grass_mode_button.selected = -1
 		return
-
+	
 	var chunk := terrain.find_child(p_chunk) as MarchingSquaresTerrainChunk
 	if chunk == null:
 		selected_chunk = null
@@ -1483,12 +1473,12 @@ func _on_chunk_selected(option_button: OptionButton, grass_mode_button: OptionBu
 		option_button.selected = -1
 		grass_mode_button.selected = -1
 		return
-
+	
 	option_button.selected = int(chunk.merge_mode)
 	grass_mode_button.selected = int(chunk.grass_mode)
 	selected_chunk = chunk
 	plugin.selected_chunk = selected_chunk
-
+	
 	plugin.gizmo_plugin.trigger_redraw(terrain)
 
 
@@ -1549,29 +1539,29 @@ func _change_chunk_grass_mode(_chunk: MarchingSquaresTerrainChunk, m_mode: int) 
 
 func _make_vector_editor(type: String, value: Variant, setting_name: String) -> HBoxContainer:
 	var hbox_cont := HBoxContainer.new()
-
+	
 	if type == "Vector2":
 		var spin_x := make_spinbox(value.x, 0.1)
 		var spin_y := make_spinbox(value.y, 0.1)
-
+		
 		var handler_x := func(v):
 			var updated_val = Vector2(v, spin_y.value)
 			_on_terrain_setting_changed(setting_name, updated_val)
 		var handler_y := func(v):
 			var updated_val = Vector2(spin_x.value, v)
 			_on_terrain_setting_changed(setting_name, updated_val)
-
+		
 		spin_x.value_changed.connect(handler_x)
 		spin_y.value_changed.connect(handler_y)
-
+		
 		hbox_cont.add_child(spin_x)
 		hbox_cont.add_child(spin_y)
-
+	
 	elif type == "Vector3i":
 		var spin_x := make_spinbox(value.x, 1.0)
 		var spin_y := make_spinbox(value.y, 1.0)
 		var spin_z := make_spinbox(value.z, 1.0)
-
+		
 		var handler_x := func(v):
 			var updated_val = Vector3i(int(v), int(spin_y.value), int(spin_z.value))
 			_on_terrain_setting_changed(setting_name, updated_val)
@@ -1581,19 +1571,19 @@ func _make_vector_editor(type: String, value: Variant, setting_name: String) -> 
 		var handler_z := func(v):
 			var updated_val = Vector3i(int(spin_x.value), int(spin_y.value), int(v))
 			_on_terrain_setting_changed(setting_name, updated_val)
-
+		
 		spin_x.value_changed.connect(handler_x)
 		spin_y.value_changed.connect(handler_y)
 		spin_z.value_changed.connect(handler_z)
-
+		
 		hbox_cont.add_child(spin_x)
 		hbox_cont.add_child(spin_y)
 		hbox_cont.add_child(spin_z)
-
+	
 	return hbox_cont
 
 
-func _make_spinbox(val: float, step: float) -> SpinBox:
+func make_spinbox(val: float, step: float) -> SpinBox:
 	var spin_box := SpinBox.new()
 	spin_box.set_step(step)
 	spin_box.set_value(float(val))

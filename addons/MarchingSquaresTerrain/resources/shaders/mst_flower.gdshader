@@ -58,14 +58,14 @@ void vertex() {
 			// Wind animations (make sure you apply a texture in the shader parameters)
 			float wind_time = TIME * wind_speed;
 			vec2 scroll = wind_time * wind_direction;
-
+			
 			vec3 world_pos = MODEL_MATRIX[3].xyz;
 			vec2 wind_uv = (world_pos.xy * wind_scale) + scroll;
-
+			
 			float wind_value = texture(wind_texture, wind_uv).r;
-
+			
 			float wind = wind_value * left_to_right_mult;
-
+			
 			float bend_factor = clamp(VERTEX.y, 0.0, 1.0);
 			VERTEX += vec3(wind, 0.0, 0.0) * bend_factor;
 		}
@@ -76,9 +76,9 @@ void vertex() {
 		vec3 cam_y = vec3(0.0, 1.0, 0.0);
 		vec3 cam_x = normalize(cross(cam_y, cam_z));
 		mat3 spherical_billboard = mat3(cam_x, cam_y, cam_z);
-
+		
 		vec3 billboarded_vertex = spherical_billboard * VERTEX;
-
+		
 		vec3 instance_origin = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 		vec3 world_position = instance_origin + billboarded_vertex;
 		POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(world_position, 1.0);
@@ -111,13 +111,13 @@ void fragment() {
 void light() {
 	float NdotL = dot(NORMAL, LIGHT);
 	NdotL = clamp(NdotL, 0.0, 1.0);
-
+	
 	float stepped = ceil(NdotL * float(bands)) / float(bands);
 	float toon_light = mix(shadow_intensity, 0.3, stepped);
-
+	
 	toon_light *= ATTENUATION;
-
+	
 	vec3 light_color = mix(shadow_color.rgb, LIGHT_COLOR.rgb, toon_light);
-
+	
 	DIFFUSE_LIGHT += light_color;
 }

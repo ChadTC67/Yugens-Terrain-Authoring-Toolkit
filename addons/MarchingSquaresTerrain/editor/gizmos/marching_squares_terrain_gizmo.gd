@@ -341,8 +341,8 @@ func _redraw():
 			
 			var chunk_dict: Dictionary = current_populator.cell_data[populator_chunk]
 			for cell_coords: Vector2i in chunk_dict.keys():
-				var draw_x := (populator_chunk_coords.x * (terrain_system.dimensions.x - 1) + cell_coords.x) * terrain_system.cell_size.x
-				var draw_z := (populator_chunk_coords.y * (terrain_system.dimensions.z - 1) + cell_coords.y) * terrain_system.cell_size.y
+				var draw_x = (populator_chunk_coords.x * (terrain_system.dimensions.x - 1) + cell_coords.x) * terrain_system.cell_size.x
+				var draw_z = (populator_chunk_coords.y * (terrain_system.dimensions.z - 1) + cell_coords.y) * terrain_system.cell_size.y
 				var draw_y = populator_chunk.height_map[cell_coords.y][cell_coords.x]
 				
 				var sample: float = 1.0
