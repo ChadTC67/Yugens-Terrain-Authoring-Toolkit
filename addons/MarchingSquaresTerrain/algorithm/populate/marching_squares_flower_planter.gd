@@ -79,7 +79,7 @@ func setup(redo: bool = true):
 	for chunk in populated_chunks:
 		if cell_data.has(chunk):
 			total_cells += cell_data[chunk].size()
-	multimesh.instance_count = total_cells * flower_subdivisions
+	multimesh.instance_count = total_cells * flower_subdivisions * flower_subdivisions
 	
 	if flower_mesh:
 		multimesh.mesh = flower_mesh
@@ -166,7 +166,7 @@ func generate_flowers_on_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i
 		return start_index
 	
 	var points: PackedVector2Array = []
-	var count := flower_subdivisions 
+	var count := flower_subdivisions * flower_subdivisions
 	var chunk_offset: Vector3
 	if chunk.is_inside_tree():
 		chunk_offset = chunk.global_position
@@ -289,11 +289,21 @@ func rebuild_cell_data() -> void:
 
 func _get_flower_cell_data(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -> Dictionary:
 	if not chunk.cell_geometry or not chunk.cell_geometry.has(cell):
+		# Persisted flower masks can be restored before terrain geometry exists.
+		# Generate only this cell before copying its geometry.
+		chunk.regenerate_cell_geometry(cell)
+	if not chunk.cell_geometry or not chunk.cell_geometry.has(cell):
 		printerr("[MarchingSquaresFlowerPlanter] cell_geometry is missing for cell: ", cell)
 		return {}
 	
 	var cell_data_copy := {}
 	var geo_data = chunk.cell_geometry[cell]
+	if not geo_data.has("verts") or not geo_data.has("uvs") or not geo_data.has("custom_1_values") or not geo_data.has("is_floor"):
+		chunk.regenerate_cell_geometry(cell)
+		geo_data = chunk.cell_geometry.get(cell, {})
+	if not geo_data.has("verts") or not geo_data.has("uvs") or not geo_data.has("custom_1_values") or not geo_data.has("is_floor"):
+		printerr("[MarchingSquaresFlowerPlanter] invalid cell_geometry data for cell: ", cell)
+		return {}
 	cell_data_copy["verts"] = geo_data["verts"]
 	cell_data_copy["uvs"] = geo_data["uvs"]
 	cell_data_copy["custom_1_values"] = geo_data["custom_1_values"]
@@ -304,6 +314,8 @@ func _get_flower_cell_data(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -
 
 ## Creates a flower instance at the given position with proper transform and random color
 func _create_flower_instance(index: int, instance_position: Vector3, a: Vector3, b: Vector3, c: Vector3) -> void:
+	if not multimesh or index < 0 or index >= multimesh.instance_count:
+		return
 	var edge1 := b - a
 	var edge2 := c - a
 	var normal := edge1.cross(edge2).normalized()
