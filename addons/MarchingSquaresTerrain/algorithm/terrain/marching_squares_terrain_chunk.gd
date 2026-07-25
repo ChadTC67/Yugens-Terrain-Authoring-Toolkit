@@ -430,6 +430,69 @@ func regenerate_mesh(use_threads: bool =  false):
 	print_verbose("Generated terrain in "+str(elapsed_time)+"ms")
 
 
+func _reset_cell_geometry(cell_coords: Vector2i) -> void:
+	cell_geometry[cell_coords] = {
+		"verts": PackedVector3Array(),
+		"uvs": PackedVector2Array(),
+		"uv2s": PackedVector2Array(),
+		"color_0s": PackedColorArray(),
+		"color_1s": PackedColorArray(),
+		"custom_1_values": PackedColorArray(),
+		"mat_blend": PackedColorArray(),
+		"is_floor": [],
+	}
+
+
+func _create_cell_for_geometry(cell_coords: Vector2i):
+	var x := cell_coords.x
+	var z := cell_coords.y
+	var h00 := 0.0
+	var h01 := 0.0
+	var h10 := 0.0
+	var h11 := 0.0
+	if height_map is Array and height_map.size() > z and height_map[z] is Array and height_map[z].size() > x:
+		h00 = float(height_map[z][x])
+	if height_map is Array and height_map.size() > z and height_map[z] is Array and height_map[z].size() > x + 1:
+		h01 = float(height_map[z][x + 1])
+	else:
+		h01 = h00
+	if height_map is Array and height_map.size() > z + 1 and height_map[z + 1] is Array and height_map[z + 1].size() > x:
+		h10 = float(height_map[z + 1][x])
+	else:
+		h10 = h00
+	if height_map is Array and height_map.size() > z + 1 and height_map[z + 1] is Array and height_map[z + 1].size() > x + 1:
+		h11 = float(height_map[z + 1][x + 1])
+	else:
+		h11 = h00
+
+	var color_helper := MSTVertexColorHelper.new()
+	var cell
+	if terrain_system != null and terrain_system.prefab_set != null:
+		cell = MSTPrefabCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold)
+	else:
+		cell = MSTTerrainCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold)
+	color_helper.chunk = self
+	color_helper.cell = cell
+	return cell
+
+
+func regenerate_cell_geometry(cell_coords: Vector2i) -> void:
+	if cell_coords.x < 0 or cell_coords.y < 0 or cell_coords.x >= dimensions.x - 1 or cell_coords.y >= dimensions.z - 1:
+		return
+	if cell_geometry.is_empty():
+		cell_geometry = {}
+	global_position_cached = global_position if is_inside_tree() else position
+	_reset_cell_geometry(cell_coords)
+	var cell = _create_cell_for_geometry(cell_coords)
+	var previous_st := st
+	st = null
+	cell.generate_geometry(cell_coords)
+	st = previous_st
+	if needs_update.size() > cell_coords.y and needs_update[cell_coords.y].size() > cell_coords.x:
+		needs_update[cell_coords.y][cell_coords.x] = false
+	print("Regenerated cell geometry: ", cell_coords)
+
+
 func generate_terrain_cells(use_threads: bool):
 	if not cell_geometry:
 		cell_geometry = {}
@@ -492,44 +555,8 @@ func generate_terrain_cells(use_threads: bool):
 
 			# If geometry did change or none exists yet,
 			# Create an entry for this cell (will also override any existing one)
-			cell_geometry[cell_coords] = {
-				"verts": PackedVector3Array(),
-				"uvs": PackedVector2Array(),
-				"uv2s": PackedVector2Array(),
-				"color_0s": PackedColorArray(),
-				"color_1s": PackedColorArray(),
-				"custom_1_values": PackedColorArray(),
-				"mat_blend": PackedColorArray(),
-				"is_floor": [],
-			}
-
-			var color_helper := MSTVertexColorHelper.new()
-			# Defensive: guard against malformed/serialized height_map rows
-			var h00 := 0.0
-			var h01 := 0.0
-			var h10 := 0.0
-			var h11 := 0.0
-			if height_map is Array and height_map.size() > z and height_map[z] is Array and height_map[z].size() > x:
-				h00 = float(height_map[z][x])
-			if height_map is Array and height_map.size() > z and height_map[z] is Array and height_map[z].size() > x+1:
-				h01 = float(height_map[z][x+1])
-			else:
-				h01 = h00
-			if height_map is Array and height_map.size() > z+1 and height_map[z+1] is Array and height_map[z+1].size() > x:
-				h10 = float(height_map[z+1][x])
-			else:
-				h10 = h00
-			if height_map is Array and height_map.size() > z+1 and height_map[z+1] is Array and height_map[z+1].size() > x+1:
-				h11 = float(height_map[z+1][x+1])
-			else:
-				h11 = h00
-			var cell
-			if terrain_system != null and terrain_system.prefab_set != null:
-				cell = MSTPrefabCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold)
-			else:
-				cell = MSTTerrainCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold)
-			color_helper.chunk = self
-			color_helper.cell = cell
+			_reset_cell_geometry(cell_coords)
+			var cell = _create_cell_for_geometry(cell_coords)
 
 			work_load =  func():
 				cell.generate_geometry(cell_coords)
@@ -567,14 +594,17 @@ func add_polygons(
 
 		cell_generation_mutex.lock()
 		var floor_mode : bool = true
-		st.set_smooth_group(0)
+		if st:
+			st.set_smooth_group(0)
 		for i in range(pts.size()):
 			if floor_mode and not floors[i]:
 				floor_mode = false
-				st.set_smooth_group(-1)
+				if st:
+					st.set_smooth_group(-1)
 			elif not floor_mode and floors[i]:
 				floor_mode = true
-				st.set_smooth_group(0)
+				if st:
+					st.set_smooth_group(0)
 			_add_point(cell_coords, pts[i], uvs[i], uv2s[i], color_0s[i], color_1s[i], custom_1_values[i], mat_blends[i], floors[i])
 		cell_generation_mutex.unlock()
 
@@ -582,13 +612,14 @@ func add_polygons(
 # Adds a point. Coordinates are relative to the top-left corner (not mesh origin relative)
 # UV.x is closeness to the bottom of an edge. UV.Y is closeness to the edge of a cliff
 func _add_point(cell_coords: Vector2i, vert: Vector3, uv: Vector2, uv2: Vector2, color_0: Color, color_1: Color, custom_1_value: Color, mat_blend: Color, is_floor: bool):
-	st.set_color(color_0)
-	st.set_custom(0, color_1)
-	st.set_custom(1, custom_1_value)
-	st.set_custom(2, mat_blend)
-	st.set_uv(uv)
-	st.set_uv2(uv2)
-	st.add_vertex(vert)
+	if st:
+		st.set_color(color_0)
+		st.set_custom(0, color_1)
+		st.set_custom(1, custom_1_value)
+		st.set_custom(2, mat_blend)
+		st.set_uv(uv)
+		st.set_uv2(uv2)
+		st.add_vertex(vert)
 
 	cell_geometry[cell_coords]["verts"].append(vert)
 	cell_geometry[cell_coords]["uvs"].append(uv)

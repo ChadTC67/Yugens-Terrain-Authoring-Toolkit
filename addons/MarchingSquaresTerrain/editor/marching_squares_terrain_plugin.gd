@@ -1764,10 +1764,11 @@ func draw_populator_mask_pattern_action(terrain: MarchingSquaresTerrain, pattern
 		if not terrain.chunks.has(chunk_coords):
 			continue
 		var chunk: MarchingSquaresTerrainChunk = terrain.chunks[chunk_coords]
-		# Generate geometry for this chunk only if needed.
-		if chunk.cell_geometry.is_empty():
-			chunk.regenerate_mesh(false)
 		for cell_coords in pattern[chunk_coords]:
+			# Populate can run before editor geometry exists. Rebuild only the
+			# cells being painted instead of regenerating the whole chunk mesh.
+			if not chunk.cell_geometry.has(cell_coords):
+				chunk.regenerate_cell_geometry(cell_coords)
 			if is_erase:
 				flower_planter.remove_flowers_from_cell(chunk, cell_coords)
 			else:
