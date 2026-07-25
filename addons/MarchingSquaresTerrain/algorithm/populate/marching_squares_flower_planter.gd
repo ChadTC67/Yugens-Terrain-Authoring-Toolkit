@@ -1,6 +1,6 @@
 @icon("uid://sx50shr1w2g0")
 @tool
-extends MarchingSquaresPlanter
+extends MarchingSquaresPopulator
 class_name MarchingSquaresFlowerPlanter
 
 
@@ -50,9 +50,11 @@ var terrain_system : MarchingSquaresTerrain
 	set(value):
 		base_height_offset = value
 		multimesh.mesh.center_offset.y = base_height_offset + multimesh.mesh.size.y / 2
-@export_custom(PROPERTY_HINT_RANGE, "-2, 2", PROPERTY_USAGE_STORAGE) var rng_height_range : float = 0.0:
+@export_custom(PROPERTY_HINT_RANGE, "0, 2", PROPERTY_USAGE_STORAGE) var rng_height_range : float = 0.0:
 	set(value):
 		rng_height_range = value
+		var flower_mat := flower_mesh.material as ShaderMaterial
+		flower_mat.set_shader_parameter("rng_height_range", value)
 
 @export_storage var planted_chunks : Dictionary = {} 
 var populated_chunks : Array[MarchingSquaresTerrainChunk]
@@ -96,10 +98,17 @@ func _init() -> void:
 
 
 func regenerate_flowers() -> void:
-	if not planted_chunks.is_empty() and cell_data.is_empty() and not MarchingSquaresTerrainPlugin.instance.remove_selection:
+	for chunk in populated_chunks:
+		if not is_instance_valid(chunk):
+			continue
+		if chunk.cell_geometry.is_empty():
+			return
+	
+	var plugin := MarchingSquaresTerrainPlugin.instance
+	var remove_selection := plugin != null and plugin.remove_selection
+	if not planted_chunks.is_empty() and cell_data.is_empty() and not remove_selection:
 		printerr("No cell data set while regenerating cells")
 		return
-	
 	if not multimesh:
 		setup()
 	
@@ -110,12 +119,17 @@ func regenerate_flowers() -> void:
 			index = generate_flowers_on_cell(chunk, cell, index)
 	
 	if should_billboard:
-		multimesh.mesh.center_offset.y = multimesh.mesh.size.y
+		multimesh.mesh.center_offset.y = base_height_offset + multimesh.mesh.size.y / 2
 	else:
 		multimesh.mesh.center_offset.y = multimesh.mesh.size.y / 2
 
 
 func add_flowers_to_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -> void:
+	if cell.x < 0 or cell.x >= terrain_system.dimensions.x - 1:
+		return
+	if cell.y < 0 or cell.y >= terrain_system.dimensions.z - 1:
+		return
+	
 	if not planted_chunks.has(chunk.chunk_coords):
 		planted_chunks[chunk.chunk_coords] = []
 	if cell not in planted_chunks[chunk.chunk_coords]:
@@ -153,7 +167,14 @@ func generate_flowers_on_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i
 	
 	var points: PackedVector2Array = []
 	var count := flower_subdivisions 
-	var chunk_offset := chunk.global_transform.origin
+	var chunk_offset: Vector3
+	if chunk.is_inside_tree():
+		chunk_offset = chunk.global_position
+	elif terrain_system and terrain_system.is_inside_tree():
+		chunk_offset = terrain_system.global_position + chunk.position
+	else:
+		chunk_offset = chunk.position
+	
 	
 	for z in range(flower_subdivisions):
 		for x in range(flower_subdivisions):
@@ -259,16 +280,20 @@ func rebuild_cell_data() -> void:
 			
 			cell_data[chunk_node] = {}
 			for cell in planted_chunks[chunk_coords]:
+				if cell.x < 0 or cell.x >= terrain_system.dimensions.x - 1:
+					continue
+				if cell.y < 0 or cell.y >= terrain_system.dimensions.z - 1:
+					continue
 				cell_data[chunk_node][cell] = _get_flower_cell_data(chunk_node, cell)	
 
 
 func _get_flower_cell_data(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -> Dictionary:
 	if not chunk.cell_geometry or not chunk.cell_geometry.has(cell):
+		printerr("[MarchingSquaresFlowerPlanter] cell_geometry is missing for cell: ", cell)
 		return {}
 	
 	var cell_data_copy := {}
 	var geo_data = chunk.cell_geometry[cell]
-	
 	cell_data_copy["verts"] = geo_data["verts"]
 	cell_data_copy["uvs"] = geo_data["uvs"]
 	cell_data_copy["custom_1_values"] = geo_data["custom_1_values"]

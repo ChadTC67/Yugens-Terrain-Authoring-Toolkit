@@ -108,9 +108,11 @@ func add_populator_settings() -> void:
 				ts_cont.add_child(editor_vec3, true)
 				vbox.add_child(ts_cont, true)
 			"SpinBox":
-				var spin_box := _make_spinbox(selected_populator.get(var_name), 0.001)
-				if var_name == "base_height_offset":
-					spin_box.step = 0.01
+				var spin_box : SpinBox
+				if var_name in ["flower_subdivisions"]:
+					spin_box = _make_spinbox_int(selected_populator.get(var_name), 1)
+				else:
+					spin_box = _make_spinbox_float(selected_populator.get(var_name), 0.01)
 				spin_box.value_changed.connect(func(value): _on_populator_setting_changed(var_name, value))
 				spin_box.set_custom_minimum_size(Vector2(25, 25))
 				
@@ -171,8 +173,8 @@ func _make_vector_editor(type: String, value: Variant, setting_name: String) -> 
 	var vbox_cont := VBoxContainer.new()
 	
 	if type == "Vector2":
-		var spin_x := _make_spinbox(value.x, 0.1)
-		var spin_y := _make_spinbox(value.y, 0.1)
+		var spin_x := _make_spinbox_float(value.x, 0.1)
+		var spin_y := _make_spinbox_float(value.y, 0.1)
 		
 		var handler_x = func(v):
 			var updated_val = Vector2(v, spin_y.value)
@@ -188,9 +190,9 @@ func _make_vector_editor(type: String, value: Variant, setting_name: String) -> 
 		vbox_cont.add_child(spin_y)
 	
 	elif type == "Vector3":
-		var spin_x := _make_spinbox(value.x, 0.1)
-		var spin_y := _make_spinbox(value.y, 0.1)
-		var spin_z := _make_spinbox(value.z, 0.1)
+		var spin_x := _make_spinbox_float(value.x, 0.1)
+		var spin_y := _make_spinbox_float(value.y, 0.1)
+		var spin_z := _make_spinbox_float(value.z, 0.1)
 		
 		var handler_x = func(v):
 			var updated_val = Vector3(v, spin_y.value, spin_z.value)
@@ -213,9 +215,17 @@ func _make_vector_editor(type: String, value: Variant, setting_name: String) -> 
 	return vbox_cont
 
 
-func _make_spinbox(val: float, step: float) -> SpinBox:
+func _make_spinbox_int(val: int, step: int) -> SpinBox:
 	var spin_box := SpinBox.new()
 	spin_box.set_step(step)
-	spin_box.set_value(float(val))
+	spin_box.set_value(val)
+	spin_box.set_custom_minimum_size(Vector2(50, 25))
+	return spin_box
+
+
+func _make_spinbox_float(val: float, step: float) -> SpinBox:
+	var spin_box := SpinBox.new()
+	spin_box.set_step(step)
+	spin_box.set_value(val)
 	spin_box.set_custom_minimum_size(Vector2(50, 25))
 	return spin_box

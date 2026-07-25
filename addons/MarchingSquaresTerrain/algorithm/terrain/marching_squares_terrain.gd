@@ -1153,7 +1153,8 @@ func _deferred_enter_tree() -> void:
 			chunks[child.chunk_coords] = child
 			child.terrain_system = self
 			child.grass_planter = null
-		elif child is MarchingSquaresPopulator: # Prep the populators
+	for child in get_children():
+		if child is MarchingSquaresPopulator: # Prep the populators
 			child.terrain_system = self
 			child.rebuild_cell_data()
 			if child is MarchingSquaresFlowerPlanter:
@@ -1354,7 +1355,7 @@ func remove_chunk(x: int, z: int, plugin):
 			if child.planted_chunks.has(chunk_coords):
 				child.planted_chunks.erase(chunk_coords)
 				child.populated_chunks.erase(chunk)
-				child.cell_data.erase(chunk_coords)
+				child.cell_data.erase(chunk)
 				child.terrain_system = self
 				child.setup(false)
 				child.regenerate_flowers()
@@ -1388,7 +1389,7 @@ func remove_chunk_from_tree(x: int, z: int, plugin):
 			if child.planted_chunks.has(chunk_coords):
 				child.planted_chunks.erase(chunk_coords)
 				child.populated_chunks.erase(chunk)
-				child.cell_data.erase(chunk_coords)
+				child.cell_data.erase(chunk)
 				child.setup(false)
 				child.regenerate_flowers()
 

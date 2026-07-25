@@ -7,6 +7,10 @@ uniform bool use_custom_color = true;
 uniform bool should_billboard = true;
 group_uniforms;
 
+group_uniforms Offset;
+uniform float rng_height_range : hint_range(0.0, 2.0, 0.1) = 0.0;
+group_uniforms;
+
 group_uniforms Shading;
 uniform vec4 shadow_color : source_color;
 uniform int bands : hint_range(1, 10) = 5;
@@ -33,19 +37,16 @@ float randf_from_id(float id) {
 }
 
 void vertex() {
-	float rand_angle = randf_from_id(float(INSTANCE_ID)) * TAU;
+	float rand_factor = randf_from_id(float(INSTANCE_ID));
+	
+	float y_offset = rand_factor * rng_height_range;
+	VERTEX.y += y_offset;
+	
+	float rand_angle = rand_factor * TAU;
 	float s = sin(rand_angle);
 	float c = cos(rand_angle);
-	if (should_billboard) {
-		VERTEX.y -= 1.0;
-		
-		mat2 rand_rot = mat2(vec2(c, s), vec2(-s,  c));
-		VERTEX.xy *= rand_rot;
-		
-		VERTEX.y += 0.75;
-	}
-	else {
-		mat2 rand_rot = mat2(vec2(c, -s), vec2(s,  c));
+	if (!should_billboard) {
+		mat2 rand_rot = mat2(vec2(c, -s), vec2(s, c));
 		VERTEX.xz *= rand_rot;
 	}
 	if (animate_active && VERTEX.y > 0.0) {
@@ -74,7 +75,12 @@ void vertex() {
 	if (should_billboard) {
 		vec3 cam_z = normalize(CAMERA_DIRECTION_WORLD);
 		vec3 cam_y = vec3(0.0, 1.0, 0.0);
-		vec3 cam_x = normalize(cross(cam_y, cam_z));
+		vec3 cam_x = cross(cam_y, cam_z);
+		if (length(cam_x) < 0.001) {
+			cam_x = vec3(1.0, 0.0, 0.0);
+		}
+		cam_x = normalize(cam_x);
+		cam_y = normalize(cross(cam_z, cam_x));
 		mat3 spherical_billboard = mat3(cam_x, cam_y, cam_z);
 		
 		vec3 billboarded_vertex = spherical_billboard * VERTEX;

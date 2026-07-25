@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://demjm5kq2kdpa"]
 
 [ext_resource type="Script" uid="uid://dclwk65s0jbm4" path="res://addons/MarchingSquaresTerrain/algorithm/populate/marching_squares_flower_planter.gd" id="1_pvhvu"]
-[ext_resource type="Shader" path="res://addons/MarchingSquaresTerrain/resources/shaders/mst_flower.gdshader" id="2_ntu2f"]
+[ext_resource type="Shader" uid="uid://nm6bsrx1aie5" path="res://addons/MarchingSquaresTerrain/resources/shaders/mst_flower.gdshader" id="2_ntu2f"]
 [ext_resource type="Texture2D" uid="uid://ld4ildjiaxlw" path="res://addons/MarchingSquaresTerrain/resources/plugin_materials/round_leaf.png" id="3_s7w8h"]
 [ext_resource type="Texture2D" uid="uid://dk1t5hy2tiil7" path="res://addons/MarchingSquaresTerrain/resources/plugin_materials/wind_noise_texture.tres" id="4_qqd6e"]
 

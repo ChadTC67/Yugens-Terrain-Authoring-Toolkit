@@ -55,6 +55,13 @@ func _on_populator_confirmed() -> void:
 	
 	if Engine.is_editor_hint():
 		populator.owner = Engine.get_singleton("EditorInterface").get_edited_scene_root()
+		
+		var plugin := MarchingSquaresTerrainPlugin.instance
+		if plugin:
+			plugin.current_populator = populator
+			plugin.ui.tool_attributes.show_tool_attributes(plugin.mode)
+			plugin.ui.populator_settings.add_populator_settings()
+			plugin.gizmo_plugin.trigger_redraw(current_terrain_node)
 
 
 func _add_new_populator() -> void:

@@ -1752,29 +1752,28 @@ func apply_composite_pattern_action(terrain: MarchingSquaresTerrain, patterns: D
 
 
 # Stores chunk and mask data for FlowerPlanters directly in the instance
-func draw_populator_mask_pattern_action(terrain: MarchingSquaresTerrain, pattern: Dictionary , is_erase: bool) -> void:
+func draw_populator_mask_pattern_action(terrain: MarchingSquaresTerrain, pattern: Dictionary, is_erase: bool) -> void:
 	if current_populator == null:
 		printerr("No valid populator selected")
 		return
-	elif current_populator is MarchingSquaresFlowerPlanter:
-		var flower_planter := current_populator as MarchingSquaresFlowerPlanter
-		for chunk_coords in pattern:
-			if not terrain.chunks.has(chunk_coords):
-				continue
-			
-			var chunk : MarchingSquaresTerrainChunk = terrain.chunks[chunk_coords]
-			for cell_coords in pattern[chunk_coords]:
-				if is_erase:
-					flower_planter.remove_flowers_from_cell(chunk, cell_coords)
-					continue
-				else:
-					flower_planter.add_flowers_to_cell(chunk, cell_coords)
-		
-		flower_planter.setup(false)
-		flower_planter.regenerate_flowers()
-	else:
+	if not current_populator is MarchingSquaresFlowerPlanter:
 		printerr("Couldn't identify a known populator type to draw to")
 		return
+	var flower_planter := current_populator as MarchingSquaresFlowerPlanter
+	for chunk_coords in pattern:
+		if not terrain.chunks.has(chunk_coords):
+			continue
+		var chunk: MarchingSquaresTerrainChunk = terrain.chunks[chunk_coords]
+		# Generate geometry for this chunk only if needed.
+		if chunk.cell_geometry.is_empty():
+			chunk.regenerate_mesh(false)
+		for cell_coords in pattern[chunk_coords]:
+			if is_erase:
+				flower_planter.remove_flowers_from_cell(chunk, cell_coords)
+			else:
+				flower_planter.add_flowers_to_cell(chunk, cell_coords)
+	flower_planter.setup(false)
+	flower_planter.regenerate_flowers()
 
 #region heightmap related
 
