@@ -490,7 +490,6 @@ func regenerate_cell_geometry(cell_coords: Vector2i) -> void:
 	st = previous_st
 	if needs_update.size() > cell_coords.y and needs_update[cell_coords.y].size() > cell_coords.x:
 		needs_update[cell_coords.y][cell_coords.x] = false
-	print("Regenerated cell geometry: ", cell_coords)
 
 
 func generate_terrain_cells(use_threads: bool):

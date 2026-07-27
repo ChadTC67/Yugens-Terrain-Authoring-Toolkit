@@ -59,6 +59,10 @@ func add_populator_settings() -> void:
 	
 	var selected_populator := plugin.current_populator
 	
+	if !is_instance_valid(selected_populator):
+		plugin.current_populator = null
+		return
+	
 	var var_data : Array[Dictionary]
 	if selected_populator is MarchingSquaresFlowerPlanter:
 		var_data = FLOWER_VAR_DATA.duplicate()

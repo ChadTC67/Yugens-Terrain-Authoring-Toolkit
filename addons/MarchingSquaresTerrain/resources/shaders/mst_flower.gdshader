@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode diffuse_toon, depth_draw_opaque;
+render_mode diffuse_toon, depth_draw_opaque, cull_disabled;
 
 group_uniforms Albedo;
 uniform sampler2D flower_texture : source_color, filter_nearest;
@@ -31,6 +31,7 @@ group_uniforms;
 
 varying vec3 model_origin;
 varying vec4 instance_color;
+varying vec3 light_vertex_position;
 
 float randf_from_id(float id) {
 	return fract(sin(id * 12.9898) * 43758.5453);
@@ -39,8 +40,10 @@ float randf_from_id(float id) {
 void vertex() {
 	float rand_factor = randf_from_id(float(INSTANCE_ID));
 	
-	float y_offset = rand_factor * rng_height_range;
-	VERTEX.y += y_offset;
+	if (rng_height_range > 0.0) {
+		float y_offset = rand_factor * rng_height_range;
+		VERTEX.y += y_offset;
+	}
 	
 	float rand_angle = rand_factor * TAU;
 	float s = sin(rand_angle);
@@ -90,14 +93,23 @@ void vertex() {
 		POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(world_position, 1.0);
 	}
 	else {
-		vec3 instance_origin = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-		POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(instance_origin + VERTEX, 1.0);
+		vec3 instance_origin = MODEL_MATRIX[3].xyz;
+		vec3 world_vertex = 
+			MODEL_MATRIX[0].xyz * VERTEX.z +
+			MODEL_MATRIX[1].xyz * -VERTEX.x +
+			MODEL_MATRIX[2].xyz * VERTEX.y;
+		
+		POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(instance_origin + world_vertex, 1.0);
+		NORMAL = normalize(
+			MODEL_MATRIX[0].xyz * NORMAL.z +
+			MODEL_MATRIX[1].xyz * NORMAL.x +
+			MODEL_MATRIX[2].xyz * NORMAL.y
+		);
+		light_vertex_position = (VIEW_MATRIX * vec4(instance_origin + world_vertex, 1.0)).xyz;
 	}
 	
 	model_origin = (MODELVIEW_MATRIX * vec4(0.,0.,0.,1.)).xyz;
 	instance_color = INSTANCE_CUSTOM;
-	if (should_billboard == false)
-		instance_color *= 5.0;
 }
 
 void fragment() {
@@ -112,6 +124,8 @@ void fragment() {
 	
 	if (should_billboard)
 		LIGHT_VERTEX = model_origin;
+	else
+		LIGHT_VERTEX = light_vertex_position;
 }
 
 void light() {

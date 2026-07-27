@@ -326,7 +326,7 @@ var flat_normals : bool = false:
 			grass_mat.set_shader_parameter("fps", animation_fps)
 			grass_mat.set_shader_parameter("animate_active", true)
 			for child in get_children():
-				if child is MarchingSquaresFlowerPlanter:
+				if child is MarchingSquaresFlowerPlanter and child.multimesh:
 					var flower_mat := child.multimesh.mesh.surface_get_material(0) as ShaderMaterial
 					flower_mat.set_shader_parameter("fps", clamp(value, 0, 30))
 @export_custom(PROPERTY_HINT_RANGE, "0, 4", PROPERTY_USAGE_STORAGE) var grass_subdivisions := 3:
@@ -344,12 +344,12 @@ var flat_normals : bool = false:
 		grass_size = value
 		var scale_factor := (cell_size.x + cell_size.y) / 4.0
 		var scaled_value := value * scale_factor
-
+		
 		# Update the shared grass mesh first (safe even before chunks initialize).
 		if grass_mesh:
 			grass_mesh.size = scaled_value
 			grass_mesh.center_offset.y = scaled_value.y / 2.0
-
+		
 		# Chunks may not have created GrassPlanter/Multimesh yet during early startup.
 		for chunk: MarchingSquaresTerrainChunk in chunks.values():
 			if not chunk or not chunk.grass_planter or not chunk.grass_planter.multimesh or not chunk.grass_planter.multimesh.mesh:
@@ -1153,12 +1153,6 @@ func _deferred_enter_tree() -> void:
 			chunks[child.chunk_coords] = child
 			child.terrain_system = self
 			child.grass_planter = null
-	for child in get_children():
-		if child is MarchingSquaresPopulator: # Prep the populators
-			child.terrain_system = self
-			child.rebuild_cell_data()
-			if child is MarchingSquaresFlowerPlanter:
-				child.regenerate_flowers()
 	
 	_warn_storage_expectations()
 	
@@ -1207,7 +1201,15 @@ func _deferred_enter_tree() -> void:
 			changed_default = bool(chunk.apply_default_wall_to_legacy_init(default_wall_texture)) or changed_default
 			if changed_default:
 				chunk.regenerate_all_cells(true)
-
+	
+	if EngineWrapper.instance.is_editor():
+		for child in get_children():
+			if child is MarchingSquaresPopulator: # Prep the populators
+				child.terrain_system = self
+				child.rebuild_cell_data()
+				if child is MarchingSquaresFlowerPlanter:
+					child.regenerate_flowers()
+	
 	_grass_regen_pending = false
 	load_finished.emit()
 	# Do not rebuild missing chunk meshes automatically while the editor is opening scenes.

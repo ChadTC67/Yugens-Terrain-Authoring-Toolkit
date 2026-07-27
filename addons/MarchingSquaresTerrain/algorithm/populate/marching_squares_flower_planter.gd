@@ -31,7 +31,11 @@ var terrain_system : MarchingSquaresTerrain
 	set(value):
 		flower_subdivisions = value
 		if Engine.is_editor_hint() and terrain_system:
-			setup(false)
+			for chunk in populated_chunks:
+				if chunk.cell_geometry.is_empty():
+					for cell in planted_chunks[chunk.chunk_coords]:
+						chunk.regenerate_cell_geometry(cell)
+			setup()
 			regenerate_flowers()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var should_billboard : bool = true:
 	set(value):
@@ -59,8 +63,6 @@ var terrain_system : MarchingSquaresTerrain
 @export_storage var planted_chunks : Dictionary = {} 
 var populated_chunks : Array[MarchingSquaresTerrainChunk]
 var cell_data : Dictionary
-
-var rng = RandomNumberGenerator.new()
 
 
 func setup(redo: bool = true):
@@ -102,6 +104,7 @@ func regenerate_flowers() -> void:
 		if not is_instance_valid(chunk):
 			continue
 		if chunk.cell_geometry.is_empty():
+			printerr("No cell_geometry data set while regenerating cells")
 			return
 	
 	var plugin := MarchingSquaresTerrainPlugin.instance
@@ -121,7 +124,7 @@ func regenerate_flowers() -> void:
 	if should_billboard:
 		multimesh.mesh.center_offset.y = base_height_offset + multimesh.mesh.size.y / 2
 	else:
-		multimesh.mesh.center_offset.y = multimesh.mesh.size.y / 2
+		multimesh.mesh.center_offset.y = base_height_offset + multimesh.mesh.size.y / 2
 
 
 func add_flowers_to_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -> void:
@@ -153,6 +156,11 @@ func remove_flowers_from_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i
 	if cell_data[chunk].is_empty():
 		cell_data.erase(chunk)
 		populated_chunks.erase(chunk)
+	
+	if planted_chunks.has(chunk.chunk_coords):
+		planted_chunks[chunk.chunk_coords].erase(cell)
+		if planted_chunks[chunk.chunk_coords].is_empty():
+			planted_chunks.erase(chunk.chunk_coords)
 
 
 func generate_flowers_on_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i, start_index: int) -> int:
@@ -175,13 +183,27 @@ func generate_flowers_on_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i
 	else:
 		chunk_offset = chunk.position
 	
+	var pos_rng  := RandomNumberGenerator.new()
+	pos_rng.seed = hash(Vector3i(
+		chunk.chunk_coords.x,
+		cell.x,
+		cell.y
+	))
+	
+	var color_rng := RandomNumberGenerator.new()
+	color_rng.seed = hash(Vector4i(
+		chunk.chunk_coords.x,
+		cell.x,
+		cell.y,
+		123
+	))
 	
 	for z in range(flower_subdivisions):
 		for x in range(flower_subdivisions):
-			if rng.randf() < 0.05:
+			if pos_rng.randf() < 0.05:
 				points.append(Vector2(
-					chunk_offset.x + (cell.x + (x + randf_range(0, 1)) / flower_subdivisions) * terrain_system.cell_size.x,
-					chunk_offset.z + (cell.y + (z + randf_range(0, 1)) / flower_subdivisions) * terrain_system.cell_size.y
+					chunk_offset.x + (cell.x + (x + pos_rng.randf_range(0, 1)) / flower_subdivisions) * terrain_system.cell_size.x,
+					chunk_offset.z + (cell.y + (z + pos_rng.randf_range(0, 1)) / flower_subdivisions) * terrain_system.cell_size.y
 				))
 	
 	var index := start_index
@@ -237,7 +259,7 @@ func generate_flowers_on_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i
 				var on_ledge_or_ridge: bool = uv.y > 0.0 or uv.x > 0.5
 				
 				if not on_ledge_or_ridge:
-					_create_flower_instance(index, p, a, b, c)
+					_create_flower_instance(index, p, a, b, c, color_rng)
 				else:
 					_hide_flower_instance(index)
 				index += 1
@@ -313,7 +335,7 @@ func _get_flower_cell_data(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -
 
 
 ## Creates a flower instance at the given position with proper transform and random color
-func _create_flower_instance(index: int, instance_position: Vector3, a: Vector3, b: Vector3, c: Vector3) -> void:
+func _create_flower_instance(index: int, instance_position: Vector3, a: Vector3, b: Vector3, c: Vector3, color_rng: RandomNumberGenerator) -> void:
 	if not multimesh or index < 0 or index >= multimesh.instance_count:
 		return
 	var edge1 := b - a
@@ -327,7 +349,7 @@ func _create_flower_instance(index: int, instance_position: Vector3, a: Vector3,
 	multimesh.set_instance_transform(index, Transform3D(instance_basis, instance_position))
 	
 	if color_gradient:
-		var color_idx := rng.randi_range(0, color_gradient.get_width() - 1)
+		var color_idx := color_rng.randi_range(0, color_gradient.get_width() - 1)
 		var gradient_img := color_gradient.get_image()
 		var instance_color := gradient_img.get_pixelv(Vector2i(color_idx, 0))
 		instance_color *= instance_color

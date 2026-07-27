@@ -476,6 +476,7 @@ func _edit(object: Object) -> void:
 	if object is MarchingSquaresTerrain:
 		if ui:
 			ui.set_visible(true)
+			current_populator = null
 			current_terrain_node = object
 			# Use signal-name connect to avoid hard crashes during script reload/parse errors.
 			var cb := Callable(self, "_on_chunk_dimensions_changed")
@@ -1773,6 +1774,7 @@ func draw_populator_mask_pattern_action(terrain: MarchingSquaresTerrain, pattern
 				flower_planter.remove_flowers_from_cell(chunk, cell_coords)
 			else:
 				flower_planter.add_flowers_to_cell(chunk, cell_coords)
+	flower_planter.rebuild_cell_data()
 	flower_planter.setup(false)
 	flower_planter.regenerate_flowers()
 
