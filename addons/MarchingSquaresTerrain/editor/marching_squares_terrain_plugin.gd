@@ -82,6 +82,7 @@ var initialization_error : String = ""
 var current_terrain_node : MarchingSquaresTerrain
 
 var current_heightmap_mesh : Mesh = null
+var heightmap_tool_selected_tab: int = 0
 
 var selected_chunk : MarchingSquaresTerrainChunk
 
@@ -1342,11 +1343,11 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 			elif mode == TerrainToolMode.HEIGHTMAP:
 				restore_value = chunk.get_height(draw_cell_coords)
 				var img_size := current_heightmap_image.get_size()
-				var index : Vector2i = draw_cell_coords - first_draw_cell
-				var sample_area := last_draw_cell - first_draw_cell + Vector2i.ONE
-				var sample_size := (sample_area.x + sample_area.y) / 2.0
-				var scale : Vector2 = (img_size / sample_size)
-				var p_coords := Vector2i(scale * Vector2(index) + scale / 2)
+				var world_pos: Vector2 = BrushPatternCalculator.cell_to_world_pos(draw_chunk_coords, draw_cell_coords, terrain)
+				var brush_min: Vector2 = Vector2(brush_position.x, brush_position.z) - Vector2.ONE * brush_size
+				var brush_extent: float = maxf(brush_size * 2.0, 0.001)
+				var brush_uv: Vector2 = (world_pos - brush_min) / brush_extent
+				var p_coords := Vector2i(brush_uv * Vector2(img_size.x, img_size.y))
 				p_coords.x = clampi(p_coords.x, 0, img_size.x - 1)
 				p_coords.y = clampi(p_coords.y, 0, img_size.y - 1)
 				var pixel := current_heightmap_image.get_pixel(p_coords.x, p_coords.y)

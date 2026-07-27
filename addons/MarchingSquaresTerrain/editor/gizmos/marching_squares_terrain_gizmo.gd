@@ -249,11 +249,10 @@ func _redraw():
 							if terrain_plugin.flatten:
 								y = terrain_plugin.brush_position.y
 							var img_size := terrain_plugin.current_heightmap_image.get_size()
-							var index : Vector2i = cursor_cell_coords - first_cell
-							var sample_area := last_cell - first_cell + Vector2i.ONE
-							var sample_size := (sample_area.x + sample_area.y) / 2.0
-							var scale : Vector2 = (img_size / sample_size)
-							var p_coords := Vector2i(scale * Vector2(index) + scale / 2)
+							var brush_min := brush_pos - Vector2.ONE * terrain_plugin.brush_size
+							var brush_extent := maxf(terrain_plugin.brush_size * 2.0, 0.001)
+							var brush_uv := (world_pos - brush_min) / brush_extent
+							var p_coords := Vector2i(brush_uv * Vector2(img_size.x, img_size.y))
 							p_coords.x = clampi(p_coords.x, 0, img_size.x - 1)
 							p_coords.y = clampi(p_coords.y, 0, img_size.y - 1)
 							pixel = terrain_plugin.current_heightmap_image.get_pixel(p_coords.x, p_coords.y)
@@ -262,7 +261,7 @@ func _redraw():
 						var draw_position := Vector3(world_pos.x, y, world_pos.y)
 						var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
 						# Only draw ground brush squares if NOT in wall paint mode
-						if not is_wall_painting and terrain_plugin.mode != terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
+						if not is_wall_painting and terrain_plugin.mode != terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT and (terrain_plugin.mode != terrain_plugin.TerrainToolMode.HEIGHTMAP or terrain_plugin.heightmap_tool_selected_tab == 2):
 							var cell_material := navmesh_material if nav_paint_mode != terrain_plugin.NavMeshPaintMode.NONE else brush_material
 							if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and pixel.r == 0.0:
 								pass
@@ -313,11 +312,10 @@ func _redraw():
 				var pixel : Color
 				if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP:
 					var img_size := terrain_plugin.current_heightmap_image.get_size()
-					var index : Vector2i = draw_coords - first_draw_cell
-					var sample_area := last_draw_cell - first_draw_cell + Vector2i.ONE
-					var sample_size := (sample_area.x + sample_area.y) / 2.0
-					var scale : Vector2 = (img_size / sample_size)
-					var p_coords := Vector2i(scale * Vector2(index) + scale / 2)
+					var brush_min := Vector2(terrain_plugin.brush_position.x, terrain_plugin.brush_position.z) - Vector2.ONE * terrain_plugin.brush_size
+					var brush_extent := maxf(terrain_plugin.brush_size * 2.0, 0.001)
+					var brush_uv := (Vector2(draw_x, draw_z) - brush_min) / brush_extent
+					var p_coords := Vector2i(brush_uv * Vector2(img_size.x, img_size.y))
 					p_coords.x = clampi(p_coords.x, 0, img_size.x - 1)
 					p_coords.y = clampi(p_coords.y, 0, img_size.y - 1)
 					pixel = terrain_plugin.current_heightmap_image.get_pixel(p_coords.x, p_coords.y)
@@ -329,7 +327,7 @@ func _redraw():
 				if terrain_plugin.is_setting and terrain_plugin.draw_height_set:
 					var draw_position := Vector3(draw_x, draw_y + height_diff * sample, draw_z)
 					var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
-					if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
+					if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT and (terrain_plugin.mode != terrain_plugin.TerrainToolMode.HEIGHTMAP or terrain_plugin.heightmap_tool_selected_tab == 2):
 						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and pixel.r == 0.0:
 							pass
 						else:
@@ -337,7 +335,7 @@ func _redraw():
 				else:
 					var draw_position := Vector3(draw_x, draw_y, draw_z)
 					var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
-					if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
+					if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT and (terrain_plugin.mode != terrain_plugin.TerrainToolMode.HEIGHTMAP or terrain_plugin.heightmap_tool_selected_tab == 2):
 						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and pixel.r == 0.0:
 							pass
 						else:
