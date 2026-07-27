@@ -119,6 +119,8 @@ func set_visible(is_visible: bool) -> void:
 #region on-signal functions
 
 func _on_tool_changed(tool_index: int) -> void:
+	if plugin.navmesh_paint_mode != MarchingSquaresTerrainPlugin.NavMeshPaintMode.NONE:
+		plugin.deactivate_navmesh_paint_mode()
 	active_tool = tool_index
 	
 	texture_settings.hide()

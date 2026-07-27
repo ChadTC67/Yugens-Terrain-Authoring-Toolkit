@@ -42,7 +42,7 @@ func _redraw():
 	if nav_paint_mode != terrain_plugin.NavMeshPaintMode.NONE and bool(terrain_system.get("navmesh_painting_enabled")):
 		var revision := int(terrain_system.get("navmesh_preview_revision"))
 		if _navmesh_overlay_cache == null or revision != _navmesh_overlay_revision:
-			_navmesh_overlay_cache = _build_navmesh_permission_overlay(terrain_system.get("chunks"), terrain_system.get("dimensions"), terrain_system.get("cell_size"))
+			_navmesh_overlay_cache = _build_navmesh_permission_overlay(terrain_system.get("chunks"), terrain_system.get("dimensions"), terrain_system.get("cell_size"), float(terrain_system.get("nav_max_slope")))
 			_navmesh_overlay_revision = revision
 		if _navmesh_overlay_cache != null:
 			add_mesh(_navmesh_overlay_cache, navmesh_material, Transform3D.IDENTITY)
@@ -165,12 +165,14 @@ func _redraw():
 				basis.z = Vector3.ZERO
 			brush_transform = Transform3D(basis, pos)
 
-		if terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING:
+		if nav_paint_mode != terrain_plugin.NavMeshPaintMode.NONE:
+			pass
+		elif terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING:
 			if terrain_plugin.paint_walls_mode:
 				add_mesh(terrain_plugin.BRUSH_RADIUS_VISUAL, terrain_plugin.BRUSH_RADIUS_MATERIAL, brush_transform)
 		elif terrain_plugin.mode not in [terrain_plugin.TerrainToolMode.SMOOTH, terrain_plugin.TerrainToolMode.GRASS_MASK, terrain_plugin.TerrainToolMode.DEBUG_BRUSH, terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT, terrain_plugin.TerrainToolMode.HEIGHTMAP, terrain_plugin.TerrainToolMode.POPULATE]:
 			add_mesh(terrain_plugin.BRUSH_RADIUS_VISUAL, terrain_plugin.BRUSH_RADIUS_MATERIAL, brush_transform)
-		
+
 		var already_set_once : bool = false
 		if not terrain_plugin.current_draw_pattern.is_empty():
 			already_set_once = true
@@ -261,14 +263,15 @@ func _redraw():
 						var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
 						# Only draw ground brush squares if NOT in wall paint mode
 						if not is_wall_painting and terrain_plugin.mode != terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT:
+							var cell_material := navmesh_material if nav_paint_mode != terrain_plugin.NavMeshPaintMode.NONE else brush_material
 							if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and pixel.r == 0.0:
 								pass
 							else:
-								add_mesh(terrain_plugin.BRUSH_VISUAL, brush_material, draw_transform)
-						
+								add_mesh(terrain_plugin.BRUSH_VISUAL, cell_material, draw_transform)
+
 						if terrain_plugin.mode in [terrain_plugin.TerrainToolMode.HEIGHTMAP] and already_set_once:
 							continue
-						
+
 						# Draw to current pattern
 						if terrain_plugin.is_drawing:
 							if not terrain_plugin.current_draw_pattern.has(cursor_chunk_coords):
@@ -364,7 +367,9 @@ func _redraw():
 				add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
 
 
-func _build_navmesh_permission_overlay(chunks: Dictionary, dims: Vector3i, cell_size: Vector2) -> ArrayMesh:
+func _build_navmesh_permission_overlay(chunks: Dictionary, dims: Vector3i, cell_size: Vector2, max_slope_degrees: float) -> ArrayMesh:
+	# Derive the preview from the same walkable floor faces used by the NavMesh
+	# baker. This prevents permission cells from appearing on vertical walls.
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var indices := PackedInt32Array()
@@ -374,22 +379,30 @@ func _build_navmesh_permission_overlay(chunks: Dictionary, dims: Vector3i, cell_
 		var chunk: MarchingSquaresTerrainChunk = chunks[chunk_coords]
 		if chunk.navmesh_permission.is_empty():
 			continue
-		for index in chunk.navmesh_permission.size():
-			if chunk.navmesh_permission[index] == 0:
+		var faces := chunk.get_nav_walkable_faces_for_permission(max_slope_degrees, chunk.navmesh_permission)
+		var seen_cells := {}
+		for face_index in range(0, faces.size(), 3):
+			if face_index + 2 >= faces.size():
+				break
+			var center := (faces[face_index] + faces[face_index + 1] + faces[face_index + 2]) / 3.0
+			var local_x := clampi(int(floor(center.x / maxf(cell_size.x, 0.0001))), 0, width - 1)
+			var local_z := clampi(int(floor(center.z / maxf(cell_size.y, 0.0001))), 0, depth - 1)
+			var cell_key := Vector2i(local_x, local_z)
+			if seen_cells.has(cell_key):
 				continue
-			var local_x: int = index % width
-			var local_z: int = int(index / width)
-			if local_x >= width or local_z >= depth:
-				continue
-			var x0 := float(chunk_coords.x * width + local_x) * cell_size.x
-			var z0 := float(chunk_coords.y * depth + local_z) * cell_size.y
-			var x1 := x0 + cell_size.x
-			var z1 := z0 + cell_size.y
+			seen_cells[cell_key] = true
+			var half_x := cell_size.x * 0.28
+			var half_z := cell_size.y * 0.28
+			var x0 := float(chunk_coords.x * width) * cell_size.x + center.x - half_x
+			var z0 := float(chunk_coords.y * depth) * cell_size.y + center.z - half_z
+			var x1 := x0 + half_x * 2.0
+			var z1 := z0 + half_z * 2.0
+			var y := center.y + 0.04
 			var base := vertices.size()
-			vertices.append(Vector3(x0, _navmesh_preview_height(chunk, local_x, local_z) + 0.035, z0))
-			vertices.append(Vector3(x1, _navmesh_preview_height(chunk, local_x + 1, local_z) + 0.035, z0))
-			vertices.append(Vector3(x1, _navmesh_preview_height(chunk, local_x + 1, local_z + 1) + 0.035, z1))
-			vertices.append(Vector3(x0, _navmesh_preview_height(chunk, local_x, local_z + 1) + 0.035, z1))
+			vertices.append(Vector3(x0, y, z0))
+			vertices.append(Vector3(x1, y, z0))
+			vertices.append(Vector3(x1, y, z1))
+			vertices.append(Vector3(x0, y, z1))
 			for _corner in 4:
 				normals.append(Vector3.UP)
 			indices.append_array(PackedInt32Array([base, base + 1, base + 2, base, base + 2, base + 3]))

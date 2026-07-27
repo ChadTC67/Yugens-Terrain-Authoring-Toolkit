@@ -288,20 +288,28 @@ var flat_normals : bool = false:
 		regenerate_all_chunk_grass()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var ridge_threshold: float = 1.0:
 	set(value):
-		ridge_threshold = value
-		terrain_material.set_shader_parameter("ridge_threshold", value)
+		ridge_threshold = clampf(float(value), 0.0, 1.0)
+		if terrain_material != null:
+			terrain_material.set_shader_parameter("ridge_threshold", ridge_threshold)
+		refresh_chunk_surface_materials()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var ledge_threshold: float = 1.0:
 	set(value):
-		ledge_threshold = value
-		terrain_material.set_shader_parameter("ledge_threshold", value)
+		ledge_threshold = clampf(float(value), 0.0, 1.0)
+		if terrain_material != null:
+			terrain_material.set_shader_parameter("ledge_threshold", ledge_threshold)
+		refresh_chunk_surface_materials()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_ridge_texture: bool = true:
 	set(value):
 		use_ridge_texture = value
-		terrain_material.set_shader_parameter("use_ridge_texture", value)
+		if terrain_material != null:
+			terrain_material.set_shader_parameter("use_ridge_texture", value)
+		refresh_chunk_surface_materials()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var use_ledge_texture: bool = true:
 	set(value):
 		use_ledge_texture = value
-		terrain_material.set_shader_parameter("use_ledge_texture", value)
+		if terrain_material != null:
+			terrain_material.set_shader_parameter("use_ledge_texture", value)
+		refresh_chunk_surface_materials()
 
 # Convenience: texture used by the shader's global noise multiplier.
 # Defaults to the same noise used for ridge/ledge so porting feels consistent.
@@ -368,9 +376,9 @@ var _is_syncing_wind_state := false
 		_is_syncing_wind_state = false
 		_sync_wind_state()
 
-@export_custom(PROPERTY_HINT_RANGE, "0.0, 5.0, 0.01", PROPERTY_USAGE_STORAGE) var wind_speed: float = 0.14:
+@export_custom(PROPERTY_HINT_RANGE, "0.0, 1.0, 0.01", PROPERTY_USAGE_STORAGE) var wind_speed: float = 0.08:
 	set(value):
-		wind_speed = clampf(float(value), 0.0, 5.0)
+		wind_speed = clampf(float(value), 0.0, 1.0)
 		_sync_wind_state()
 
 @export_custom(PROPERTY_HINT_RANGE, "0.0, 2.0, 0.01", PROPERTY_USAGE_STORAGE) var wind_strength: float = 1.0:
@@ -378,9 +386,9 @@ var _is_syncing_wind_state := false
 		wind_strength = clampf(float(value), 0.0, 2.0)
 		_sync_wind_state()
 
-@export_custom(PROPERTY_HINT_RANGE, "0.001, 4.0, 0.001", PROPERTY_USAGE_STORAGE) var wind_scale: float = 1.0:
+@export_custom(PROPERTY_HINT_RANGE, "0.005, 1.0, 0.005", PROPERTY_USAGE_STORAGE) var wind_scale: float = 0.037:
 	set(value):
-		wind_scale = clampf(float(value), 0.001, 4.0)
+		wind_scale = clampf(float(value), 0.005, 1.0)
 		_sync_wind_state()
 
 @export_custom(PROPERTY_HINT_RANGE, "0.0, 2.0, 0.01", PROPERTY_USAGE_STORAGE) var wind_gust_strength: float = 0.35:
@@ -388,9 +396,9 @@ var _is_syncing_wind_state := false
 		wind_gust_strength = clampf(float(value), 0.0, 2.0)
 		_sync_wind_state()
 
-@export_custom(PROPERTY_HINT_RANGE, "0.0, 5.0, 0.01", PROPERTY_USAGE_STORAGE) var wind_gust_speed: float = 0.35:
+@export_custom(PROPERTY_HINT_RANGE, "0.0, 1.0, 0.01", PROPERTY_USAGE_STORAGE) var wind_gust_speed: float = 0.12:
 	set(value):
-		wind_gust_speed = clampf(float(value), 0.0, 5.0)
+		wind_gust_speed = clampf(float(value), 0.0, 1.0)
 		_sync_wind_state()
 
 @export_custom(PROPERTY_HINT_ENUM, "Smooth,Gusty,Turbulent", PROPERTY_USAGE_STORAGE) var wind_mode: int = 0:

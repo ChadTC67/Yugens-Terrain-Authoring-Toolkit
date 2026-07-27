@@ -2,26 +2,27 @@ group_uniforms Effects.Wind;
 uniform sampler2D wind_noise_texture : hint_default_white, repeat_enable, filter_linear;
 uniform float wind_direction_degrees : hint_range(0.0, 360.0, 0.1) = 45.0;
 uniform vec2 wind_direction = vec2(0.70710678, 0.70710678);
-uniform float wind_speed : hint_range(0.0, 5.0, 0.01) = 0.14;
+uniform float wind_speed : hint_range(0.0, 1.0, 0.01) = 0.08;
 uniform float wind_strength : hint_range(0.0, 2.0, 0.01) = 1.0;
-uniform float wind_scale : hint_range(0.001, 4.0, 0.001) = 1.0;
+uniform float wind_scale : hint_range(0.005, 1.0, 0.005) = 0.037;
 uniform float wind_gust_strength : hint_range(0.0, 2.0, 0.01) = 0.35;
-uniform float wind_gust_speed : hint_range(0.0, 5.0, 0.01) = 0.35;
+uniform float wind_gust_speed : hint_range(0.0, 1.0, 0.01) = 0.12;
 uniform int wind_mode = 0;
 group_uniforms;
 
 vec2 mst_get_wind_direction() {
-	vec2 dir = wind_direction;
-	if (dot(dir, dir) <= 0.00001) {
-		float radians = radians(wind_direction_degrees);
-		dir = vec2(sin(radians), cos(radians));
-	}
-	return normalize(dir);
+	// The editor angle is the source of truth: 0 degrees is +Z and angles turn
+	// clockwise around the spherical Y axis. This keeps the shader and editor
+	// gizmo using the same wind direction convention.
+	float angle_radians = radians(wind_direction_degrees);
+	return vec2(sin(angle_radians), cos(angle_radians));
 }
 
 float mst_sample_wind_sway_at_time(vec2 world_xz, float seed, float sample_time) {
 	vec2 dir = mst_get_wind_direction();
-	float scale = max(global_noise_scale * max(wind_scale, 0.001), 0.001);
+	// Wind scale is independent from terrain texturing scale and directly controls
+	// the world-space frequency of the wind noise map.
+	float scale = max(wind_scale, 0.005);
 	float time_scroll = sample_time * wind_speed;
 	vec2 base_uv = fract(world_xz * scale + dir * time_scroll + vec2(seed, seed * 0.73));
 	float base_wind = texture(wind_noise_texture, base_uv).r * 2.0 - 1.0;

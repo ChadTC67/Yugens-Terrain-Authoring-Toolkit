@@ -63,6 +63,9 @@ const TERRAIN_SETTINGS_CHUNK_TAB := [
 	"prefab_set",
 	"extra_collision_layer",
 	"collision_thickness",
+]
+
+const CHUNK_MANAGEMENT_NAVMESH_SETTINGS := [
 	"nav_agent_radius",
 	"nav_max_slope",
 	"nav_max_step_height",
@@ -80,7 +83,6 @@ const TERRAIN_SETTINGS_VERTEX_PAINTER_TAB := [
 
 const TERRAIN_SETTINGS_ENVIRONMENT_TAB := [
 	"noise_hmap",
-	"animation_fps",
 	"grass_subdivisions",
 	"grass_size",
 	"grass_random_scale",
@@ -89,6 +91,7 @@ const TERRAIN_SETTINGS_ENVIRONMENT_TAB := [
 ]
 
 const TERRAIN_SETTINGS_WIND_TAB := [
+	"animation_fps",
 	"wind_direction_degrees",
 	"wind_speed",
 	"wind_strength",
@@ -114,6 +117,7 @@ const TERRAIN_SETTINGS_LABEL_OVERRIDES := {
 }
 
 const TERRAIN_TAB_VISIBLE_HEIGHT := 132
+const TOOL_TAB_MIN_HEIGHT := TERRAIN_TAB_VISIBLE_HEIGHT + 36
 
 var plugin : MarchingSquaresTerrainPlugin
 var attribute_list : MarchingSquaresToolAttributesList
@@ -245,6 +249,7 @@ var last_setting_type : SettingType = SettingType.ERROR
 var selected_chunk : MarchingSquaresTerrainChunk
 var current_available_chunks : Array[MarchingSquaresTerrainChunk] = []
 var _terrain_settings_selected_tab: int = 0
+var _chunk_management_selected_tab: int = 0
 var _terrain_settings_scroll_positions: Dictionary = {}
 var _wind_setting_rows: Dictionary = {}
 
@@ -620,116 +625,7 @@ func add_setting(p_params: Dictionary) -> void:
 			cont.add_child(quick_paint_button, true)
 			hbox_container.add_child(cont, true)
 		SettingType.CHUNK:
-			if plugin.current_terrain_node.get_child_count() == 0:
-				return
-			
-			current_available_chunks.clear()
-			
-			var terrain_children : Array = plugin.current_terrain_node.get_children()
-			var chunk_button := OptionButton.new()
-			for child in terrain_children:
-				var terrain_chunk := child as MarchingSquaresTerrainChunk
-				if terrain_chunk != null:
-					chunk_button.add_item("Chunk " + str(terrain_chunk.chunk_coords))
-					current_available_chunks.append(terrain_chunk)
-			if not current_available_chunks.is_empty():
-				var preferred_chunk: MarchingSquaresTerrainChunk = plugin.selected_chunk
-				if preferred_chunk == null and plugin.current_terrain_node.chunks.has(plugin.current_hovered_chunk):
-					preferred_chunk = plugin.current_terrain_node.chunks[plugin.current_hovered_chunk]
-				if preferred_chunk == null:
-					preferred_chunk = current_available_chunks[0]
-				plugin.selected_chunk = preferred_chunk
-				selected_chunk = preferred_chunk
-				chunk_button.selected = current_available_chunks.find(preferred_chunk)
-			else:
-				chunk_button.selected = -1
-			
-			var option_button := OptionButton.new()
-			option_button.set_flat(true)
-			option_button.set_custom_minimum_size(Vector2(65, 35))
-			for mode in MarchingSquaresTerrainChunk.Mode:
-				option_button.add_item(_format_constant_string(mode))
-			option_button.selected = plugin.selected_chunk.merge_mode if not current_available_chunks.is_empty() and plugin.selected_chunk else -1
-			option_button.item_selected.connect(_on_chunk_mode_changed)
-			
-			var grass_mode_button := OptionButton.new()
-			grass_mode_button.set_flat(true)
-			grass_mode_button.set_custom_minimum_size(Vector2(85, 35))
-			grass_mode_button.add_item("Grass")
-			grass_mode_button.add_item("Grassless")
-			grass_mode_button.selected = plugin.selected_chunk.grass_mode if not current_available_chunks.is_empty() and plugin.selected_chunk else -1
-			grass_mode_button.item_selected.connect(_on_chunk_grass_mode_changed)
-			
-			chunk_button.set_flat(true)
-			chunk_button.item_selected.connect(func(chunk): _on_chunk_selected(option_button, grass_mode_button, chunk_button.get_item_text(chunk)))
-			chunk_button.set_custom_minimum_size(Vector2(65, 35))
-			
-			var mult_apply_button := Button.new()
-			mult_apply_button.set_custom_minimum_size(Vector2(65, 30))
-			mult_apply_button.pressed.connect(_apply_mode_to_all_chunks)
-			mult_apply_button.text = "Apply mode to all chunks"
-
-			var nav_paint_button := Button.new()
-			nav_paint_button.text = "Paint"
-			nav_paint_button.toggle_mode = true
-			nav_paint_button.button_pressed = plugin.navmesh_paint_mode == MarchingSquaresTerrainPlugin.NavMeshPaintMode.PAINT
-			var nav_erase_button := Button.new()
-			nav_erase_button.text = "Erase"
-			nav_erase_button.toggle_mode = true
-			nav_erase_button.button_pressed = plugin.navmesh_paint_mode == MarchingSquaresTerrainPlugin.NavMeshPaintMode.ERASE
-			nav_paint_button.pressed.connect(func():
-				plugin.set_navmesh_paint_mode(MarchingSquaresTerrainPlugin.NavMeshPaintMode.PAINT if nav_paint_button.button_pressed else MarchingSquaresTerrainPlugin.NavMeshPaintMode.NONE)
-				nav_erase_button.button_pressed = false
-			)
-			nav_erase_button.pressed.connect(func():
-				plugin.set_navmesh_paint_mode(MarchingSquaresTerrainPlugin.NavMeshPaintMode.ERASE if nav_erase_button.button_pressed else MarchingSquaresTerrainPlugin.NavMeshPaintMode.NONE)
-				nav_paint_button.button_pressed = false
-			)
-			var bake_navmesh_button := Button.new()
-			bake_navmesh_button.text = "Bake NavMesh"
-			bake_navmesh_button.pressed.connect(func():
-				if plugin.current_terrain_node != null:
-					plugin.current_terrain_node.bake_navmesh_from_tool()
-					plugin.set_navmesh_paint_mode(MarchingSquaresTerrainPlugin.NavMeshPaintMode.NONE)
-			)
-
-			cont = CenterContainer.new()
-			cont.set_custom_minimum_size(Vector2(65, 35))
-			cont.add_child(chunk_button, true)
-			hbox_container.add_child(cont, true)
-			
-			var v_sep := VSeparator.new()
-			hbox_container.add_child(v_sep, true)
-			
-			cont = CenterContainer.new()
-			cont.set_custom_minimum_size(Vector2(65, 35))
-			cont.add_child(option_button, true)
-			hbox_container.add_child(cont, true)
-			
-			v_sep = VSeparator.new()
-			hbox_container.add_child(v_sep, true)
-			
-			cont = CenterContainer.new()
-			cont.set_custom_minimum_size(Vector2(85, 35))
-			cont.add_child(grass_mode_button, true)
-			hbox_container.add_child(cont, true)
-			
-			v_sep = VSeparator.new()
-			hbox_container.add_child(v_sep, true)
-			
-			cont = MarginContainer.new()
-			cont.set_custom_minimum_size(Vector2(65, 35))
-			cont.add_theme_constant_override("margin_bottom", 3)
-			cont.add_child(mult_apply_button, true)
-			hbox_container.add_child(cont, true)
-			var nav_separator := VSeparator.new()
-			hbox_container.add_child(nav_separator, true)
-			for nav_button in [bake_navmesh_button, nav_paint_button, nav_erase_button]:
-				var nav_cont := MarginContainer.new()
-				nav_cont.set_custom_minimum_size(Vector2(75, 35))
-				nav_cont.add_theme_constant_override("margin_bottom", 3)
-				nav_cont.add_child(nav_button, true)
-				hbox_container.add_child(nav_cont, true)
+			hbox_container.add_child(_create_chunk_management_tabs(), true)
 		SettingType.TERRAIN:
 			hbox_container.add_child(_create_terrain_settings_tabs(), true)
 		SettingType.HEIGHTMAP:
@@ -1111,12 +1007,147 @@ func _create_heightmap_settings_list(tab_name: String) -> Control:
 	return wrapper
 
 
+func _create_chunk_management_tabs() -> Control:
+	var tabs := TabContainer.new()
+	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tabs.size_flags_vertical = Control.SIZE_FILL
+	tabs.set_custom_minimum_size(Vector2(0, TOOL_TAB_MIN_HEIGHT))
+	tabs.add_child(_create_chunk_configuration_page(), true)
+	tabs.set_tab_title(0, "Manager")
+	tabs.add_child(_create_chunk_navmesh_page(), true)
+	tabs.set_tab_title(1, "NavMesh")
+	tabs.current_tab = clampi(_chunk_management_selected_tab, 0, 1)
+	tabs.tab_changed.connect(func(tab_index: int):
+		_chunk_management_selected_tab = tab_index
+		if tab_index != 1 and plugin.navmesh_paint_mode != MarchingSquaresTerrainPlugin.NavMeshPaintMode.NONE:
+			plugin.deactivate_navmesh_paint_mode()
+			var nav_row := tabs.get_child(1).get_child(1) as HBoxContainer
+			if nav_row != null:
+				var paint_button := nav_row.get_child(0) as Button
+				var erase_button := nav_row.get_child(1) as Button
+				if paint_button != null:
+					paint_button.button_pressed = false
+				if erase_button != null:
+					erase_button.button_pressed = false
+	)
+	return tabs
+
+
+func _create_chunk_configuration_page() -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 5)
+	row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	current_available_chunks.clear()
+	var chunk_button := OptionButton.new()
+	for child in plugin.current_terrain_node.get_children():
+		var terrain_chunk := child as MarchingSquaresTerrainChunk
+		if terrain_chunk != null:
+			chunk_button.add_item("Chunk " + str(terrain_chunk.chunk_coords))
+			current_available_chunks.append(terrain_chunk)
+	if not current_available_chunks.is_empty():
+		var preferred_chunk: MarchingSquaresTerrainChunk = plugin.selected_chunk
+		if preferred_chunk == null and plugin.current_terrain_node.chunks.has(plugin.current_hovered_chunk):
+			preferred_chunk = plugin.current_terrain_node.chunks[plugin.current_hovered_chunk]
+		if preferred_chunk == null:
+			preferred_chunk = current_available_chunks[0]
+		plugin.selected_chunk = preferred_chunk
+		selected_chunk = preferred_chunk
+		chunk_button.selected = current_available_chunks.find(preferred_chunk)
+	else:
+		chunk_button.selected = -1
+
+	var option_button := OptionButton.new()
+	option_button.set_flat(true)
+	for mode in MarchingSquaresTerrainChunk.Mode:
+		option_button.add_item(_format_constant_string(mode))
+	option_button.selected = plugin.selected_chunk.merge_mode if not current_available_chunks.is_empty() and plugin.selected_chunk else -1
+	option_button.item_selected.connect(_on_chunk_mode_changed)
+
+	var grass_mode_button := OptionButton.new()
+	grass_mode_button.set_flat(true)
+	grass_mode_button.add_item("Grass")
+	grass_mode_button.add_item("Grassless")
+	grass_mode_button.selected = plugin.selected_chunk.grass_mode if not current_available_chunks.is_empty() and plugin.selected_chunk else -1
+	grass_mode_button.item_selected.connect(_on_chunk_grass_mode_changed)
+
+	chunk_button.set_flat(true)
+	chunk_button.item_selected.connect(func(chunk): _on_chunk_selected(option_button, grass_mode_button, chunk_button.get_item_text(chunk)))
+	var mult_apply_button := Button.new()
+	mult_apply_button.text = "Apply mode to all chunks"
+	mult_apply_button.pressed.connect(_apply_mode_to_all_chunks)
+	var chunk_container := CenterContainer.new()
+	chunk_container.custom_minimum_size = Vector2(65, 35)
+	chunk_container.add_child(chunk_button, true)
+	row.add_child(chunk_container, true)
+	row.add_child(VSeparator.new(), true)
+	var mode_container := CenterContainer.new()
+	mode_container.custom_minimum_size = Vector2(65, 35)
+	mode_container.add_child(option_button, true)
+	row.add_child(mode_container, true)
+	row.add_child(VSeparator.new(), true)
+	var grass_container := CenterContainer.new()
+	grass_container.custom_minimum_size = Vector2(85, 35)
+	grass_container.add_child(grass_mode_button, true)
+	row.add_child(grass_container, true)
+	row.add_child(VSeparator.new(), true)
+	var apply_container := MarginContainer.new()
+	apply_container.custom_minimum_size = Vector2(220, 35)
+	apply_container.add_theme_constant_override("margin_bottom", 3)
+	apply_container.add_child(mult_apply_button, true)
+	row.add_child(apply_container, true)
+	return row
+
+
+func _create_chunk_navmesh_page() -> Control:
+	var page := VBoxContainer.new()
+	page.add_theme_constant_override("separation", 6)
+	page.add_child(_create_terrain_settings_list(CHUNK_MANAGEMENT_NAVMESH_SETTINGS), true)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	var paint := Button.new()
+	paint.text = "Paint"
+	paint.toggle_mode = true
+	paint.button_pressed = plugin.navmesh_paint_mode == MarchingSquaresTerrainPlugin.NavMeshPaintMode.PAINT
+	var erase := Button.new()
+	erase.text = "Erase"
+	erase.toggle_mode = true
+	erase.button_pressed = plugin.navmesh_paint_mode == MarchingSquaresTerrainPlugin.NavMeshPaintMode.ERASE
+	var bake := Button.new()
+	bake.text = "Bake NavMesh"
+	paint.pressed.connect(func():
+		if paint.button_pressed:
+			plugin.set_navmesh_paint_mode(MarchingSquaresTerrainPlugin.NavMeshPaintMode.PAINT)
+			erase.button_pressed = false
+		else:
+			plugin.deactivate_navmesh_paint_mode()
+	)
+	erase.pressed.connect(func():
+		if erase.button_pressed:
+			plugin.set_navmesh_paint_mode(MarchingSquaresTerrainPlugin.NavMeshPaintMode.ERASE)
+			paint.button_pressed = false
+		else:
+			plugin.deactivate_navmesh_paint_mode()
+	)
+	bake.pressed.connect(func():
+		plugin.deactivate_navmesh_paint_mode()
+		if plugin.current_terrain_node != null:
+			plugin.current_terrain_node.bake_navmesh_from_tool()
+		paint.button_pressed = false
+		erase.button_pressed = false
+	)
+	row.add_child(paint, true)
+	row.add_child(erase, true)
+	row.add_child(bake, true)
+	page.add_child(row, true)
+	return page
+
+
 func _create_terrain_settings_tabs() -> Control:
 	var tabs := TabContainer.new()
 	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tabs.size_flags_vertical = Control.SIZE_FILL
-	tabs.set_custom_minimum_size(Vector2(0, TERRAIN_TAB_VISIBLE_HEIGHT + 36))
-	
+	tabs.set_custom_minimum_size(Vector2(0, TOOL_TAB_MIN_HEIGHT))
+
 	tabs.add_child(_create_chunk_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Chunks")
 	
@@ -1464,11 +1495,11 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			elif setting == "wind_direction_degrees":
 				spin_slider.set_max(360.0)
 			elif setting == "wind_speed" or setting == "wind_gust_speed":
-				spin_slider.set_max(5.0)
+				spin_slider.set_max(1.0)
 			elif setting == "wind_strength" or setting == "wind_gust_strength":
 				spin_slider.set_max(2.0)
 			elif setting == "wind_scale":
-				spin_slider.set_max(4.0)
+				spin_slider.set_max(1.0)
 			elif setting == "wall_threshold":
 				spin_slider.set_max(0.5)
 			else:

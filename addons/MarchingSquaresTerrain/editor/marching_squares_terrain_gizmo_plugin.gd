@@ -8,7 +8,7 @@ func _init():
 	create_material("removechunk", Color(1,0,0), false, true)
 	create_material("addchunk", Color(0,1,0), false, true)
 	create_material("highlightchunk", Color(0, 0, 1), false, true)
-	create_material("navmesh_permission", Color(0.15, 0.85, 1.0, 0.80), false, true)
+	create_material("navmesh_permission", Color(0.12, 0.55, 1.0, 0.55), false, false)
 	create_handle_material("handles")
 
 

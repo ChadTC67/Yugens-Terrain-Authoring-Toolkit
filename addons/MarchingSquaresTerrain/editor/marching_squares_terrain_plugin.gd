@@ -152,6 +152,18 @@ func set_navmesh_paint_mode(value: NavMeshPaintMode) -> void:
 		mode = _navmesh_previous_tool_mode
 	else:
 		navmesh_paint_mode = value
+
+
+func deactivate_navmesh_paint_mode() -> void:
+	if navmesh_paint_mode == NavMeshPaintMode.NONE:
+		return
+	_commit_navmesh_stroke(current_terrain_node)
+	set_navmesh_paint_mode(NavMeshPaintMode.NONE)
+	is_drawing = false
+	is_setting = false
+	current_draw_pattern.clear()
+	if current_terrain_node != null and gizmo_plugin != null:
+		gizmo_plugin.trigger_redraw(current_terrain_node)
 #endregion
 
 #region tool attribute vars
@@ -1130,6 +1142,7 @@ func _apply_navmesh_pattern(terrain: MarchingSquaresTerrain, pattern: Dictionary
 			chunk.navmesh_permission[index] = value
 			_navmesh_stroke_do[chunk_coords][index] = value
 		chunk.mark_dirty()
+		terrain._nav_controller.invalidate_preview()
 
 
 func _commit_navmesh_stroke(terrain: MarchingSquaresTerrain) -> void:
@@ -1160,6 +1173,7 @@ func apply_navmesh_permission_action(terrain: MarchingSquaresTerrain, states: Di
 			if cell_index >= 0 and cell_index < chunk.navmesh_permission.size():
 				chunk.navmesh_permission[cell_index] = int(states[chunk_coords][index])
 		chunk.mark_dirty()
+		terrain._nav_controller.invalidate_preview()
 
 
 func draw_pattern(terrain: MarchingSquaresTerrain):
