@@ -128,7 +128,9 @@ var selected_chunk : MarchingSquaresTerrainChunk
 var current_available_chunks : Array[MarchingSquaresTerrainChunk] = []
 
 var _terrain_settings_selected_tab: int = 0
+var _chunk_management_selected_tab: int = 0
 var _terrain_settings_scroll_positions: Dictionary = {}
+var _wind_setting_rows: Dictionary = {}
 
 var _heightmap_tool_selected_tab : int = 0
 var _heightmap_tool_scroll_positions : Dictionary = {}
@@ -240,20 +242,6 @@ func _get_vertex_paint_material_label(slot_idx: int, terrain_names: Array) -> St
 	if slot_idx >= 0 and slot_idx < terrain_names.size():
 		return str(terrain_names[slot_idx])
 	return "Texture " + str(slot_idx + 1)
-
-var plugin : MarchingSquaresTerrainPlugin
-var attribute_list : MarchingSquaresToolAttributesList
-var settings : Dictionary = {}
-
-var last_setting_type : SettingType = SettingType.ERROR
-var selected_chunk : MarchingSquaresTerrainChunk
-var current_available_chunks : Array[MarchingSquaresTerrainChunk] = []
-var _terrain_settings_selected_tab: int = 0
-var _chunk_management_selected_tab: int = 0
-var _terrain_settings_scroll_positions: Dictionary = {}
-var _wind_setting_rows: Dictionary = {}
-
-var hbox_container
 
 
 func _ready() -> void:
