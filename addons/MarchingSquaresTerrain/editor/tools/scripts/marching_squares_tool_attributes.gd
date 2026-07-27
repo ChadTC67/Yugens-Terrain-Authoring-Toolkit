@@ -1022,6 +1022,16 @@ func _create_chunk_management_tabs() -> Control:
 
 
 func _create_chunk_configuration_page() -> Control:
+	var page := VBoxContainer.new()
+	page.add_theme_constant_override("separation", 8)
+	var settings_scroll := ScrollContainer.new()
+	settings_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_scroll.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	settings_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	settings_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	settings_scroll.set_custom_minimum_size(Vector2(0, 80))
+	settings_scroll.add_child(_create_terrain_settings_list(TERRAIN_SETTINGS_CHUNK_TAB), true)
+	page.add_child(settings_scroll, true)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 5)
 	row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -1083,7 +1093,10 @@ func _create_chunk_configuration_page() -> Control:
 	apply_container.add_theme_constant_override("margin_bottom", 3)
 	apply_container.add_child(mult_apply_button, true)
 	row.add_child(apply_container, true)
-	return row
+	var row_center := CenterContainer.new()
+	row_center.add_child(row, true)
+	page.add_child(row_center, true)
+	return page
 
 
 func _create_chunk_navmesh_page() -> Control:
@@ -1093,11 +1106,11 @@ func _create_chunk_navmesh_page() -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	var paint := Button.new()
-	paint.text = "Paint"
+	paint.text = "Paint NavMesh"
 	paint.toggle_mode = true
 	paint.button_pressed = plugin.navmesh_paint_mode == MarchingSquaresTerrainPlugin.NavMeshPaintMode.PAINT
 	var erase := Button.new()
-	erase.text = "Erase"
+	erase.text = "Erase NavMesh"
 	erase.toggle_mode = true
 	erase.button_pressed = plugin.navmesh_paint_mode == MarchingSquaresTerrainPlugin.NavMeshPaintMode.ERASE
 	var bake := Button.new()
@@ -1124,9 +1137,13 @@ func _create_chunk_navmesh_page() -> Control:
 		erase.button_pressed = false
 	)
 	row.add_child(paint, true)
+	row.add_child(VSeparator.new(), true)
 	row.add_child(erase, true)
+	row.add_child(VSeparator.new(), true)
 	row.add_child(bake, true)
-	page.add_child(row, true)
+	var row_center := CenterContainer.new()
+	row_center.add_child(row, true)
+	page.add_child(row_center, true)
 	return page
 
 
@@ -1136,9 +1153,6 @@ func _create_terrain_settings_tabs() -> Control:
 	tabs.size_flags_vertical = Control.SIZE_FILL
 	tabs.set_custom_minimum_size(Vector2(0, TOOL_TAB_MIN_HEIGHT))
 
-	tabs.add_child(_create_chunk_tab())
-	tabs.set_tab_title(tabs.get_tab_count() - 1, "Chunks")
-	
 	tabs.add_child(_create_vertex_painter_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Vertex Painter")
 	
@@ -1281,14 +1295,6 @@ func _create_post_process_effect_row(array_name: String, slot_idx: int) -> Contr
 	return panel
 
 
-func _create_chunk_tab() -> Control:
-	var page := VBoxContainer.new()
-	page.name = "Chunk"
-	page.add_theme_constant_override("separation", 8)
-	page.add_child(_create_tab_scroll(page.name, _create_terrain_settings_list(TERRAIN_SETTINGS_CHUNK_TAB)), true)
-	return page
-
-
 func _create_vertex_painter_tab() -> Control:
 	var page := VBoxContainer.new()
 	page.name = "VertexPainter"
@@ -1398,21 +1404,37 @@ func _create_terrain_settings_list(setting_names: Array) -> Control:
 	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wrapper.add_child(left_spacer, true)
 
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 18)
-	grid.add_theme_constant_override("v_separation", 6)
-	grid.set_custom_minimum_size(Vector2(1060, 0))
-	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	grid.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override("separation", 18)
+	columns.set_custom_minimum_size(Vector2(1060, 0))
+	columns.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	columns.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 
+	var left_column := VBoxContainer.new()
+	left_column.add_theme_constant_override("separation", 6)
+	left_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var right_column := VBoxContainer.new()
+	right_column.add_theme_constant_override("separation", 6)
+	right_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var valid_settings: Array[String] = []
 	for setting_name_variant in setting_names:
 		var setting_name := str(setting_name_variant)
 		if not terrain_settings_data.has(setting_name):
 			continue
-		grid.add_child(_create_terrain_setting_row(setting_name), true)
+		valid_settings.append(setting_name)
 
-	wrapper.add_child(grid, true)
+	for i in range(valid_settings.size()):
+		var setting_row := _create_terrain_setting_row(valid_settings[i])
+		if i % 2 == 0:
+			left_column.add_child(setting_row, true)
+		else:
+			right_column.add_child(setting_row, true)
+
+	columns.add_child(left_column, true)
+	columns.add_child(VSeparator.new(), true)
+	columns.add_child(right_column, true)
+	wrapper.add_child(columns, true)
 
 	var right_spacer := Control.new()
 	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL

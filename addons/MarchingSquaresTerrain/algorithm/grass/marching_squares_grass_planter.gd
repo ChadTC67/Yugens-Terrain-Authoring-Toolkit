@@ -30,16 +30,20 @@ func _build_grass_basis(normal: Vector3) -> Basis:
 func _sample_height_local(x: float, z: float) -> float:
 	if not _chunk or not terrain_system or not _chunk.height_map:
 		return 0.0
+	var row_count := _chunk.height_map.size()
+	if row_count == 0 or not (_chunk.height_map[0] is Array) or _chunk.height_map[0].is_empty():
+		return 0.0
+	var column_count: int = _chunk.height_map[0].size()
 	var cs := terrain_system.cell_size
 	if cs.x == 0.0 or cs.y == 0.0:
 		return 0.0
 
-	var gx := clampf(x / cs.x, 0.0, float(_chunk.dimensions.x - 1))
-	var gz := clampf(z / cs.y, 0.0, float(_chunk.dimensions.z - 1))
+	var gx := clampf(x / cs.x, 0.0, float(column_count - 1))
+	var gz := clampf(z / cs.y, 0.0, float(row_count - 1))
 	var x0 := int(floor(gx))
 	var z0 := int(floor(gz))
-	var x1 := mini(x0 + 1, _chunk.dimensions.x - 1)
-	var z1 := mini(z0 + 1, _chunk.dimensions.z - 1)
+	var x1 := mini(x0 + 1, column_count - 1)
+	var z1 := mini(z0 + 1, row_count - 1)
 	var tx := gx - float(x0)
 	var tz := gz - float(z0)
 

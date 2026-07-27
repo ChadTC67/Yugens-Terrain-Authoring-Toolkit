@@ -503,6 +503,22 @@ func regenerate_cell_geometry(cell_coords: Vector2i) -> void:
 func generate_terrain_cells(use_threads: bool):
 	if not cell_geometry:
 		cell_geometry = {}
+	# Serialized chunks can contain an update grid from an older dimension set.
+	# Rebuild it before indexing so generation always matches the current cell grid.
+	var cell_rows := dimensions.z - 1
+	var cell_columns := dimensions.x - 1
+	var needs_update_shape_valid := needs_update.size() == cell_rows
+	if needs_update_shape_valid:
+		for row in needs_update:
+			if not (row is Array) or row.size() != cell_columns:
+				needs_update_shape_valid = false
+				break
+	if not needs_update_shape_valid:
+		needs_update = []
+		for z in range(cell_rows):
+			needs_update.append([])
+			for x in range(cell_columns):
+				needs_update[z].append(true)
 
 	global_position_cached = global_position if is_inside_tree() else position
 	var thread_pool := MarchingSquaresThreadPool.new(max(1, OS.get_processor_count()))
