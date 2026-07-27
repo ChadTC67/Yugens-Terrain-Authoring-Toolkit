@@ -1358,7 +1358,12 @@ func remove_chunk(x: int, z: int, plugin):
 				child.planted_chunks.erase(chunk_coords)
 				child.populated_chunks.erase(chunk)
 				child.cell_data.erase(chunk)
+				
 				child.terrain_system = self
+				for p_chunk in child.populated_chunks:
+					if p_chunk.cell_geometry.is_empty():
+						for cell in child.planted_chunks[p_chunk.chunk_coords]:
+							p_chunk.regenerate_cell_geometry(cell)
 				child.setup(false)
 				child.regenerate_flowers()
 
@@ -1392,6 +1397,11 @@ func remove_chunk_from_tree(x: int, z: int, plugin):
 				child.planted_chunks.erase(chunk_coords)
 				child.populated_chunks.erase(chunk)
 				child.cell_data.erase(chunk)
+				
+				for p_chunk in child.populated_chunks:
+					if p_chunk.cell_geometry.is_empty():
+						for cell in child.planted_chunks[p_chunk.chunk_coords]:
+							p_chunk.regenerate_cell_geometry(cell)
 				child.setup(false)
 				child.regenerate_flowers()
 

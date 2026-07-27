@@ -37,11 +37,23 @@ const FLOWER_VAR_DATA : Array[Dictionary] = [
 		"type": "SpinBox",
 	},
 	{
+		"name": "flower_hmap",
+		"label": "Flower Hmap",
+		"type": "EditorResourcePicker",
+	},
+	{
 		"name": "rng_height_range",
-		"label": "RNG Height Range",
+		"label": "Height Range",
 		"type": "HSlider",
 		"range_min": 0,
 		"range_max": 2,
+	},
+	{
+		"name": "rng_size_range",
+		"label": "Size Range",
+		"type": "HSlider",
+		"range_min": 0,
+		"range_max": 1,
 	},
 ]
 

@@ -4,11 +4,12 @@ render_mode diffuse_toon, depth_draw_opaque, cull_disabled;
 group_uniforms Albedo;
 uniform sampler2D flower_texture : source_color, filter_nearest;
 uniform bool use_custom_color = true;
-uniform bool should_billboard = true;
+uniform bool should_billboard = false;
 group_uniforms;
 
-group_uniforms Offset;
+group_uniforms RNG;
 uniform float rng_height_range : hint_range(0.0, 2.0, 0.1) = 0.0;
+uniform float rng_size_range : hint_range(0.0, 1.0, 0.1) = 0.0;
 group_uniforms;
 
 group_uniforms Shading;
@@ -43,6 +44,10 @@ void vertex() {
 	if (rng_height_range > 0.0) {
 		float y_offset = rand_factor * rng_height_range;
 		VERTEX.y += y_offset;
+	}
+	if (rng_size_range > 0.0) {
+		float size_factor = 1.0 + (rand_factor * 2.0 - 1.0) * rng_size_range * 0.5;
+		VERTEX.xz *= size_factor;
 	}
 	
 	float rand_angle = rand_factor * TAU;

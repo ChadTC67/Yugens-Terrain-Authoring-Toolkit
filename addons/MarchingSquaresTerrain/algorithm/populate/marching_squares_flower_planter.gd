@@ -37,7 +37,7 @@ var terrain_system : MarchingSquaresTerrain
 						chunk.regenerate_cell_geometry(cell)
 			setup()
 			regenerate_flowers()
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var should_billboard : bool = true:
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var should_billboard : bool = false:
 	set(value):
 		should_billboard = value
 		var flower_mat := flower_mesh.material as ShaderMaterial
@@ -48,17 +48,29 @@ var terrain_system : MarchingSquaresTerrain
 			flower_mesh.orientation = PlaneMesh.FACE_Y
 			flower_mat.set_shader_parameter("should_billboard", false)
 		multimesh.mesh.center_offset.y = base_height_offset + multimesh.mesh.size.y / 2
-		if Engine.is_editor_hint():
-			MarchingSquaresTerrainPlugin.instance.ui.populator_settings.add_populator_settings()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var base_height_offset : float = 0.75:
 	set(value):
 		base_height_offset = value
 		multimesh.mesh.center_offset.y = base_height_offset + multimesh.mesh.size.y / 2
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var flower_hmap : Texture2D:
+	set(value):
+		flower_hmap = value
+		if Engine.is_editor_hint() and terrain_system:
+			for chunk in populated_chunks:
+				if chunk.cell_geometry.is_empty():
+					for cell in planted_chunks[chunk.chunk_coords]:
+						chunk.regenerate_cell_geometry(cell)
+			regenerate_flowers()
 @export_custom(PROPERTY_HINT_RANGE, "0, 2", PROPERTY_USAGE_STORAGE) var rng_height_range : float = 0.0:
 	set(value):
 		rng_height_range = value
 		var flower_mat := flower_mesh.material as ShaderMaterial
 		flower_mat.set_shader_parameter("rng_height_range", value)
+@export_custom(PROPERTY_HINT_RANGE, "0, 1", PROPERTY_USAGE_STORAGE) var rng_size_range : float = 0.0:
+	set(value):
+		rng_size_range = value
+		var flower_mat := flower_mesh.material as ShaderMaterial
+		flower_mat.set_shader_parameter("rng_size_range", value)
 
 @export_storage var planted_chunks : Dictionary = {} 
 var populated_chunks : Array[MarchingSquaresTerrainChunk]
@@ -334,6 +346,41 @@ func _get_flower_cell_data(chunk: MarchingSquaresTerrainChunk, cell: Vector2i) -
 	return cell_data_copy
 
 
+func _get_hmap_image() -> Image:
+	if not _is_valid_texture2d(flower_hmap):
+		return null
+	
+	var img : Image = flower_hmap.get_image()
+	if img:
+		img.decompress()
+	return img
+
+
+func _is_valid_texture2d(tex) -> bool:
+	if tex == null or not (tex is Texture2D):
+		return false
+	return tex.get_class() != "Texture2D"
+
+
+## Samples the flower heightmap at the given world position.
+func _sample_flower_heightmap_value(world_pos: Vector3) -> float:
+	var hmap_image := _get_hmap_image()
+	if not hmap_image:
+		return 0.0
+	
+	var uv_x : float = clamp(world_pos.x / ((terrain_system.dimensions.x - 1) * terrain_system.cell_size.x), 0.0, 1.0)
+	var uv_y : float = clamp(world_pos.z / ((terrain_system.dimensions.z - 1) * terrain_system.cell_size.y), 0.0, 1.0)
+	
+	uv_x = abs(fmod(uv_x, 1.0))
+	uv_y = abs(fmod(uv_y, 1.0))
+	
+	var px := int(uv_x * (hmap_image.get_width() - 1))
+	var py := int(uv_y * (hmap_image.get_height() - 1))
+	var height := hmap_image.get_pixelv(Vector2(px, py))
+	
+	return height.r * terrain_system.cell_size.x * terrain_system.dimensions.x / 16
+
+
 ## Creates a flower instance at the given position with proper transform and random color
 func _create_flower_instance(index: int, instance_position: Vector3, a: Vector3, b: Vector3, c: Vector3, color_rng: RandomNumberGenerator) -> void:
 	if not multimesh or index < 0 or index >= multimesh.instance_count:
@@ -345,6 +392,8 @@ func _create_flower_instance(index: int, instance_position: Vector3, a: Vector3,
 	var right := Vector3.FORWARD.cross(normal).normalized()
 	var forward := normal.cross(Vector3.RIGHT).normalized()
 	var instance_basis := Basis(right, forward, -normal)
+	
+	instance_position.y += _sample_flower_heightmap_value(instance_position)
 	
 	multimesh.set_instance_transform(index, Transform3D(instance_basis, instance_position))
 	
