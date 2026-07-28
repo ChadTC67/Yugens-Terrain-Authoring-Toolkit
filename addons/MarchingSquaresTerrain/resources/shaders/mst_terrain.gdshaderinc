@@ -46,6 +46,8 @@ group_uniforms Effects.Blending;
 uniform bool use_hard_textures = false;
 uniform int blend_mode = 0;
 uniform float blend_sharpness : hint_range(0.0, 1.0, 0.01) = 0.5;
+uniform int floor_blend_mode = 0;
+uniform float blend_noise_threshold : hint_range(0.0, 1.0, 0.01) = 0.5;
 uniform float blend_noise_scale : hint_range(0.0, 50.0, 1.0) = 10.0;
 uniform float blend_noise_strength : hint_range(0.0, 1.0, 0.05) = 0.0;
 uniform bool use_stylized_texture_edges = true;
@@ -854,7 +856,41 @@ void fragment() {
 				weight_c /= weight_sum;
 			}
 
-			if (blend_noise_strength > 0.0) {
+			if (floor_blend_mode == 1) {
+				// Noisy floor blending selects between the lowest-index material
+				// present in the cell and the dominant alternative using world noise.
+				int source_idx = -1;
+				float source_w = 0.0;
+				if (weight_a > 0.001) { source_idx = mat_a; source_w = weight_a; }
+				if (weight_b > 0.001 && (source_idx < 0 || mat_b < source_idx)) { source_idx = mat_b; source_w = weight_b; }
+				if (weight_c > 0.001 && (source_idx < 0 || mat_c < source_idx)) { source_idx = mat_c; source_w = weight_c; }
+
+				int target_idx = mat_a;
+				float target_w = weight_a;
+				if (weight_b > target_w) { target_idx = mat_b; target_w = weight_b; }
+				if (weight_c > target_w) { target_idx = mat_c; target_w = weight_c; }
+				if (target_idx == source_idx) {
+					if (mat_a != source_idx) {
+						target_idx = mat_a;
+					} else {
+						target_idx = mat_b;
+					}
+				}
+
+				float blend_noise = get_world_noise(vertex_pos.xyz, rl_noise_tile_size);
+				float noise_variation = (blend_noise - 0.5) * rl_noise_strength;
+				float select_source = step(blend_noise_threshold + noise_variation, source_w);
+				int selected_idx = target_idx;
+				if (select_source > 0.5) {
+					selected_idx = source_idx;
+				}
+				floor_color = sample_material_by_index(selected_idx, floor_uv);
+				out_roughness = _palette_roughness(selected_idx);
+				out_wet_enabled = _palette_wet_enabled(selected_idx);
+				out_wet_mode = _palette_wet_mode(selected_idx);
+				alpha_mat = selected_idx;
+			} else {
+				if (blend_noise_strength > 0.0) {
 				// Add a subtle waviness to material boundaries without disturbing solid interiors.
 				float max_w = max(weight_a, max(weight_b, weight_c));
 				float min_w = min(weight_a, min(weight_b, weight_c));
@@ -869,7 +905,7 @@ void fragment() {
 				weight_c = clamp(weight_c - noise_offset * 0.5, 0.0, 1.0);
 				float total = weight_a + weight_b + weight_c;
 				if (total > 0.001) { weight_a /= total; weight_b /= total; weight_c /= total; }
-			}
+				}
 
 			// Always apply the response curve so 0.0 is the crispest endpoint
 			// instead of accidentally bypassing sharpening and becoming softer again.
@@ -914,6 +950,7 @@ void fragment() {
 			out_wet_enabled = _palette_wet_enabled(top1_idx);
 			out_wet_mode = _palette_wet_mode(top1_idx);
 			alpha_mat = top1_idx;
+			}
 		}
 
 		ALBEDO = floor_color.rgb;

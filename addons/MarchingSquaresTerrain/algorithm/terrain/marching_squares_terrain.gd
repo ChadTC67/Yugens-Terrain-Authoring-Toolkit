@@ -222,6 +222,23 @@ var _data_directory : String = ""
 			return
 		refresh_chunk_surface_materials()
 
+@export_storage var floor_blend_mode: int = 0:
+	set(value):
+		floor_blend_mode = clampi(int(value), 0, 1)
+		if terrain_material != null:
+			terrain_material.set_shader_parameter("floor_blend_mode", floor_blend_mode)
+			refresh_chunk_surface_materials()
+		if is_inside_tree():
+			for chunk: MarchingSquaresTerrainChunk in chunks.values():
+				chunk.regenerate_all_cells(true)
+
+@export_storage var blend_noise_threshold: float = 0.5:
+	set(value):
+		blend_noise_threshold = clampf(float(value), 0.0, 1.0)
+		if terrain_material != null:
+			terrain_material.set_shader_parameter("blend_noise_threshold", blend_noise_threshold)
+			refresh_chunk_surface_materials()
+
 # Texture boundary waviness (blend noise). This controls ONLY the blend jitter/waves.
 # Palette color distribution stays stable regardless.
 @export_storage var blend_noise_enabled: bool = false:
@@ -1205,6 +1222,8 @@ func _init() -> void:
 	terrain_material.set_shader_parameter("use_hard_textures", false)
 	terrain_material.set_shader_parameter("blend_mode", 0)
 	terrain_material.set_shader_parameter("blend_sharpness", blend_sharpness)
+	terrain_material.set_shader_parameter("floor_blend_mode", floor_blend_mode)
+	terrain_material.set_shader_parameter("blend_noise_threshold", blend_noise_threshold)
 	terrain_material.set_shader_parameter("global_noise_texture", global_noise_texture)
 	terrain_material.set_shader_parameter("global_noise_strength", global_noise_strength)
 	terrain_material.set_shader_parameter("global_noise_scale", global_noise_scale)
@@ -1894,6 +1913,8 @@ func force_batch_update() -> void:
 	terrain_material.set_shader_parameter("global_noise_strength", global_noise_strength)
 	terrain_material.set_shader_parameter("global_noise_scale", global_noise_scale)
 	terrain_material.set_shader_parameter("global_noise_scroll", global_noise_scroll)
+	terrain_material.set_shader_parameter("floor_blend_mode", floor_blend_mode)
+	terrain_material.set_shader_parameter("blend_noise_threshold", blend_noise_threshold)
 	_sync_global_noise_to_grass()
 	_apply_blend_noise_settings()
 

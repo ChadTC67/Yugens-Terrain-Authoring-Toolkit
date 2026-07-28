@@ -27,6 +27,8 @@ var terrain_settings_data : Dictionary = {
 	"cell_size": "Vector2",
 	"blend_mode": "OptionButton",
 	"blend_sharpness": "EditorSpinSlider",
+	"floor_blend_mode": "OptionButton",
+	"blend_noise_threshold": "EditorSpinSlider",
 	"noise_hmap": "EditorResourcePicker",
 	"default_wall_texture": "OptionButton",
 	"collision_thickness": "EditorSpinSlider",
@@ -73,12 +75,13 @@ const CHUNK_MANAGEMENT_NAVMESH_SETTINGS := [
 ]
 
 const TERRAIN_SETTINGS_VERTEX_PAINTER_TAB := [
-	"default_wall_texture",
+	"floor_blend_mode",
 	"blend_sharpness",
 	"use_ridge_texture",
 	"use_ledge_texture",
 	"ridge_threshold",
 	"ledge_threshold",
+	"default_wall_texture",
 ]
 
 const TERRAIN_SETTINGS_ENVIRONMENT_TAB := [
@@ -103,6 +106,8 @@ const TERRAIN_SETTINGS_WIND_TAB := [
 
 const TERRAIN_SETTINGS_LABEL_OVERRIDES := {
 	"blend_sharpness": "Blend Smoothness",
+	"floor_blend_mode": "Floor Blend Mode",
+	"blend_noise_threshold": "Noise Threshold",
 	"collision_thickness": "Collision Thickness",
 	"nav_agent_radius": "Agent Radius",
 	"nav_max_slope": "Max Slope",
@@ -1303,6 +1308,7 @@ func _create_vertex_painter_tab() -> Control:
 	page.name = "VertexPainter"
 	page.add_theme_constant_override("separation", 8)
 	page.add_child(_create_tab_scroll(page.name, _create_terrain_settings_list(TERRAIN_SETTINGS_VERTEX_PAINTER_TAB)), true)
+	call_deferred("_update_floor_blend_setting_visibility")
 	return page
 
 
@@ -1449,13 +1455,20 @@ func _create_terrain_settings_list(setting_names: Array) -> Control:
 func _create_terrain_setting_row(setting: String) -> Control:
 	var editor_setting = terrain_settings_data[setting]
 	var s_value := plugin.current_terrain_node.get(setting)
-	
+	var floor_blend_is_noisy := int(plugin.current_terrain_node.get("floor_blend_mode")) == 1
+	if setting == "blend_sharpness" and floor_blend_is_noisy:
+		s_value = plugin.current_terrain_node.get("blend_noise_threshold")
+
 	var hbox := HBoxContainer.new()
+	hbox.name = setting
 	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	
 	var label := Label.new()
 	var label_text := TERRAIN_SETTINGS_LABEL_OVERRIDES.get(setting, _make_editor_name(setting))
+	if setting == "blend_sharpness" and floor_blend_is_noisy:
+		label_text = "Noise Threshold"
 	label.set_text(str(label_text) + ':')
+	label.name = "SettingLabel"
 	label.set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER)
 	label.set_custom_minimum_size(Vector2(170, 25))
 	
@@ -1520,7 +1533,13 @@ func _create_terrain_setting_row(setting: String) -> Control:
 			if setting not in ["collision_thickness", "nav_agent_radius", "nav_max_slope", "nav_max_step_height", "nav_min_region_size"]:
 				spin_slider.set_step(0.01)
 			spin_slider.set_value(s_value)
-			spin_slider.value_changed.connect(func(value): _on_terrain_setting_changed(setting, value))
+			spin_slider.value_changed.connect(func(value):
+				var target_setting := setting
+				if setting == "blend_sharpness" and int(plugin.current_terrain_node.get("floor_blend_mode")) == 1:
+					target_setting = "blend_noise_threshold"
+				_on_terrain_setting_changed(target_setting, value)
+			)
+			spin_slider.name = "SettingEditor"
 			spin_slider.set_custom_minimum_size(Vector2(120, 35))
 			
 			ts_cont = MarginContainer.new()
@@ -1577,6 +1596,9 @@ func _create_terrain_setting_row(setting: String) -> Control:
 					option_button.set_item_metadata(option_button.item_count - 1, slot_idx)
 			elif setting == "blend_mode":
 				option_button.add_item("Smoothed")
+			elif setting == "floor_blend_mode":
+				option_button.add_item("Smooth")
+				option_button.add_item("Noisy")
 			elif setting == "wind_mode":
 				option_button.add_item("Smooth")
 				option_button.add_item("Gusty")
@@ -1607,7 +1629,11 @@ func _create_terrain_setting_row(setting: String) -> Control:
 					_on_terrain_setting_changed(setting, int(option_button.get_item_metadata(index)))
 				)
 			else:
-				option_button.item_selected.connect(func(index): _on_terrain_setting_changed(setting, index))
+				option_button.item_selected.connect(func(index):
+					_on_terrain_setting_changed(setting, index)
+					if setting == "floor_blend_mode":
+						call_deferred("_update_floor_blend_setting_visibility")
+				)
 			option_button.set_custom_minimum_size(Vector2(120, 35))
 			
 			ts_cont = CenterContainer.new()
@@ -1892,6 +1918,29 @@ func _make_editor_name(var_name: String) -> String:
 	for word in loose_words:
 		loose_words[loose_words.find(word)] = word.capitalize()
 	return " ".join(loose_words)
+
+
+func _update_floor_blend_setting_visibility() -> void:
+	var blend_row := _find_named_control(self, "blend_sharpness")
+	if blend_row == null or plugin == null or plugin.current_terrain_node == null:
+		return
+	var is_noisy := int(plugin.current_terrain_node.get("floor_blend_mode")) == 1
+	var label := _find_named_control(blend_row, "SettingLabel") as Label
+	var editor := _find_named_control(blend_row, "SettingEditor") as EditorSpinSlider
+	if label != null:
+		label.text = ("Noise Threshold" if is_noisy else "Blend Smoothness") + ":"
+	if editor != null:
+		editor.set_value(float(plugin.current_terrain_node.get("blend_noise_threshold" if is_noisy else "blend_sharpness")))
+
+
+func _find_named_control(node: Node, target_name: String) -> Control:
+	if node is Control and node.name == target_name:
+		return node as Control
+	for child in node.get_children():
+		var found := _find_named_control(child, target_name)
+		if found != null:
+			return found
+	return null
 
 
 func _hide_textures(texture_node: Node) -> void:

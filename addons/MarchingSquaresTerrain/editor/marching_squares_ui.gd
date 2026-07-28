@@ -336,6 +336,12 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 		"blend_sharpness":
 			if p_value is float or p_value is int:
 				terrain.blend_sharpness = float(p_value)
+		"floor_blend_mode":
+			if p_value is int:
+				terrain.floor_blend_mode = p_value
+		"blend_noise_threshold":
+			if p_value is float or p_value is int:
+				terrain.blend_noise_threshold = float(p_value)
 		"wall_threshold":
 			if p_value is float:
 				terrain.wall_threshold = p_value
