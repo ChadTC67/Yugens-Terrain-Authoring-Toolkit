@@ -8,7 +8,6 @@
 render_priority = 0
 shader = ExtResource("1_k1nnx")
 shader_parameter/flower_texture = ExtResource("2_j2ufq")
-shader_parameter/use_custom_color = true
 shader_parameter/should_billboard = false
 shader_parameter/rng_height_range = 0.0
 shader_parameter/rng_size_range = 0.0

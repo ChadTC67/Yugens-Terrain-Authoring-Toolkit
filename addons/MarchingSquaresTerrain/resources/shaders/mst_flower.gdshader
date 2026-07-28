@@ -3,7 +3,6 @@ render_mode diffuse_toon, depth_draw_opaque, cull_disabled;
 
 group_uniforms Albedo;
 uniform sampler2D flower_texture : source_color, filter_nearest;
-uniform bool use_custom_color = true;
 uniform bool should_billboard = false;
 group_uniforms;
 
@@ -120,7 +119,7 @@ void vertex() {
 void fragment() {
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 	vec4 flower_tex = texture(flower_texture, UV);
-	vec3 flower_color = use_custom_color ? flower_tex.rgb * instance_color.rgb : flower_tex.rgb;
+	vec3 flower_color = flower_tex.rgb * instance_color.rgb;
 	
 	ALBEDO = flower_color;
 	ALPHA = flower_tex.a * instance_color.a;

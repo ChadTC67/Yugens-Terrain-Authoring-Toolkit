@@ -193,7 +193,7 @@ func _redraw():
 						var use_falloff := terrain_plugin.falloff
 						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING:
 							use_falloff = (terrain_plugin.vp_falloff_mode == terrain_plugin.VertexPaintFalloffMode.DITHERED)
-						if terrain_plugin.mode in [terrain_plugin.TerrainToolMode.HEIGHTMAP, terrain_plugin.TerrainToolMode.GRASS_MASK, terrain_plugin.TerrainToolMode.POPULATE]:
+						if terrain_plugin.mode in [terrain_plugin.TerrainToolMode.HEIGHTMAP, terrain_plugin.TerrainToolMode.DEBUG_BRUSH, terrain_plugin.TerrainToolMode.GRASS_MASK, terrain_plugin.TerrainToolMode.POPULATE]:
 							use_falloff = false
 						var sample : float = BrushPatternCalculator.calculate_falloff_sample(
 							world_pos, brush_pos, terrain_plugin.brush_size, terrain_plugin.current_brush_index,
