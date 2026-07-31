@@ -125,12 +125,6 @@ var remove_selection : Dictionary = {
 	"default": false,
 }
 
-var populate_terrain : Dictionary = {
-	"name": "populate_terrain",
-	"type": "populate_button",
-	"label": "Populate Terrain",
-}
-
 var chunk_management : Dictionary = {
 	"name": "chunk_management",
 	"type": "chunk",

@@ -14,7 +14,6 @@ enum SettingType {
 	SLIDER,
 	OPTION,
 	TEXT,
-	POPULATE_BUTTON,
 	CHUNK,
 	TERRAIN,
 	PRESET,
@@ -230,7 +229,6 @@ func show_tool_attributes(tool_index: int) -> void:
 		"checkbox": SettingType.CHECKBOX,
 		"option": SettingType.OPTION,
 		"text": SettingType.TEXT,
-		"populate_button": SettingType.POPULATE_BUTTON,
 		"chunk": SettingType.CHUNK,
 		"terrain": SettingType.TERRAIN,
 		"preset": SettingType.PRESET,
@@ -271,8 +269,6 @@ func show_tool_attributes(tool_index: int) -> void:
 		new_attributes.append(attribute_list.populator)
 	if tool_attributes.remove_selection:
 		new_attributes.append(attribute_list.remove_selection)
-	if tool_attributes.populate_terrain:
-		new_attributes.append(attribute_list.populate_terrain)
 	if tool_attributes.chunk_management:
 		new_attributes.append(attribute_list.chunk_management)
 	if tool_attributes.heightmap:
@@ -468,15 +464,6 @@ func add_setting(p_params: Dictionary) -> void:
 			cont = CenterContainer.new()
 			cont.set_custom_minimum_size(Vector2(35, 35))
 			cont.add_child(line_edit, true)
-			hbox_container.add_child(cont, true)
-		SettingType.POPULATE_BUTTON:
-			var button = MarchingSquaresPopulateButton.new()
-			button.current_terrain_node = plugin.current_terrain_node
-			
-			cont = MarginContainer.new()
-			cont.add_theme_constant_override("margin_bottom", 2)
-			cont.set_custom_minimum_size(Vector2(65, 35))
-			cont.add_child(button, true)
 			hbox_container.add_child(cont, true)
 		SettingType.PRESET:
 			var preset_button := OptionButton.new()
@@ -1396,8 +1383,6 @@ func _get_setting_value(p_setting_name: String) -> Variant:
 			pass
 		"remove_selection":
 			return plugin.remove_selection
-		"populate_terrain":
-			pass
 		"chunk_management":
 			pass
 		"terrain_settings":

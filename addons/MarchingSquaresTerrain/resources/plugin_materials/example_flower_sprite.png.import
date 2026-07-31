@@ -3,8 +3,8 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://ld4ildjiaxlw"
-path.s3tc="res://.godot/imported/round_leaf.png-421a6bb49a49d9bf35b3a96f841cf8be.s3tc.ctex"
-path.etc2="res://.godot/imported/round_leaf.png-421a6bb49a49d9bf35b3a96f841cf8be.etc2.ctex"
+path.s3tc="res://.godot/imported/example_flower_sprite.png-d52014b0bee609a81ff88cdb933a6021.s3tc.ctex"
+path.etc2="res://.godot/imported/example_flower_sprite.png-d52014b0bee609a81ff88cdb933a6021.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
@@ -12,8 +12,8 @@ metadata={
 
 [deps]
 
-source_file="res://addons/MarchingSquaresTerrain/resources/plugin_materials/round_leaf.png"
-dest_files=["res://.godot/imported/round_leaf.png-421a6bb49a49d9bf35b3a96f841cf8be.s3tc.ctex", "res://.godot/imported/round_leaf.png-421a6bb49a49d9bf35b3a96f841cf8be.etc2.ctex"]
+source_file="res://addons/MarchingSquaresTerrain/resources/plugin_materials/example_flower_sprite.png"
+dest_files=["res://.godot/imported/example_flower_sprite.png-d52014b0bee609a81ff88cdb933a6021.s3tc.ctex", "res://.godot/imported/example_flower_sprite.png-d52014b0bee609a81ff88cdb933a6021.etc2.ctex"]
 
 [params]
 

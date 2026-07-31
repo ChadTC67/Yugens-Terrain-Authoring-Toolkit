@@ -33,80 +33,6 @@ var texture_import_albedo_dir_input : LineEdit
 var texture_import_normal_dir_input : LineEdit
 var texture_import_bake_check : CheckBox
 
-const VAR_NAMES : Array[Dictionary] = [
-	{
-		"tex_var": "texture_1",
-		"scale_var": "texture_scale_1",
-		"sprite_var": "grass_sprite_tex_1",
-	},
-	{
-		"tex_var": "texture_2",
-		"scale_var": "texture_scale_2",
-		"sprite_var": "grass_sprite_tex_2",
-		"use_grass_var": "tex2_has_grass",
-	},
-	{
-		"tex_var": "texture_3",
-		"scale_var": "texture_scale_3",
-		"sprite_var": "grass_sprite_tex_3",
-		"use_grass_var": "tex3_has_grass",
-	},
-	{
-		"tex_var": "texture_4",
-		"scale_var": "texture_scale_4",
-		"sprite_var": "grass_sprite_tex_4",
-		"use_grass_var": "tex4_has_grass",
-	},
-	{
-		"tex_var": "texture_5",
-		"scale_var": "texture_scale_5",
-		"sprite_var": "grass_sprite_tex_5",
-		"use_grass_var": "tex5_has_grass",
-	},
-	{
-		"tex_var": "texture_6",
-		"scale_var": "texture_scale_6",
-		"sprite_var": "grass_sprite_tex_6",
-		"use_grass_var": "tex6_has_grass",
-	},
-	{
-		"tex_var": "texture_7",
-		"scale_var": "texture_scale_7",
-	},
-	{
-		"tex_var": "texture_8",
-		"scale_var": "texture_scale_8",
-	},
-	{
-		"tex_var": "texture_9",
-		"scale_var": "texture_scale_9",
-	},
-	{
-		"tex_var": "texture_10",
-		"scale_var": "texture_scale_10",
-	},
-	{
-		"tex_var": "texture_11",
-		"scale_var": "texture_scale_11",
-	},
-	{
-		"tex_var": "texture_12",
-		"scale_var": "texture_scale_12",
-	},
-	{
-		"tex_var": "texture_13",
-		"scale_var": "texture_scale_13",
-	},
-	{
-		"tex_var": "texture_14",
-		"scale_var": "texture_scale_14",
-	},
-	{
-		"tex_var": "texture_15",
-		"scale_var": "texture_scale_15",
-	},
-]
-
 
 func _ready() -> void:
 	# Reserve enough width for slot previews and labels on larger editor layouts.
@@ -692,12 +618,12 @@ func _clear_slot(terrain, slot_idx: int, p_refresh_ui: bool = true) -> void:
 	_refresh_slot_runtime(terrain, p_refresh_ui, had_grass_sprite, had_grass_sprite or had_grass_flag)
 
 
-func _make_slot_preview(texture: Texture2D, size: int = 64) -> TextureRect:
+func _make_slot_preview(texture: Texture2D, _size: int = 64) -> TextureRect:
 	var thumb := TextureRect.new()
 	thumb.texture = texture
 	thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	thumb.custom_minimum_size = Vector2(size, size)
+	thumb.custom_minimum_size = Vector2(_size, _size)
 	thumb.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	thumb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	return thumb

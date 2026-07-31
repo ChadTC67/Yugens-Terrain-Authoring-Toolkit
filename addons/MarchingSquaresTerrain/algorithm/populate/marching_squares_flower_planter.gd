@@ -4,11 +4,16 @@ extends MarchingSquaresPopulator
 class_name MarchingSquaresFlowerPlanter
 
 
+# All populators need this variable at the top so the mst_populator_settings.gd script can reference it properly
+const CLASS_NAME := "MarchingSquaresFlowerPlanter"
+
 var terrain_system : MarchingSquaresTerrain
 
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var flower_mesh : QuadMesh = null:
+@export var flower_mesh : QuadMesh = null:
 	set(value):
 		flower_mesh = value
+		if multimesh:
+			multimesh.mesh = flower_mesh
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var color_gradient : GradientTexture1D = preload("uid://cjkufv3o3pg57"):
 	set(value):
 		color_gradient = value
@@ -17,7 +22,7 @@ var terrain_system : MarchingSquaresTerrain
 			flower_mat.set_shader_parameter("use_custom_color", true)
 		else:
 			flower_mat.set_shader_parameter("use_custom_color", false)
-@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var flower_sprite : CompressedTexture2D = preload("uid://ld4ildjiaxlw"):
+@export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var flower_sprite : CompressedTexture2D:
 	set(value):
 		flower_sprite = value
 		var flower_mat := flower_mesh.material as ShaderMaterial
@@ -61,12 +66,12 @@ var terrain_system : MarchingSquaresTerrain
 					for cell in planted_chunks[chunk.chunk_coords]:
 						chunk.regenerate_cell_geometry(cell)
 			regenerate_flowers()
-@export_custom(PROPERTY_HINT_RANGE, "0, 2", PROPERTY_USAGE_STORAGE) var rng_height_range : float = 0.0:
+@export_custom(PROPERTY_HINT_RANGE, "0, 2", PROPERTY_USAGE_STORAGE) var rng_height_range : float = 0.1:
 	set(value):
 		rng_height_range = value
 		var flower_mat := flower_mesh.material as ShaderMaterial
 		flower_mat.set_shader_parameter("rng_height_range", value)
-@export_custom(PROPERTY_HINT_RANGE, "0, 1", PROPERTY_USAGE_STORAGE) var rng_size_range : float = 0.0:
+@export_custom(PROPERTY_HINT_RANGE, "0, 1", PROPERTY_USAGE_STORAGE) var rng_size_range : float = 0.2:
 	set(value):
 		rng_size_range = value
 		var flower_mat := flower_mesh.material as ShaderMaterial
@@ -105,10 +110,9 @@ func setup(redo: bool = true):
 
 
 func _init() -> void:
-	var fallback_flower_mesh := preload("uid://ds5vman6g5424")
+	var fallback_flower_mesh := preload("uid://dp1hfchm2o7c3")
 	if not flower_mesh:
 		flower_mesh = fallback_flower_mesh.duplicate(true)
-		flower_mesh.material = fallback_flower_mesh.material.duplicate(true)
 
 
 func regenerate_flowers() -> void:

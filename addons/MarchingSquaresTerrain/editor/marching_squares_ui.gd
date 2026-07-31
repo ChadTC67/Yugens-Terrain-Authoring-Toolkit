@@ -21,8 +21,6 @@ const GRASS_SPRITE_PROPERTIES := [
 	"grass_sprite_tex_4", "grass_sprite_tex_5", "grass_sprite_tex_6"
 ]
 
-
-
 const HAS_GRASS_PROPERTIES := [
 	"tex2_has_grass", "tex3_has_grass", "tex4_has_grass",
 	"tex5_has_grass", "tex6_has_grass"

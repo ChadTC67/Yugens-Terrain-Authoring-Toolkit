@@ -7,8 +7,8 @@ uniform bool should_billboard = false;
 group_uniforms;
 
 group_uniforms RNG;
-uniform float rng_height_range : hint_range(0.0, 2.0, 0.1) = 0.0;
-uniform float rng_size_range : hint_range(0.0, 1.0, 0.1) = 0.0;
+uniform float rng_height_range : hint_range(0.0, 2.0, 0.1) = 0.1;
+uniform float rng_size_range : hint_range(0.0, 1.0, 0.1) = 0.2;
 group_uniforms;
 
 group_uniforms Shading;
@@ -46,7 +46,10 @@ void vertex() {
 	}
 	if (rng_size_range > 0.0) {
 		float size_factor = 1.0 + (rand_factor * 2.0 - 1.0) * rng_size_range * 0.5;
-		VERTEX.xz *= size_factor;
+		if (!should_billboard)
+			VERTEX.xz *= size_factor;
+		else
+			VERTEX.xy *= size_factor;
 	}
 	
 	float rand_angle = rand_factor * TAU;

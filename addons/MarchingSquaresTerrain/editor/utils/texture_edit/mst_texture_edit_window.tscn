@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://58vqrcbqc0jm"]
 
-[ext_resource type="Script" uid="uid://38j7bnoq6nks" path="res://addons/MarchingSquaresTerrain/editor/utils/texture_edit/texture_edit_window.gd" id="1_jefjx"]
+[ext_resource type="Script" uid="uid://38j7bnoq6nks" path="res://addons/MarchingSquaresTerrain/editor/utils/texture_edit/mst_texture_edit_window.gd" id="1_0wwrc"]
 
 [sub_resource type="ViewportTexture" id="ViewportTexture_jefjx"]
 viewport_path = NodePath("SubViewport")
@@ -14,7 +14,7 @@ visible = true
 exclusive = false
 unresizable = true
 ok_button_text = "      OK      "
-script = ExtResource("1_jefjx")
+script = ExtResource("1_0wwrc")
 texture_preview = NodePath("WindowVBoxContainer/TexturePreview")
 prev_cam_button = NodePath("WindowVBoxContainer/CameraControlHBox/PrevCameraButton")
 next_cam_button = NodePath("WindowVBoxContainer/CameraControlHBox/NextCameraButton")

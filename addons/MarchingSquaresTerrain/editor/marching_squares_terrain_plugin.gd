@@ -1381,10 +1381,12 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 		undo_redo.add_undo_method(self, "draw_grass_mask_pattern_action", terrain, restore_pattern)
 		undo_redo.commit_action()
 	elif mode == TerrainToolMode.POPULATE:
-		var action_name := "terrain flower mask draw" if current_populator is MarchingSquaresFlowerPlanter else "unknown populator type mask draw"
+		var action_name := "unkown populator undo/redo"
+		if current_populator is MarchingSquaresFlowerPlanter:
+			action_name = "terrain flower mask draw"
 		undo_redo.create_action(action_name)
 		undo_redo.add_do_method(self, "draw_populator_mask_pattern_action", terrain, pattern, remove_selection)
-		undo_redo.add_undo_method(self, "draw_populator_mask_pattern_action", terrain, restore_pattern, remove_selection)
+		undo_redo.add_undo_method(self, "draw_populator_mask_pattern_action", terrain, restore_pattern, !remove_selection)
 		undo_redo.commit_action()
 	else:
 		# Handle BRUSH, LEVEL, SMOOTH, BRIDGE, CHUNK_MANAGEMENT modes

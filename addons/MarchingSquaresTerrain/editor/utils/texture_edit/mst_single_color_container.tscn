@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://cf8710euu81ol"]
 
-[ext_resource type="Script" uid="uid://d0667y7g3cax0" path="res://addons/MarchingSquaresTerrain/editor/utils/texture_edit/single_color_container.gd" id="1_scf7p"]
+[ext_resource type="Script" uid="uid://d0667y7g3cax0" path="res://addons/MarchingSquaresTerrain/editor/utils/texture_edit/mst_single_color_container.gd" id="1_scf7p"]
 
 [node name="SingleColorContainer" type="HBoxContainer" unique_id=298288097 node_paths=PackedStringArray("color_label", "color_picker", "color_weight_h_box", "weight_percentage_label", "weight_slider", "remove_color_button")]
 script = ExtResource("1_scf7p")
