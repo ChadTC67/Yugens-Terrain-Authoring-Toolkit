@@ -23,6 +23,7 @@ const MarchingSquaresBaker := preload("uid://bvqkmycahgowa")
 const MarchingSquaresTerrainHelpers := preload("uid://b33pjajd0cl83")
 const MSTextureLibraryScript := preload("uid://iyvy0c8carkd")
 const MarchingSquaresTextureImportHelper := preload("res://addons/MarchingSquaresTerrain/editor/utils/marching_squares_texture_import_helper.gd")
+const MSTVertexColorHelper := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_vertex_color_helper.gd")
 
 const _TEXTURE_EDIT_WINDOW := preload("uid://58vqrcbqc0jm")
 
@@ -32,6 +33,7 @@ var texture_import_save_path_input : LineEdit
 var texture_import_albedo_dir_input : LineEdit
 var texture_import_normal_dir_input : LineEdit
 var texture_import_bake_check : CheckBox
+var _delete_unused_textures_dialog : ConfirmationDialog
 
 
 func _ready() -> void:
@@ -585,7 +587,7 @@ func _shrink_visible_texture_slots(terrain) -> void:
 	terrain.visible_texture_slot_count = _get_effective_visible_slot_count(terrain)
 
 
-func _clear_slot(terrain, slot_idx: int, p_refresh_ui: bool = true) -> void:
+func _clear_slot(terrain, slot_idx: int, p_refresh_ui: bool = true, p_runtime_refresh: bool = true) -> void:
 	if terrain == null or slot_idx < 0 or slot_idx >= MAX_TEXTURE_SLOTS or slot_idx == 15:
 		return
 	if not _ensure_terrain_arrays(terrain):
@@ -615,7 +617,114 @@ func _clear_slot(terrain, slot_idx: int, p_refresh_ui: bool = true) -> void:
 		if slot_idx < lib_res.grass_textures.size():
 			lib_res.grass_textures[slot_idx] = null
 		_save_resource_if_external(lib_res)
-	_refresh_slot_runtime(terrain, p_refresh_ui, had_grass_sprite, had_grass_sprite or had_grass_flag)
+	if p_runtime_refresh:
+		_refresh_slot_runtime(terrain, p_refresh_ui, had_grass_sprite, had_grass_sprite or had_grass_flag)
+	elif p_refresh_ui:
+		call_deferred("add_texture_settings")
+
+
+func _collect_used_texture_indices(terrain) -> Dictionary:
+	var used := {}
+	used[0] = true # Slot 1 / base texture is always kept.
+	used[15] = true # Void slot is reserved.
+	if terrain == null:
+		return used
+	if terrain.get("default_wall_texture") != null:
+		used[clampi(int(terrain.default_wall_texture), 0, 255)] = true
+
+	for chunk in terrain.chunks.values():
+		if not is_instance_valid(chunk):
+			continue
+		if chunk.color_map_0 is PackedColorArray and chunk.color_map_1 is PackedColorArray:
+			var count := mini(chunk.color_map_0.size(), chunk.color_map_1.size())
+			for i in range(count):
+				used[MSTVertexColorHelper.get_texture_index_from_colors(chunk.color_map_0[i], chunk.color_map_1[i])] = true
+		if chunk.wall_color_map_0 is PackedColorArray and chunk.wall_color_map_1 is PackedColorArray:
+			var wall_count := mini(chunk.wall_color_map_0.size(), chunk.wall_color_map_1.size())
+			for i in range(wall_count):
+				used[MSTVertexColorHelper.get_texture_index_from_colors(chunk.wall_color_map_0[i], chunk.wall_color_map_1[i])] = true
+		if chunk.wall_paint_stamp_texture_indices is PackedInt32Array:
+			for stamp_idx in chunk.wall_paint_stamp_texture_indices:
+				used[clampi(int(stamp_idx), 0, 255)] = true
+	return used
+
+
+func _collect_unused_texture_slots(terrain) -> Array[int]:
+	var unused: Array[int] = []
+	if terrain == null or not _ensure_terrain_arrays(terrain):
+		return unused
+	var used := _collect_used_texture_indices(terrain)
+	var slot_limit := mini(MAX_TEXTURE_SLOTS, terrain.texture_slots.size())
+	for slot_idx in range(slot_limit):
+		if slot_idx == 0 or slot_idx == 15:
+			continue
+		if used.has(slot_idx):
+			continue
+		var slot_obj = terrain.texture_slots[slot_idx]
+		if _is_slot_inactive(slot_obj):
+			continue
+		unused.append(slot_idx)
+	return unused
+
+
+func _on_delete_unused_textures_pressed() -> void:
+	var terrain = plugin.current_terrain_node if plugin != null else null
+	if terrain == null:
+		return
+	var unused := _collect_unused_texture_slots(terrain)
+	if unused.is_empty():
+		var none_dialog := AcceptDialog.new()
+		none_dialog.title = "Delete Unused Texture"
+		none_dialog.dialog_text = "No unused textures found on this terrain."
+		none_dialog.confirmed.connect(none_dialog.queue_free)
+		none_dialog.canceled.connect(none_dialog.queue_free)
+		EditorInterface.get_base_control().add_child(none_dialog)
+		none_dialog.popup_centered()
+		return
+
+	if _delete_unused_textures_dialog != null and is_instance_valid(_delete_unused_textures_dialog):
+		_delete_unused_textures_dialog.queue_free()
+	_delete_unused_textures_dialog = ConfirmationDialog.new()
+	_delete_unused_textures_dialog.title = "Delete Unused Texture"
+	var texture_word := "texture" if unused.size() == 1 else "textures"
+	_delete_unused_textures_dialog.dialog_text = "Are you sure?\n\nYou'll be deleting %d %s that are not used on any ground or walls.\n\nSlot 1 and Void will be kept." % [unused.size(), texture_word]
+	_delete_unused_textures_dialog.ok_button_text = "Delete"
+	_delete_unused_textures_dialog.confirmed.connect(_delete_unused_textures.bind(unused.duplicate()))
+	_delete_unused_textures_dialog.canceled.connect(func():
+		if is_instance_valid(_delete_unused_textures_dialog):
+			_delete_unused_textures_dialog.queue_free()
+		_delete_unused_textures_dialog = null
+	)
+	EditorInterface.get_base_control().add_child(_delete_unused_textures_dialog)
+	_delete_unused_textures_dialog.popup_centered()
+
+
+func _delete_unused_textures(unused_slots: Array) -> void:
+	var terrain = plugin.current_terrain_node if plugin != null else null
+	if _delete_unused_textures_dialog != null and is_instance_valid(_delete_unused_textures_dialog):
+		_delete_unused_textures_dialog.queue_free()
+	_delete_unused_textures_dialog = null
+	if terrain == null or unused_slots.is_empty():
+		return
+
+	var cleared := 0
+	var needs_grass_refresh := false
+	for slot_idx in unused_slots:
+		var idx := int(slot_idx)
+		if idx == 0 or idx == 15:
+			continue
+		var slot_obj = terrain.texture_slots[idx] if idx < terrain.texture_slots.size() else null
+		if slot_obj != null and (bool(slot_obj.get("has_grass")) or _coerce_texture2d(slot_obj.get("grass_texture")) != null):
+			needs_grass_refresh = true
+		_clear_slot(terrain, idx, false, false)
+		cleared += 1
+
+	if cleared <= 0:
+		return
+	_shrink_visible_texture_slots(terrain)
+	_refresh_slot_runtime(terrain, true, needs_grass_refresh, needs_grass_refresh)
+	EditorInterface.mark_scene_as_unsaved()
+	print("[MST] Deleted %d unused texture slot(s)." % cleared)
 
 
 func _make_slot_preview(texture: Texture2D, _size: int = 64) -> TextureRect:
@@ -779,6 +888,15 @@ func add_texture_settings() -> void:
 	import_texture_folder_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	import_texture_folder_btn.pressed.connect(_open_texture_import_dialog)
 	vbox.add_child(import_texture_folder_btn, true)
+
+	var delete_unused_btn := Button.new()
+	delete_unused_btn.text = "Delete Unused Texture"
+	delete_unused_btn.tooltip_text = "Remove texture slots that are not painted on any ground or wall vertices (keeps slot 1 and Void)."
+	delete_unused_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	delete_unused_btn.custom_minimum_size = Vector2(0, 22)
+	delete_unused_btn.add_theme_font_size_override("font_size", 12)
+	delete_unused_btn.pressed.connect(_on_delete_unused_textures_pressed)
+	vbox.add_child(delete_unused_btn, true)
 	
 	vbox.add_child(HSeparator.new())
 	

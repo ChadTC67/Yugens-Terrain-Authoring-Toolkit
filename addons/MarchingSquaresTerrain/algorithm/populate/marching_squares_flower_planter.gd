@@ -107,6 +107,8 @@ func setup(redo: bool = true):
 	multimesh.mesh.size = sprite_size
 	
 	cast_shadow = SHADOW_CASTING_SETTING_OFF
+	if terrain_system != null:
+		terrain_system._sync_wind_state(false)
 
 
 func _init() -> void:

@@ -123,33 +123,33 @@ void vertex() {
 	vec3 wind_world_offset = vec3(0.0);
 	float wind_perspective = 0.0;
 	float wind_tip_bend = 0.0;
-	if (animate_active && scaled_local.y > 0.0) {
+	// Animation FPS steps the shared wind sample clock. 0 = no frames / no motion.
+	if (animate_active && scaled_local.y > 0.0 && fps > 0.0) {
 		float bend_factor = clamp(scaled_local.y / max(sloty, 0.0001), 0.0, 1.0);
 		float body_weight = blade_body_weight(bend_factor);
 		float tip_weight = blade_tip_weight(bend_factor);
 		float sway_strength = 0.32;
 		float seed = fract(sin(float(INSTANCE_ID) * 91.137 + slotx * 17.0 + slotz * 7.0) * 43758.5453);
-		if (fps > 0.0) {
-			float stepped_time = floor((TIME + seed) * fps) / fps;
-			float sway = sin(stepped_time * 2.6 + seed * 6.28318) * sway_strength;
-			scaled_local.x += sway * (body_weight * 0.28 + tip_weight * 0.72);
-		} else {
-			vec2 wind_vec = mst_sample_wind_vector(instance_origin.xz, seed);
-			float wind_amount = length(wind_vec);
-			vec2 wind_dir = (wind_amount > 0.0001) ? (wind_vec / wind_amount) : vec2(0.0, 0.0);
-			vec2 cross_dir = vec2(-wind_dir.y, wind_dir.x);
-			float flutter = sin(TIME * (max(wind_speed, 0.001) * 3.2 + 0.8) + seed * 6.28318 + bend_factor * 3.4);
-			float forward_push = wind_amount * (body_weight * 0.18 + tip_weight * 0.44);
-			float side_sway = flutter * wind_amount * (tip_weight * 0.16);
-			float downward_drag = wind_amount * (body_weight * 0.025 + tip_weight * 0.11);
-			wind_world_offset =
-				vec3(wind_dir.x, 0.0, wind_dir.y) * forward_push * sway_strength +
-				vec3(cross_dir.x, 0.0, cross_dir.y) * side_sway * sway_strength;
-			wind_world_offset.y -= downward_drag * sway_strength;
-			vec2 camera_forward_xz = normalize(vec2(cam_z.x, cam_z.z) + vec2(0.0001, 0.0));
-			wind_perspective = dot(wind_dir, camera_forward_xz) * wind_amount;
-			wind_tip_bend = wind_amount * tip_weight;
-		}
+		float stepped_time = floor((TIME + seed) * fps) / fps;
+		vec2 wind_vec = mst_sample_wind_vector_at_time(instance_origin.xz, seed, stepped_time);
+		float wind_amount = length(wind_vec);
+		vec2 wind_dir = (wind_amount > 0.0001) ? (wind_vec / wind_amount) : vec2(0.0, 0.0);
+		vec2 cross_dir = vec2(-wind_dir.y, wind_dir.x);
+		float flutter = sin(
+			stepped_time * (max(wind_speed, 0.001) * 3.2 + 0.8) +
+			seed * 6.28318 +
+			bend_factor * 3.4
+		);
+		float forward_push = wind_amount * (body_weight * 0.18 + tip_weight * 0.44);
+		float side_sway = flutter * wind_amount * (tip_weight * 0.16);
+		float downward_drag = wind_amount * (body_weight * 0.025 + tip_weight * 0.11);
+		wind_world_offset =
+			vec3(wind_dir.x, 0.0, wind_dir.y) * forward_push * sway_strength +
+			vec3(cross_dir.x, 0.0, cross_dir.y) * side_sway * sway_strength;
+		wind_world_offset.y -= downward_drag * sway_strength;
+		vec2 camera_forward_xz = normalize(vec2(cam_z.x, cam_z.z) + vec2(0.0001, 0.0));
+		wind_perspective = dot(wind_dir, camera_forward_xz) * wind_amount;
+		wind_tip_bend = wind_amount * tip_weight;
 	}
 
 	vec3 billboarded_vertex = spherical_billboard * scaled_local;

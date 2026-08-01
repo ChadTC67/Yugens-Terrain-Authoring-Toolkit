@@ -34,10 +34,48 @@ func apply_global_wind(material: ShaderMaterial) -> void:
 	material.set_shader_parameter("wind_mode", terrain.wind_mode)
 
 
+func get_flower_planter_material(planter) -> ShaderMaterial:
+	if planter == null:
+		return null
+	var mesh: Mesh = null
+	if planter.get("flower_mesh") is Mesh:
+		mesh = planter.flower_mesh as Mesh
+	elif planter is MultiMeshInstance3D and planter.multimesh != null:
+		mesh = planter.multimesh.mesh
+	if mesh == null:
+		return null
+	if mesh is PrimitiveMesh and (mesh as PrimitiveMesh).material is ShaderMaterial:
+		return (mesh as PrimitiveMesh).material as ShaderMaterial
+	if mesh.get_surface_count() > 0:
+		return mesh.surface_get_material(0) as ShaderMaterial
+	return null
+
+
+func apply_flower_wind_profile(material: ShaderMaterial) -> void:
+	if material == null:
+		return
+	apply_global_wind(material)
+	material.set_shader_parameter("fps", terrain.animation_fps)
+	material.set_shader_parameter("animate_active", true)
+	material.set_shader_parameter("flower_wind_strength", terrain.flower_wind_strength)
+	material.set_shader_parameter("flower_stem_bend", terrain.flower_stem_bend)
+	material.set_shader_parameter("flower_tip_flutter", terrain.flower_tip_flutter)
+
+
+func sync_flower_wind_materials() -> void:
+	if terrain == null:
+		return
+	for child in terrain.get_children():
+		if not (child is MarchingSquaresFlowerPlanter):
+			continue
+		apply_flower_wind_profile(get_flower_planter_material(child))
+
+
 func sync_wind_state(refresh_chunks: bool = true) -> void:
 	apply_global_wind(terrain.terrain_material)
 	if terrain.grass_mesh != null and terrain.grass_mesh.material is ShaderMaterial:
 		apply_global_wind(terrain.grass_mesh.material as ShaderMaterial)
+	sync_flower_wind_materials()
 	if refresh_chunks and terrain.is_inside_tree():
 		terrain.refresh_chunk_surface_materials()
 
@@ -51,7 +89,7 @@ func sync_global_noise_to_grass() -> void:
 	grass_mat.set_shader_parameter("global_noise_texture", terrain.global_noise_texture)
 	grass_mat.set_shader_parameter("chunk_size", terrain.dimensions)
 	grass_mat.set_shader_parameter("cell_size", terrain.cell_size)
-	grass_mat.set_shader_parameter("grass_random_scale", terrain.grass_random_scale)
+	grass_mat.set_shader_parameter("blade_variation", terrain.grass_random_scale)
 	grass_mat.set_shader_parameter("fps", terrain.animation_fps)
 	grass_mat.set_shader_parameter("animate_active", true)
 	grass_mat.set_shader_parameter("vc_floor_tex_array", terrain._runtime_texture_array)

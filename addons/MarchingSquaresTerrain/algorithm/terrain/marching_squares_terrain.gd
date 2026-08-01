@@ -8,12 +8,14 @@ const MSTMaterialControllerScript := preload("res://addons/MarchingSquaresTerrai
 const MSTCollisionControllerScript := preload("res://addons/MarchingSquaresTerrain/algorithm/controllers/mst_collision_controller.gd")
 const MSTNavMeshControllerScript := preload("res://addons/MarchingSquaresTerrain/algorithm/controllers/mst_navmesh_controller.gd")
 const MSTPostProcessControllerScript := preload("res://addons/MarchingSquaresTerrain/algorithm/controllers/mst_post_process_controller.gd")
+const MSTTerrainLodControllerScript := preload("res://addons/MarchingSquaresTerrain/algorithm/controllers/mst_terrain_lod_controller.gd")
 const MSTNavMeshScript := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_navmesh.gd")
 const DEFAULT_TEXTURE_PRESET_PATH := "res://addons/MarchingSquaresTerrain/resources/empty_project.tres"
 var _material_controller := MSTMaterialControllerScript.new(self)
 var _collision_controller := MSTCollisionControllerScript.new(self)
 var _nav_controller := MSTNavMeshControllerScript.new(self)
 var _post_process_controller := MSTPostProcessControllerScript.new(self)
+var _lod_controller := MSTTerrainLodControllerScript.new(self)
 
 # Uses global class_name MSTDataHandler (static utility).
 
@@ -153,6 +155,54 @@ var _data_directory : String = ""
 		if not is_batch_updating:
 			_request_grass_regen()
 
+@export_group("Visibility & Detail")
+## Enables renderer-level distance culling without removing terrain nodes or collision.
+@export var visibility_detail_enabled: bool = false:
+	set(value):
+		visibility_detail_enabled = value
+		_visibility_detail_settings_dirty = true
+## Maximum draw distance for authored terrain chunks. Zero disables terrain culling.
+@export_range(0.0, 10000.0, 1.0) var chunk_visibility_end_distance: float = 0.0:
+	set(value):
+		chunk_visibility_end_distance = maxf(float(value), 0.0)
+		_visibility_detail_settings_dirty = true
+## Maximum draw distance for grass. Zero disables grass-specific culling.
+@export_range(0.0, 10000.0, 1.0) var grass_visibility_end_distance: float = 0.0:
+	set(value):
+		grass_visibility_end_distance = maxf(float(value), 0.0)
+		_visibility_detail_settings_dirty = true
+## Extra distance margin used to reduce visibility-range popping.
+@export_range(0.0, 1000.0, 1.0) var visibility_range_margin: float = 0.0:
+	set(value):
+		visibility_range_margin = maxf(float(value), 0.0)
+		_visibility_detail_settings_dirty = true
+@export_tool_button("Apply Visibility Settings") var apply_visibility_settings_button = func():
+	_apply_visibility_detail_settings()
+## Builds a renderer-only reduced terrain proxy for distant views.
+@export var terrain_lod_enabled: bool = false:
+	set(value):
+		terrain_lod_enabled = value
+		_visibility_detail_settings_dirty = true
+## Distance where the full authored chunk hands off to its reduced proxy.
+@export_range(1.0, 10000.0, 1.0) var terrain_lod_start_distance: float = 128.0:
+	set(value):
+		terrain_lod_start_distance = maxf(float(value), 1.0)
+		_visibility_detail_settings_dirty = true
+## Distance where the reduced proxy is culled.
+@export_range(2.0, 20000.0, 1.0) var terrain_lod_end_distance: float = 512.0:
+	set(value):
+		terrain_lod_end_distance = maxf(float(value), terrain_lod_start_distance + 1.0)
+		_visibility_detail_settings_dirty = true
+## Sampling stride for the reduced proxy. Higher values use fewer vertices.
+@export_range(2, 16, 1) var terrain_lod_step: int = 2:
+	set(value):
+		terrain_lod_step = clampi(int(value), 2, 16)
+		_visibility_detail_settings_dirty = true
+@export_tool_button("Rebuild Terrain LOD Proxies") var rebuild_terrain_lod_button = func():
+	if _lod_controller != null:
+		_lod_controller.clear()
+	_apply_visibility_detail_settings()
+
 @export_group("Legacy Runtime Baking")
 ## Legacy fallback: bakes generated geometry into per-polygon texture atlases at runtime.
 ## Not needed for the Texture Library / Texture2DArray workflow.
@@ -231,6 +281,8 @@ var _data_directory : String = ""
 		if is_inside_tree():
 			for chunk: MarchingSquaresTerrainChunk in chunks.values():
 				chunk.regenerate_all_cells(true)
+			# Grass follows noisy island selection; rebuild when mode changes.
+			regenerate_all_chunk_grass(true)
 
 @export_storage var blend_noise_threshold: float = 0.5:
 	set(value):
@@ -238,6 +290,9 @@ var _data_directory : String = ""
 		if terrain_material != null:
 			terrain_material.set_shader_parameter("blend_noise_threshold", blend_noise_threshold)
 			refresh_chunk_surface_materials()
+		# Grass placement mirrors noisy islands; rebuild when the threshold moves.
+		if is_inside_tree() and floor_blend_mode == 1:
+			regenerate_all_chunk_grass(true)
 
 # Texture boundary waviness (blend noise). This controls ONLY the blend jitter/waves.
 # Palette color distribution stays stable regardless.
@@ -423,6 +478,21 @@ var _is_syncing_wind_state := false
 		wind_mode = clampi(int(value), 0, 2)
 		_sync_wind_state()
 
+@export_custom(PROPERTY_HINT_RANGE, "0.0, 2.0, 0.01", PROPERTY_USAGE_STORAGE) var flower_wind_strength: float = 1.0:
+	set(value):
+		flower_wind_strength = clampf(float(value), 0.0, 2.0)
+		_sync_wind_state()
+
+@export_custom(PROPERTY_HINT_RANGE, "1.0, 2.5, 0.01", PROPERTY_USAGE_STORAGE) var flower_stem_bend: float = 1.35:
+	set(value):
+		flower_stem_bend = clampf(float(value), 1.0, 2.5)
+		_sync_wind_state()
+
+@export_custom(PROPERTY_HINT_RANGE, "0.0, 1.0, 0.01", PROPERTY_USAGE_STORAGE) var flower_tip_flutter: float = 0.2:
+	set(value):
+		flower_tip_flutter = clampf(float(value), 0.0, 1.0)
+		_sync_wind_state()
+
 
 ## Used to generate smooth initial heights for more natural-looking terrain.
 ## If null, initial terrain will be flat.
@@ -438,10 +508,7 @@ var _is_syncing_wind_state := false
 		if grass_mat != null:
 			grass_mat.set_shader_parameter("fps", animation_fps)
 			grass_mat.set_shader_parameter("animate_active", true)
-			for child in get_children():
-				if child is MarchingSquaresFlowerPlanter and child.multimesh:
-					var flower_mat := child.multimesh.mesh.surface_get_material(0) as ShaderMaterial
-					flower_mat.set_shader_parameter("fps", clamp(value, 0, 30))
+		_material_controller.sync_flower_wind_materials()
 @export_custom(PROPERTY_HINT_RANGE, "0.0, 1.0, 0.01", PROPERTY_USAGE_STORAGE) var grass_random_scale: float = 0.0:
 	set(value):
 		grass_random_scale = clampf(float(value), 0.0, 1.0)
@@ -913,6 +980,7 @@ var is_batch_updating : bool = false
 
 var chunks : Dictionary = {}
 var collision_triangle_count_debug: int = 0
+var _visibility_detail_settings_dirty := true
 var _grass_random_scale_apply_queued := false
 var navmesh_painting_enabled: bool = false
 const POST_PROCESS_SLOT_COUNT := 5
@@ -1139,7 +1207,8 @@ func _sync_global_noise_to_grass() -> void:
 	grass_mat.set_shader_parameter("global_noise_texture", global_noise_texture)
 	grass_mat.set_shader_parameter("chunk_size", dimensions)
 	grass_mat.set_shader_parameter("cell_size", cell_size)
-	grass_mat.set_shader_parameter("grass_random_scale", grass_random_scale)
+	# Shader uniform is blade_variation; grass_random_scale is the terrain/UI property name.
+	grass_mat.set_shader_parameter("blade_variation", grass_random_scale)
 	grass_mat.set_shader_parameter("fps", animation_fps)
 	grass_mat.set_shader_parameter("animate_active", true)
 	grass_mat.set_shader_parameter("vc_floor_tex_array", _runtime_texture_array)
@@ -1170,7 +1239,7 @@ func _apply_grass_random_scale() -> void:
 	for material: ShaderMaterial in materials:
 		material.set_shader_parameter("global_noise_texture", global_noise_texture)
 		material.set_shader_parameter("global_noise_scale", global_noise_scale)
-		material.set_shader_parameter("grass_random_scale", grass_random_scale)
+		material.set_shader_parameter("blade_variation", grass_random_scale)
 		material.set_shader_parameter("fps", animation_fps)
 		material.set_shader_parameter("animate_active", true)
 
@@ -1248,11 +1317,18 @@ func _init() -> void:
 
 
 
+## Bumped when shared terrain surface shader params change so chunks re-duplicate materials.
+var _surface_material_revision: int = 0
+
+
 func get_chunk_surface_material() -> Material:
 	return terrain_material
 
 
 func refresh_chunk_surface_materials() -> void:
+	# Chunks render duplicated materials; bump revision so refresh re-copies
+	# shared uniforms (blend/ridge/ledge/etc.) from terrain_material.
+	_surface_material_revision += 1
 	for chunk: MarchingSquaresTerrainChunk in chunks.values():
 		if is_instance_valid(chunk):
 			chunk.refresh_surface_material()
@@ -1260,6 +1336,50 @@ func refresh_chunk_surface_materials() -> void:
 
 var _grass_regen_timer: Timer = null
 var _grass_regen_pending: bool = false
+## Serialize full-chunk grass cooks so ~100 chunks don't all process in parallel
+## (which left many incomplete / partially revealed).
+var _grass_cook_queue: Array[Dictionary] = []
+var _grass_cook_active_planter: MarchingSquaresGrassPlanter = null
+
+
+func _enqueue_grass_cook(planter: MarchingSquaresGrassPlanter, generation: int) -> void:
+	if planter == null or not is_instance_valid(planter):
+		return
+	for i in range(_grass_cook_queue.size() - 1, -1, -1):
+		if _grass_cook_queue[i].get("planter") == planter:
+			_grass_cook_queue.remove_at(i)
+	# Restart in-place when this planter is already the active cook.
+	if _grass_cook_active_planter == planter:
+		planter.call_deferred("_process_deferred_grass_cells", generation)
+		return
+	_grass_cook_queue.append({"planter": planter, "generation": generation})
+	_kick_grass_cook_queue()
+
+
+func _grass_cook_finished(planter: MarchingSquaresGrassPlanter) -> void:
+	if _grass_cook_active_planter == planter:
+		_grass_cook_active_planter = null
+	call_deferred("_kick_grass_cook_queue")
+
+
+func _kick_grass_cook_queue() -> void:
+	if _grass_cook_active_planter != null:
+		if is_instance_valid(_grass_cook_active_planter) and _grass_cook_active_planter._deferred_grass_pending:
+			return
+		_grass_cook_active_planter = null
+	while not _grass_cook_queue.is_empty():
+		var entry: Dictionary = _grass_cook_queue.pop_front()
+		var planter: MarchingSquaresGrassPlanter = entry.get("planter")
+		var generation := int(entry.get("generation", -1))
+		if planter == null or not is_instance_valid(planter):
+			continue
+		if generation != planter._deferred_grass_generation:
+			continue
+		if not planter._deferred_grass_pending and planter._deferred_grass_remaining() <= 0:
+			continue
+		_grass_cook_active_planter = planter
+		planter.call_deferred("_process_deferred_grass_cells", generation)
+		return
 
 
 func invalidate_grass_bake_state() -> void:
@@ -1302,10 +1422,10 @@ func _apply_grass_regen() -> void:
 			chunk.grass_planter.regenerate_all_cells()
 
 
-func regenerate_all_chunk_grass() -> void:
+func regenerate_all_chunk_grass(force_recook: bool = false) -> void:
 	for chunk: MarchingSquaresTerrainChunk in chunks.values():
 		if chunk and chunk.grass_planter:
-			chunk.grass_planter.regenerate_all_cells()
+			chunk.grass_planter.regenerate_all_cells(force_recook)
 
 
 func _apply_flat_normals(p_enabled: bool) -> void:
@@ -1399,6 +1519,7 @@ func _normalize_image_for_texture_array(src: Image, w: int, h: int) -> Image:
 
 
 func rebuild_texture_array() -> void:
+	_surface_material_revision += 1
 	MarchingSquaresTerrainHelpers.rebuild_texture_array(self)
 
 
@@ -1462,9 +1583,62 @@ func _notification(what: int) -> void:
 
 
 func _process(_delta: float) -> void:
+	if EngineWrapper.instance.is_editor():
+		if _visibility_detail_settings_dirty:
+			_apply_visibility_detail_settings()
+		elif _lod_controller != null and _lod_controller.has_pending_updates():
+			_lod_controller.apply()
+		_update_building_chunk_visibility()
 	if _collision_controller != null:
 		_collision_controller.process_queue()
 		_collision_controller.process_scheduled_refresh()
+
+
+func _update_building_chunk_visibility() -> void:
+	for chunk: MarchingSquaresTerrainChunk in chunks.values():
+		if not is_instance_valid(chunk):
+			continue
+		var building := chunk.build_phase in [
+			MarchingSquaresTerrainChunk.BuildPhase.GENERATING_CELLS,
+			MarchingSquaresTerrainChunk.BuildPhase.PUBLISHING_TILES,
+		]
+		chunk.visible = not building
+		if chunk.grass_planter != null and is_instance_valid(chunk.grass_planter):
+			chunk.grass_planter.set_grass_visible(not building)
+		for child in chunk.get_children():
+			if child is StaticBody3D:
+				for shape_child in child.get_children():
+					if shape_child is CollisionShape3D:
+						shape_child.visible = false
+
+
+func _apply_visibility_detail_settings() -> void:
+	_visibility_detail_settings_dirty = false
+	var terrain_end := 0.0
+	var grass_end := 0.0
+	if visibility_detail_enabled:
+		terrain_end = chunk_visibility_end_distance
+		grass_end = grass_visibility_end_distance
+	for chunk: MarchingSquaresTerrainChunk in chunks.values():
+		if not is_instance_valid(chunk):
+			continue
+		chunk.visibility_range_end = terrain_end
+		chunk.visibility_range_end_margin = visibility_range_margin if terrain_end > 0.0 else 0.0
+		for tile in chunk._mesh_tiles.values():
+			if tile is MeshInstance3D:
+				chunk._apply_mesh_tile_visibility(tile)
+		if chunk.grass_planter != null and is_instance_valid(chunk.grass_planter):
+			chunk.grass_planter.set_visibility_range(
+				grass_end,
+				visibility_range_margin if grass_end > 0.0 else 0.0
+			)
+	if _lod_controller != null:
+		_lod_controller.apply()
+
+
+func _invalidate_terrain_lod_chunk(coords: Vector2i) -> void:
+	if _lod_controller != null:
+		_lod_controller.invalidate_chunk(coords)
 
 
 func _enter_tree() -> void:
@@ -1600,6 +1774,7 @@ func _deferred_enter_tree() -> void:
 				child.rebuild_cell_data()
 				if child is MarchingSquaresFlowerPlanter:
 					child.regenerate_flowers()
+	_sync_wind_state(false)
 	
 	_grass_regen_pending = false
 	load_finished.emit()
@@ -1728,6 +1903,7 @@ func remove_chunk(x: int, z: int, plugin):
 	var chunk : MarchingSquaresTerrainChunk = chunks[chunk_coords]
 	chunks.erase(chunk_coords)  # Use chunk_coords, not chunk object
 	_nav_controller.invalidate_chunk(chunk_coords)
+	_invalidate_terrain_lod_chunk(chunk_coords)
 	chunk.free()
 
 	if plugin.selected_chunk and plugin.selected_chunk.chunk_coords == chunk.chunk_coords:
@@ -1767,6 +1943,7 @@ func remove_chunk_from_tree(x: int, z: int, plugin):
 	var chunk : MarchingSquaresTerrainChunk = chunks[chunk_coords]
 	chunks.erase(chunk_coords)  # Use chunk_coords, not chunk object
 	_nav_controller.invalidate_chunk(chunk_coords)
+	_invalidate_terrain_lod_chunk(chunk_coords)
 	chunk._skip_save_on_exit = true  # Prevent mesh save during undo/redo
 	remove_child(chunk)
 	chunk.owner = null
@@ -1823,6 +2000,7 @@ func add_chunk(coords: Vector2i, chunk: MarchingSquaresTerrainChunk, plugin, reg
 	# Rebuild all chunk proxies after insertion so flat regions can merge
 	# across the newly completed chunk grid.
 	_schedule_collision_refresh()
+	_apply_visibility_detail_settings()
 	print_verbose("[MST] Added new chunk to terrain system at ", chunk)
 	if plugin:
 		if not plugin.selected_chunk or plugin.selected_chunk.chunk_coords == Vector2i(99999, 99999):
@@ -1874,6 +2052,7 @@ func _ensure_palette_weights() -> void:
 
 
 func _rebuild_palette_uniforms() -> void:
+	_surface_material_revision += 1
 	MarchingSquaresTerrainHelpers.rebuild_palette_uniforms(self)
 	refresh_chunk_surface_materials()
 
@@ -2348,7 +2527,3 @@ func load_from_preset(preset: MarchingSquaresTexturePreset) -> void:
 	_request_grass_regen()
 
 #endregion
-
-
-
-

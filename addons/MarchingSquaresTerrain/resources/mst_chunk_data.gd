@@ -23,6 +23,9 @@ extends Resource
 ## Grass mask
 @export var grass_mask : PackedByteArray
 
+## Per-cell permission mask for terrain NavMesh baking.
+@export var navmesh_permission : PackedByteArray
+
 # Legacy format (V1.1) for backward compatibility during migration
 @export var color_map_0 : PackedColorArray
 @export var color_map_1 : PackedColorArray
@@ -32,6 +35,7 @@ extends Resource
 
 # Ephemeral data saved for caching but regenerated on load if missing
 @export var mesh : Mesh
+@export var mesh_is_tiled_complete : bool = false
 @export var collision_faces : PackedVector3Array
 @export var grass_multimesh : MultiMesh
 @export var wall_paint_stamp_positions : PackedVector3Array

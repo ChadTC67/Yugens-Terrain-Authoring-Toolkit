@@ -183,6 +183,10 @@ static func save_all_chunks(terrain: MarchingSquaresTerrain) -> bool:
 			needs_save = true
 
 		if needs_save:
+			if not chunk.prepare_for_storage():
+				push_error("MSTDataHandler: Refusing to save incomplete mesh state for " + str(chunk_coords))
+				all_saved = false
+				continue
 			if not _chunk_has_source_data(terrain, chunk):
 				push_error("MSTDataHandler: Refusing to save invalid or uninitialized chunk source data for " + str(chunk_coords))
 				all_saved = false
@@ -302,7 +306,23 @@ static func load_chunk_from_directory(terrain: MarchingSquaresTerrain, coords: V
 	if ResourceLoader.exists(metadata_path):
 		var data : MSTChunkData = load(metadata_path)
 		if data:
+			var mesh_surface_count := data.mesh.get_surface_count() if data.mesh != null else 0
+			var persisted_mesh_complete := chunk.is_persisted_mesh_complete(data.mesh)
+			print("[MST Persistence] load chunk=%s metadata=present height=%d ground=%d wall=%d mesh=%s surfaces=%d tiled_flag=%s surface_complete=%s" % [
+				str(coords),
+				data.height_map.size(),
+				data.ground_texture_idx.size(),
+				data.wall_texture_idx.size(),
+				"present" if data.mesh != null else "missing",
+				mesh_surface_count,
+				str(data.mesh_is_tiled_complete),
+				str(persisted_mesh_complete),
+			])
 			import_chunk_data(chunk, data)
+		else:
+			print("[MST Persistence] load chunk=%s metadata=invalid path=%s" % [str(coords), metadata_path])
+	else:
+		print("[MST Persistence] load chunk=%s metadata=missing path=%s" % [str(coords), metadata_path])
 
 	print_verbose("MSTDataHandler: Loaded chunk ", coords)
 
@@ -326,6 +346,7 @@ static func export_chunk_data(chunk: MarchingSquaresTerrainChunk) -> MSTChunkDat
 	data.ground_texture_idx.resize(cell_count)
 	data.wall_texture_idx.resize(cell_count)
 	data.grass_mask.resize(cell_count)
+	data.navmesh_permission = chunk.navmesh_permission.duplicate()
 
 	for i in cell_count:
 		data.ground_texture_idx[i] = _colors_to_texture_idx(chunk.color_map_0[i], chunk.color_map_1[i])
@@ -339,10 +360,27 @@ static func export_chunk_data(chunk: MarchingSquaresTerrainChunk) -> MSTChunkDat
 			data.grass_mask[i] = 1
 
 	# Ephemeral data for BAKED mode
-	data.mesh = chunk.mesh
+	data.mesh = chunk.get_persisted_mesh()
+	data.mesh_is_tiled_complete = data.mesh != null and chunk.is_mesh_complete_for_storage() and chunk.is_persisted_mesh_complete(data.mesh)
+	print("[MST Persistence] save chunk=%s storage_mode=%d mesh=%s surfaces=%d complete=%s mesh_tiles=%d dirty_tiles=%d build_pending=%s" % [
+		str(chunk.chunk_coords),
+		int(chunk.terrain_system.storage_mode),
+		"present" if data.mesh != null else "missing",
+		data.mesh.get_surface_count() if data.mesh != null else 0,
+		str(data.mesh_is_tiled_complete),
+		chunk._mesh_tiles.size(),
+		chunk._dirty_mesh_tiles.size(),
+		str(chunk._initial_build_pending),
+	])
 
 	if chunk.terrain_system.bake_grass and chunk.grass_planter:
-		data.grass_multimesh = chunk.grass_planter.multimesh
+		# Only persist cooked blade data. Empty MultiMesh allocations (setup
+		# placeholders with identity transforms) must not overwrite a real bake.
+		var grass_mm: MultiMesh = chunk.grass_planter.multimesh
+		if MarchingSquaresGrassPlanter.is_multimesh_cooked(grass_mm):
+			data.grass_multimesh = grass_mm
+		else:
+			data.grass_multimesh = null
 	data.wall_paint_stamp_positions = chunk.wall_paint_stamp_positions
 	data.wall_paint_stamp_normals = chunk.wall_paint_stamp_normals
 	data.wall_paint_stamp_radii = chunk.wall_paint_stamp_radii
@@ -383,10 +421,14 @@ static func import_chunk_data(chunk: MarchingSquaresTerrainChunk, data: MSTChunk
 	chunk.grass_mode = data.grass_mode as MarchingSquaresTerrainChunk.GrassMode
 	chunk._suppress_grass_mode_side_effects = false
 	chunk.height_map = data.height_map.duplicate(true)
+	chunk.navmesh_permission = data.navmesh_permission.duplicate()
 
 	# Restore baked assets if present
 	if data.mesh:
 		chunk.mesh = data.mesh
+		chunk._baked_mesh_is_complete = data.mesh_is_tiled_complete and chunk.is_persisted_mesh_complete(data.mesh)
+		if chunk._baked_mesh_is_complete:
+			chunk.hydrate_mesh_tiles_from_persisted_mesh(data.mesh)
 	elif chunk.terrain_system.storage_mode == MarchingSquaresTerrain.StorageMode.BAKED:
 		push_warning("Baking enabled, but terrain-resource does not contain mesh data")
 
@@ -397,7 +439,11 @@ static func import_chunk_data(chunk: MarchingSquaresTerrainChunk, data: MSTChunk
 		push_warning("Collision baking enabled, but terrain-resource does not contain collision data")
 
 	if chunk.grass_mode == MarchingSquaresTerrainChunk.GrassMode.GRASS and data.grass_multimesh:
-		chunk._temp_grass_multimesh = data.grass_multimesh
+		if MarchingSquaresGrassPlanter.is_multimesh_cooked(data.grass_multimesh):
+			chunk._temp_grass_multimesh = data.grass_multimesh
+		else:
+			chunk._temp_grass_multimesh = null
+			push_warning("MST: Ignoring empty baked grass MultiMesh for chunk %s (will recook)." % str(chunk.chunk_coords))
 	chunk.wall_paint_stamp_positions = data.wall_paint_stamp_positions
 	chunk.wall_paint_stamp_normals = data.wall_paint_stamp_normals
 	chunk.wall_paint_stamp_radii = data.wall_paint_stamp_radii

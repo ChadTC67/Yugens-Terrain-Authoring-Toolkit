@@ -58,7 +58,6 @@ group_uniforms;
 group_uniforms Effects.Experimental;
 uniform bool is_merge_round = false;
 uniform float blade_variation : hint_range(0.0, 1.0, 0.01) = 1.0;
-uniform float grass_random_scale : hint_range(0.0, 1.0, 0.01) = 0.0;
 uniform float wall_threshold : hint_range(0.0, 0.5) = 0.0;
 group_uniforms;
 
@@ -67,6 +66,7 @@ uniform float global_noise_scale = 0.037;
 uniform float global_noise_strength : hint_range(0.0, 1.0, 0.01) = 1.0;
 uniform float global_noise_scroll = 0.0;
 uniform sampler2D global_noise_texture : hint_default_white, repeat_enable, filter_linear;
+group_uniforms;
 
 #include "mst_global_wind.gdshaderinc"
 
@@ -93,11 +93,45 @@ varying float instance_has_ground_uv;
 varying flat int instance_slot_id;
 varying float v_grass_wet_mask;
 varying flat int instance_id;
+varying float v_wind_perspective;
+varying float v_wind_tip_bend;
 
+// ------------- Wind Choices --------------
+
+float hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
 
 float hash3(vec3 p) {
 	return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
 }
+
+float noise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	float a = hash(i);
+	float b = hash(i + vec2(1.0, 0.0));
+	float c = hash(i + vec2(0.0, 1.0));
+	float d = hash(i + vec2(1.0, 1.0));
+	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float cheap_noise(vec2 p) {
+	vec2 warp = vec2(
+		noise(p + vec2(1.7, 9.2)),
+		noise(p + vec2(8.3, 2.8)));
+	return noise(p + warp * 0.4) * 0.6 + noise(p * 2.1 + vec2(5.2, 1.3)) * 0.4;
+}
+
+float blade_body_weight(float blade_height) {
+	return smoothstep(0.08, 0.72, blade_height);
+}
+
+float blade_tip_weight(float blade_height) {
+	return smoothstep(0.42, 1.0, blade_height);
+}
+
 
 vec4 _palette_meta(int slot) {
 	slot = clamp(slot, 0, 255);
@@ -111,6 +145,10 @@ int _palette_count(int slot) {
 
 int _palette_blend_mode(int slot) {
 	return int(round(_palette_meta(slot).g * 255.0));
+}
+
+float _palette_blend_scale(int slot) {
+	return mix(0.001, 0.1, clamp(_palette_meta(slot).a, 0.0, 1.0));
 }
 
 float _palette_roughness(int slot) {
@@ -156,7 +194,7 @@ float sample_palette_weight(int slot, int color_idx) {
 vec4 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 	slot = clamp(slot, 0, 255);
 	int color_count = _palette_count(slot);
-	if (color_count <= 0) return vec4(1.0, 1.0, 1.0, 0.0);
+	if (color_count <= 0) return vec4(0.392, 0.471, 0.318, 1.0);
 	if (color_count == 1) return sample_palette_entry(slot, 0);
 
 	int mode = _palette_blend_mode(slot);
@@ -165,7 +203,7 @@ vec4 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 	float n = 0.0;
 	// Internal remap for palette blending: fixed higher-frequency sampling + inverted.
 	// This keeps the UI Global Noise settings independent of palette blending behavior.
-	float palette_gn_scale = gradient_mode ? 0.014 : 0.008;
+	float palette_gn_scale = _palette_blend_scale(slot);
 	vec2 uv = fract(world_xz * palette_gn_scale);
 	n = 1.0 - texture(global_noise_texture, uv).r;
 	if (gradient_mode) {
@@ -210,6 +248,7 @@ vec4 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 		}
 		cum += wi;
 	}
+	int i1 = min(i0 + 1, color_count - 1);
 	float t = 0.0;
 	if (w0 > 0.00001) t = clamp((x - start) / w0, 0.0, 1.0);
 
@@ -326,13 +365,7 @@ vec4 sample_floor_material_color(int slot, vec2 base_uv) {
 	bool tex_has_content = (tex.a > 0.001) && (abs(tex.r - 1.0) > 0.001 || abs(tex.g - 1.0) > 0.001 || abs(tex.b - 1.0) > 0.001);
 	if (tex_has_content) {
 		float pal_alpha = clamp(palette.a, 0.0, 1.0);
-		vec4 slot_albedo = get_slot_albedo_color(slot);
-		vec3 tint_target = palette.rgb;
-		if (slot_albedo.a > 0.001) {
-			vec3 base_albedo = max(slot_albedo.rgb, vec3(0.001));
-			tint_target = clamp(palette.rgb / base_albedo, vec3(0.0), vec3(4.0));
-		}
-		vec3 tinted = tex.rgb * mix(vec3(1.0), tint_target, pal_alpha);
+		vec3 tinted = mix(tex.rgb, tex.rgb * palette.rgb, pal_alpha);
 		return vec4(tinted, tex.a);
 	}
 	return mix(tex, palette, clamp(palette.a, 0.0, 1.0));
@@ -361,27 +394,41 @@ void vertex() {
 	float h = fract(sin(float(INSTANCE_ID) * 12.9898) * 43758.5453);
 	float height_mult = mix(0.75, 1.25, h);
 	sloty *= mix(1.0, height_mult, blade_variation);
-	vec2 random_scale_uv = fract(instance_origin.xz * max(global_noise_scale, 0.001));
-	float global_random = texture(global_noise_texture, random_scale_uv).r;
-	float random_range = clamp(grass_random_scale, 0.0, 1.0);
-	float min_random_height = mix(1.0, 0.25, random_range);
-	float max_random_height = mix(1.0, 3.0, random_range);
-	sloty *= mix(min_random_height, max_random_height, global_random);
 
 	vec3 scaled_local = vec3(VERTEX.x * slotx, VERTEX.y * sloty, VERTEX.z * slotz);
-	if (animate_active && scaled_local.y > 0.0) {
+	vec3 wind_world_offset = vec3(0.0);
+	float wind_perspective = 0.0;
+	float wind_tip_bend = 0.0;
+	// Animation FPS steps the shared wind sample clock. 0 = no frames / no motion.
+	if (animate_active && scaled_local.y > 0.0 && fps > 0.0) {
 		float bend_factor = clamp(scaled_local.y / max(sloty, 0.0001), 0.0, 1.0);
-		float sway_strength = 0.18;
+		float body_weight = blade_body_weight(bend_factor);
+		float tip_weight = blade_tip_weight(bend_factor);
+		float sway_strength = 0.32;
 		float seed = fract(sin(float(INSTANCE_ID) * 91.137 + slotx * 17.0 + slotz * 7.0) * 43758.5453);
-		if (fps > 0.0) {
-			float stepped_time = floor(TIME * fps) / fps;
-			vec2 wind_vec = mst_sample_wind_vector_at_time(instance_origin.xz, seed, stepped_time);
-			scaled_local.x += wind_vec.x * sway_strength * bend_factor;
-			scaled_local.z += wind_vec.y * sway_strength * bend_factor;
-		}
+		float stepped_time = floor((TIME + seed) * fps) / fps;
+		vec2 wind_vec = mst_sample_wind_vector_at_time(instance_origin.xz, seed, stepped_time);
+		float wind_amount = length(wind_vec);
+		vec2 wind_dir = (wind_amount > 0.0001) ? (wind_vec / wind_amount) : vec2(0.0, 0.0);
+		vec2 cross_dir = vec2(-wind_dir.y, wind_dir.x);
+		float flutter = sin(
+			stepped_time * (max(wind_speed, 0.001) * 3.2 + 0.8) +
+			seed * 6.28318 +
+			bend_factor * 3.4
+		);
+		float forward_push = wind_amount * (body_weight * 0.18 + tip_weight * 0.44);
+		float side_sway = flutter * wind_amount * (tip_weight * 0.16);
+		float downward_drag = wind_amount * (body_weight * 0.025 + tip_weight * 0.11);
+		wind_world_offset =
+			vec3(wind_dir.x, 0.0, wind_dir.y) * forward_push * sway_strength +
+			vec3(cross_dir.x, 0.0, cross_dir.y) * side_sway * sway_strength;
+		wind_world_offset.y -= downward_drag * sway_strength;
+		vec2 camera_forward_xz = normalize(vec2(cam_z.x, cam_z.z) + vec2(0.0001, 0.0));
+		wind_perspective = dot(wind_dir, camera_forward_xz) * wind_amount;
+		wind_tip_bend = wind_amount * tip_weight;
 	}
 	vec3 billboarded_vertex = spherical_billboard * scaled_local;
-	vec3 world_position = instance_origin + billboarded_vertex;
+	vec3 world_position = instance_origin + billboarded_vertex + wind_world_offset;
 	POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(world_position, 1.0);
 
 	model_origin = (MODELVIEW_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
@@ -422,6 +469,8 @@ void vertex() {
 	_gc = use_base ? base_col : sampled_floor_col;
 	v_grass_color = _gc;
 	v_grass_wet_mask = 0.0;
+	v_wind_perspective = wind_perspective;
+	v_wind_tip_bend = wind_tip_bend;
 	if (_palette_wet_enabled(slot) > 0.5) {
 		float top_half_mask = smoothstep(0.70, 0.98, 1.0 - UV.y);
 		v_grass_wet_mask = clamp(_palette_grass_wetness(slot), 0.0, 1.0) * top_half_mask;
@@ -439,23 +488,33 @@ void fragment() {
 	vec3 grass_color = v_grass_color;
 	int slot = clamp(int(instance_slot_id), 0, 255);
 	int legacy_tex_id = clamp(slot + 1, 1, 6);
+	vec2 grass_uv = UV;
+	float tip_mask = smoothstep(0.22, 1.0, 1.0 - grass_uv.y);
+	float perspective_strength = clamp(v_wind_perspective * 0.55, -0.35, 0.35);
+	float center_pull = abs(perspective_strength) * tip_mask * 0.12;
+	grass_uv.x = mix(grass_uv.x, 0.5, center_pull);
+	grass_uv.y = clamp(
+		grass_uv.y + perspective_strength * tip_mask * 0.18 - v_wind_tip_bend * tip_mask * 0.06,
+		0.0,
+		1.0
+	);
 
 	// Sample the appropriate grass texture. Prefer Texture2DArray if available.
 	vec4 grass_tex = vec4(0.0);
 	if (use_grass_tex_array) {
 		if (use_slot_layer_lookup) {
 			int dense_layer = dense_texture_layer(slot);
-			grass_tex = (dense_layer < 0) ? vec4(0.0) : textureLod(vc_grass_tex_array, vec3(UV, float(dense_layer)), 0.0);
+			grass_tex = (dense_layer < 0) ? vec4(0.0) : textureLod(vc_grass_tex_array, vec3(grass_uv, float(dense_layer)), 0.0);
 		} else {
-			grass_tex = textureLod(vc_grass_tex_array, vec3(UV, float(slot)), 0.0);
+			grass_tex = textureLod(vc_grass_tex_array, vec3(grass_uv, float(slot)), 0.0);
 		}
 	} else {
-		if (legacy_tex_id == 1) grass_tex = textureLod(grass_texture_1, UV, 0.0);
-		else if (legacy_tex_id == 2) grass_tex = textureLod(grass_texture_2, UV, 0.0);
-		else if (legacy_tex_id == 3) grass_tex = textureLod(grass_texture_3, UV, 0.0);
-		else if (legacy_tex_id == 4) grass_tex = textureLod(grass_texture_4, UV, 0.0);
-		else if (legacy_tex_id == 5) grass_tex = textureLod(grass_texture_5, UV, 0.0);
-		else if (legacy_tex_id == 6) grass_tex = textureLod(grass_texture_6, UV, 0.0);
+		if (legacy_tex_id == 1) grass_tex = textureLod(grass_texture_1, grass_uv, 0.0);
+		else if (legacy_tex_id == 2) grass_tex = textureLod(grass_texture_2, grass_uv, 0.0);
+		else if (legacy_tex_id == 3) grass_tex = textureLod(grass_texture_3, grass_uv, 0.0);
+		else if (legacy_tex_id == 4) grass_tex = textureLod(grass_texture_4, grass_uv, 0.0);
+		else if (legacy_tex_id == 5) grass_tex = textureLod(grass_texture_5, grass_uv, 0.0);
+		else if (legacy_tex_id == 6) grass_tex = textureLod(grass_texture_6, grass_uv, 0.0);
 	}
 
 	ALBEDO = grass_color;
@@ -533,7 +592,7 @@ void light() {
 		float ndoth = max(dot(NORMAL, half_vec), 0.0);
 		float spec = pow(ndoth, mix(10.0, 22.0, wet_mask));
 		float fres = pow(1.0 - max(dot(NORMAL, VIEW), 0.0), 3.0);
-		float wet_spec = (spec * 0.55 + fres * 0.16) * wet_mask;
+		float wet_spec = (spec * 0.55 + fres * 0.25) * wet_mask;
 		SPECULAR_LIGHT += LIGHT_COLOR.rgb * wet_spec * ATTENUATION;
 	}
 }

@@ -13,9 +13,17 @@ shader_parameter/bands = 5
 shader_parameter/shadow_intensity = 0.0
 shader_parameter/animate_active = true
 shader_parameter/fps = 0.0
-shader_parameter/wind_direction = Vector2(1, 1)
-shader_parameter/wind_scale = 0.02
-shader_parameter/wind_speed = 0.15
+shader_parameter/flower_wind_strength = 1.0
+shader_parameter/flower_stem_bend = 1.35
+shader_parameter/flower_tip_flutter = 0.2
+shader_parameter/wind_direction_degrees = 45.0
+shader_parameter/wind_direction = Vector2(0.70710677, 0.70710677)
+shader_parameter/wind_speed = 0.08
+shader_parameter/wind_strength = 1.0
+shader_parameter/wind_scale = 0.037
+shader_parameter/wind_gust_strength = 0.35
+shader_parameter/wind_gust_speed = 0.12
+shader_parameter/wind_mode = 0
 
 [resource]
 material = SubResource("ShaderMaterial_jhoiy")

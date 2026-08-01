@@ -57,6 +57,9 @@ var terrain_settings_data : Dictionary = {
 	"wind_gust_strength": "EditorSpinSlider",
 	"wind_gust_speed": "EditorSpinSlider",
 	"wind_mode": "OptionButton",
+	"flower_wind_strength": "EditorSpinSlider",
+	"flower_stem_bend": "EditorSpinSlider",
+	"flower_tip_flutter": "EditorSpinSlider",
 }
 
 const TERRAIN_SETTINGS_CHUNK_TAB := [
@@ -102,6 +105,9 @@ const TERRAIN_SETTINGS_WIND_TAB := [
 	"wind_gust_strength",
 	"wind_gust_speed",
 	"wind_mode",
+	"flower_wind_strength",
+	"flower_stem_bend",
+	"flower_tip_flutter",
 ]
 
 const TERRAIN_SETTINGS_LABEL_OVERRIDES := {
@@ -118,6 +124,9 @@ const TERRAIN_SETTINGS_LABEL_OVERRIDES := {
 	"wind_gust_speed": "Gust Speed",
 	"wind_scale": "Wind Scale",
 	"wind_mode": "Wind Mode",
+	"flower_wind_strength": "Flower Strength",
+	"flower_stem_bend": "Stem Bend",
+	"flower_tip_flutter": "Tip Flutter",
 	"grass_random_scale": "Grass Random Scale",
 }
 
@@ -1519,10 +1528,13 @@ func _create_terrain_setting_row(setting: String) -> Control:
 				spin_slider.set_step(0.25)
 			elif setting == "wind_direction_degrees":
 				spin_slider.set_max(360.0)
-			elif setting == "wind_speed" or setting == "wind_gust_speed":
+			elif setting == "wind_speed" or setting == "wind_gust_speed" or setting == "flower_tip_flutter":
 				spin_slider.set_max(1.0)
-			elif setting == "wind_strength" or setting == "wind_gust_strength":
+			elif setting == "wind_strength" or setting == "wind_gust_strength" or setting == "flower_wind_strength":
 				spin_slider.set_max(2.0)
+			elif setting == "flower_stem_bend":
+				spin_slider.set_min(1.0)
+				spin_slider.set_max(2.5)
 			elif setting == "wind_scale":
 				spin_slider.set_max(1.0)
 			elif setting == "wall_threshold":

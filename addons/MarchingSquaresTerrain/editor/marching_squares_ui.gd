@@ -373,11 +373,11 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 			if p_value is bool:
 				terrain.use_cell_shading = p_value
 		"ridge_threshold":
-			if p_value is float:
-				terrain.ridge_threshold = p_value
+			if p_value is float or p_value is int:
+				terrain.ridge_threshold = float(p_value)
 		"ledge_threshold":
-			if p_value is float:
-				terrain.ledge_threshold = p_value
+			if p_value is float or p_value is int:
+				terrain.ledge_threshold = float(p_value)
 		"use_ridge_texture":
 			if p_value is bool:
 				terrain.use_ridge_texture = p_value
@@ -416,6 +416,12 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 			terrain.wind_gust_speed = float(p_value)
 		"wind_mode":
 			terrain.wind_mode = int(p_value)
+		"flower_wind_strength":
+			terrain.flower_wind_strength = float(p_value)
+		"flower_stem_bend":
+			terrain.flower_stem_bend = float(p_value)
+		"flower_tip_flutter":
+			terrain.flower_tip_flutter = float(p_value)
 		"prefab_set":
 			if p_value is MarchingSquaresPrefabSet:
 				if p_value.has_method("has_required_pieces") and not p_value.has_required_pieces():
