@@ -419,7 +419,9 @@ func _preview_palette_color(entries: Array, blend_mode: int, noise_uv: Vector2, 
 		return entries[0]["color"]
 	var color_count := entries.size()
 	var gradient_mode := blend_mode != 1 and blend_mode != 2 and blend_mode != 3
-	var n := 1.0 - _sample_preview_noise(noise_img, noise_uv)
+	# Match terrain palette remap scales (gradient 0.014 / discrete 0.008).
+	var palette_gn_scale := 0.014 if gradient_mode else 0.008
+	var n := 1.0 - _sample_preview_noise(noise_img, noise_uv * palette_gn_scale)
 	if gradient_mode:
 		var centered := (clampf(n, 0.0, 1.0) - 0.5) * 2.0
 		n = clampf(sign(centered) * pow(absf(centered), 0.55) * 0.5 + 0.5, 0.0, 1.0)
@@ -587,7 +589,8 @@ func _make_material_preview_texture(terrain, slot_idx: int) -> Texture2D:
 	var mode := 0
 	if slot_idx < terrain.slot_blend_modes.size():
 		mode = clampi(int(terrain.slot_blend_modes[slot_idx]), 0, 3)
-	var tile_scale := 0.38
+	# Larger tile_scale = more of the albedo pattern visible (less zoomed-in).
+	var tile_scale := 0.62
 	var slot_scale := 1.0
 	if slot_idx < terrain.texture_slots.size() and terrain.texture_slots[slot_idx] != null:
 		var raw_scale: Variant = terrain.texture_slots[slot_idx].get("scale")
@@ -603,7 +606,8 @@ func _make_material_preview_texture(terrain, slot_idx: int) -> Texture2D:
 			var src := _sample_preview_albedo(img, sample_uv)
 			var px := src
 			if not entries.is_empty():
-				var palette_color := _preview_palette_color(entries, mode, sample_uv, uv * 256.0, noise_img)
+				# Use card-space coords so palette noise frequency stays stable when zooming.
+				var palette_color := _preview_palette_color(entries, mode, uv * 256.0, uv * 256.0, noise_img)
 				px = _tint_preview_pixel(src, palette_color, base_albedo)
 			var centered_uv := uv - Vector2(0.5, 0.5)
 			var dist := centered_uv.length()

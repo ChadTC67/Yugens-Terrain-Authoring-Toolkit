@@ -730,6 +730,8 @@ func _delete_unused_textures(unused_slots: Array) -> void:
 func _make_slot_preview(texture: Texture2D, _size: int = 64) -> TextureRect:
 	var thumb := TextureRect.new()
 	thumb.texture = texture
+	# Keep sprite/texel edges crisp in the dock (LINEAR softens small thumbs).
+	thumb.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	thumb.custom_minimum_size = Vector2(_size, _size)

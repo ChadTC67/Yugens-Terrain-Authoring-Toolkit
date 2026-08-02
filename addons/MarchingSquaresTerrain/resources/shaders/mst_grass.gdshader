@@ -147,10 +147,6 @@ int _palette_blend_mode(int slot) {
 	return int(round(_palette_meta(slot).g * 255.0));
 }
 
-float _palette_blend_scale(int slot) {
-	return mix(0.001, 0.1, clamp(_palette_meta(slot).a, 0.0, 1.0));
-}
-
 float _palette_roughness(int slot) {
 	slot = clamp(slot, 0, 255);
 	float v = (float(slot) + 0.5) / 256.0;
@@ -191,19 +187,19 @@ float sample_palette_weight(int slot, int color_idx) {
 	return max(texture(palette_weights_tex, vec2(u, v)).r, 0.0);
 }
 
-vec4 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
+vec4 get_grass_palette_color(int slot, vec2 world_xz) {
 	slot = clamp(slot, 0, 255);
 	int color_count = _palette_count(slot);
-	if (color_count <= 0) return vec4(0.392, 0.471, 0.318, 1.0);
+	// Match terrain empty-palette fallback (no tint) instead of a hardcoded green.
+	if (color_count <= 0) return vec4(1.0, 1.0, 1.0, 0.0);
 	if (color_count == 1) return sample_palette_entry(slot, 0);
 
 	int mode = _palette_blend_mode(slot);
 	bool gradient_mode = mode != 1 && mode != 2 && mode != 3;
 
 	float n = 0.0;
-	// Internal remap for palette blending: fixed higher-frequency sampling + inverted.
-	// This keeps the UI Global Noise settings independent of palette blending behavior.
-	float palette_gn_scale = _palette_blend_scale(slot);
+	// Match terrain floor palette remap exactly (same scales / invert / curve).
+	float palette_gn_scale = gradient_mode ? 0.014 : 0.008;
 	vec2 uv = fract(world_xz * palette_gn_scale);
 	n = 1.0 - texture(global_noise_texture, uv).r;
 	if (gradient_mode) {
@@ -256,12 +252,12 @@ vec4 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 		// Retro: hard snap by weighted ownership.
 		return sample_palette_entry(slot, i0);
 	} else if (mode == 2) {
-		// Dithered: weights own area; only non-zero color boundaries dither.
+		// Dithered: match terrain floor dither thresholds / 2D hash.
 		vec4 result = sample_palette_entry(slot, i0);
 		float boundary = 0.0;
-		float transition = max(total * 0.06, 0.0001);
-		vec3 dither_coord = floor(vec3(world_xz.x, world_y, world_xz.y) * 8.0);
-		float dither = hash3(dither_coord);
+		float transition = max(total * 0.09, 0.0001);
+		vec2 dither_coord = floor(world_xz * 8.0);
+		float dither = hash(dither_coord);
 		for (int i = 0; i < 7; i++) {
 			if (i >= color_count - 1) break;
 			boundary += ws[i];
@@ -272,13 +268,13 @@ vec4 get_grass_palette_color(int slot, vec2 world_xz, float world_y) {
 		}
 		return result;
 	} else if (mode == 3) {
-		// Stipple: weights own area; only non-zero color boundaries checker/stipple.
+		// Stipple: match terrain floor checker/seam constants.
 		vec4 result = sample_palette_entry(slot, i0);
 		float boundary = 0.0;
-		float transition = max(total * 0.06, 0.0001);
-		float seam = 0.08;
-		vec3 checker_coord = floor(vec3(world_xz.x, world_y, world_xz.y) * 12.0);
-		float checker = mod(checker_coord.x + checker_coord.y + checker_coord.z, 2.0);
+		float transition = max(total * 0.09, 0.0001);
+		float seam = 0.12;
+		vec2 checker_coord = floor(world_xz * 4.0);
+		float checker = mod(checker_coord.x + checker_coord.y, 2.0);
 		for (int i = 0; i < 7; i++) {
 			if (i >= color_count - 1) break;
 			boundary += ws[i];
@@ -361,11 +357,18 @@ vec4 sample_floor_material_color(int slot, vec2 base_uv) {
 	vec4 tex = use_floor_tex_array ? sample_floor_texture_layer(slot, base_uv) : vec4(1.0);
 	if (slot == 15) return tex;
 
-	vec4 palette = get_grass_palette_color(slot, world_origin.xz, world_origin.y);
+	vec4 palette = get_grass_palette_color(slot, world_origin.xz);
 	bool tex_has_content = (tex.a > 0.001) && (abs(tex.r - 1.0) > 0.001 || abs(tex.g - 1.0) > 0.001 || abs(tex.b - 1.0) > 0.001);
 	if (tex_has_content) {
 		float pal_alpha = clamp(palette.a, 0.0, 1.0);
-		vec3 tinted = mix(tex.rgb, tex.rgb * palette.rgb, pal_alpha);
+		// Match terrain: palette as absolute tint target via albedo-normalized multiply.
+		vec4 slot_albedo = get_slot_albedo_color(slot);
+		vec3 tint_target = palette.rgb;
+		if (slot_albedo.a > 0.001) {
+			vec3 base_albedo = max(slot_albedo.rgb, vec3(0.001));
+			tint_target = clamp(palette.rgb / base_albedo, vec3(0.0), vec3(4.0));
+		}
+		vec3 tinted = tex.rgb * mix(vec3(1.0), tint_target, pal_alpha);
 		return vec4(tinted, tex.a);
 	}
 	return mix(tex, palette, clamp(palette.a, 0.0, 1.0));
@@ -447,7 +450,7 @@ void vertex() {
 	else if (slot == 3) use_base = use_base_color_4;
 	else if (slot == 4) use_base = use_base_color_5;
 	else if (slot == 5) use_base = use_base_color_6;
-	vec4 palette = get_grass_palette_color(slot, world_origin.xz, world_origin.y);
+	vec4 palette = get_grass_palette_color(slot, world_origin.xz);
 	vec3 palette_col = palette.rgb;
 	vec4 slot_albedo = get_slot_albedo_color(slot);
 	vec3 slot_col = slot_albedo.rgb;

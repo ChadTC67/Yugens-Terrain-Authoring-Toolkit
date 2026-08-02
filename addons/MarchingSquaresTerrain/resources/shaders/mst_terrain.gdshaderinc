@@ -622,6 +622,48 @@ vec4 sample_material_by_index(int index, vec2 base_uv) {
 	return sample_material_by_index_with_palette_coords(index, base_uv, world_pos.xz);
 }
 
+bool _mst_slot_has_texture(int slot) {
+	slot = clamp(slot, 0, 255);
+	if (slot == 15) {
+		return false;
+	}
+	if (use_slot_layer_lookup) {
+		return _dense_texture_layer(slot) >= 0;
+	}
+	// Legacy arrays pad missing slots with white placeholders.
+	vec4 tex = sample_texture_layer(slot, vec2(0.5));
+	return (tex.a > 0.001) && (abs(tex.r - 1.0) > 0.001 || abs(tex.g - 1.0) > 0.001 || abs(tex.b - 1.0) > 0.001);
+}
+
+float _mst_slot_blend_height(int slot, vec2 base_uv) {
+	// Color-only slots stay flat. Textured slots use albedo luminance so blend
+	// isocontours break up along texture detail instead of forming rings.
+	if (!_mst_slot_has_texture(slot)) {
+		return 0.5;
+	}
+	float scale = get_texture_scale(slot);
+	vec4 tex = sample_texture_layer(slot, base_uv * scale);
+	return clamp(dot(tex.rgb, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
+}
+
+vec4 _mst_height_blend3(
+	vec4 c0, float w0, float h0,
+	vec4 c1, float w1, float h1,
+	vec4 c2, float w2, float h2,
+	float depth
+) {
+	depth = max(depth, 0.001);
+	float ma = w0 + h0 * depth;
+	float mb = w1 + h1 * depth;
+	float mc = w2 + h2 * depth;
+	float mmax = max(ma, max(mb, mc));
+	float b0 = max(ma - mmax + depth, 0.0);
+	float b1 = max(mb - mmax + depth, 0.0);
+	float b2 = max(mc - mmax + depth, 0.0);
+	float bsum = max(b0 + b1 + b2, 0.0001);
+	return (c0 * b0 + c1 * b1 + c2 * b2) / bsum;
+}
+
 vec4 _mst_apply_material_tint(int index, vec4 tex, vec2 palette_coords) {
 	if (index == 15) return tex;
 	vec4 palette = get_palette_color(index, palette_coords);
@@ -879,7 +921,19 @@ void fragment() {
 
 				float blend_noise = get_world_noise(vertex_pos.xyz, rl_noise_tile_size);
 				float noise_variation = (blend_noise - 0.5) * rl_noise_strength;
-				float select_source = step(blend_noise_threshold + noise_variation, source_w);
+				// When one side is textured and the other is color-only, raw source_w
+				// isolines form concentric shells. Nudge selection with texture height.
+				float select_w = source_w;
+				bool src_tex = _mst_slot_has_texture(source_idx);
+				bool tgt_tex = _mst_slot_has_texture(target_idx);
+				if (src_tex != tgt_tex) {
+					float h_tex = src_tex
+						? _mst_slot_blend_height(source_idx, floor_uv)
+						: _mst_slot_blend_height(target_idx, floor_uv);
+					float height_term = (h_tex - 0.5) * (src_tex ? 0.45 : -0.45);
+					select_w = clamp(source_w + height_term, 0.0, 1.0);
+				}
+				float select_source = step(blend_noise_threshold + noise_variation, select_w);
 				int selected_idx = target_idx;
 				if (select_source > 0.5) {
 					selected_idx = source_idx;
@@ -941,9 +995,32 @@ void fragment() {
 				top2_w = weight_c;
 			}
 
-			floor_color = sample_material_by_index(mat_a, floor_uv) * weight_a
-						+ sample_material_by_index(mat_b, floor_uv) * weight_b
-						+ sample_material_by_index(mat_c, floor_uv) * weight_c;
+			vec4 col_a = sample_material_by_index(mat_a, floor_uv);
+			vec4 col_b = sample_material_by_index(mat_b, floor_uv);
+			vec4 col_c = sample_material_by_index(mat_c, floor_uv);
+			float height_a = _mst_slot_blend_height(mat_a, floor_uv);
+			float height_b = _mst_slot_blend_height(mat_b, floor_uv);
+			float height_c = _mst_slot_blend_height(mat_c, floor_uv);
+			bool tex_a = _mst_slot_has_texture(mat_a);
+			bool tex_b = _mst_slot_has_texture(mat_b);
+			bool tex_c = _mst_slot_has_texture(mat_c);
+			bool mixed_coverage = (
+				(tex_a != tex_b && weight_a > 0.001 && weight_b > 0.001) ||
+				(tex_a != tex_c && weight_a > 0.001 && weight_c > 0.001) ||
+				(tex_b != tex_c && weight_b > 0.001 && weight_c > 0.001)
+			);
+			// Stronger depth when mixing a real texture into a flat color slot —
+			// linear weight mixes expose visible contour rings otherwise.
+			float height_depth = mix(0.16, 0.34, clamp(blend_sharpness, 0.0, 1.0));
+			if (mixed_coverage) {
+				height_depth = max(height_depth, mix(0.36, 0.55, clamp(blend_sharpness, 0.0, 1.0)));
+			}
+			floor_color = _mst_height_blend3(
+				col_a, weight_a, height_a,
+				col_b, weight_b, height_b,
+				col_c, weight_c, height_c,
+				height_depth
+			);
 			out_roughness = _palette_roughness(mat_a) * weight_a
 						+ _palette_roughness(mat_b) * weight_b
 						+ _palette_roughness(mat_c) * weight_c;

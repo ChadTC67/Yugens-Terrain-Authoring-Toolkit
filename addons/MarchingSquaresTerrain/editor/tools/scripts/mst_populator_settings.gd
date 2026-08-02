@@ -45,6 +45,8 @@ func _get_slot_preview_texture(populator: MarchingSquaresPopulator) -> Texture2D
 func _make_slot_preview(texture: Texture2D, _size: int = 64) -> TextureRect:
 	var thumb := TextureRect.new()
 	thumb.texture = texture
+	# Keep flower/sprite previews sharp instead of bilinear-softened.
+	thumb.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	thumb.custom_minimum_size = Vector2(_size, _size)

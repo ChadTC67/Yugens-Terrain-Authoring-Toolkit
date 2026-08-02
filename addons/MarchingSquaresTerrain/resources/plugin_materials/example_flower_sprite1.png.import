@@ -2,9 +2,9 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b7ki487nruxbe"
-path.s3tc="res://.godot/imported/caps_DD.png-f83f2567f574f559806fa9388a013da3.s3tc.ctex"
-path.etc2="res://.godot/imported/caps_DD.png-f83f2567f574f559806fa9388a013da3.etc2.ctex"
+uid="uid://c2komfsom20ds"
+path.s3tc="res://.godot/imported/example_flower_sprite1.png-7e9ca3528484190af37d8a1ad022774d.s3tc.ctex"
+path.etc2="res://.godot/imported/example_flower_sprite1.png-7e9ca3528484190af37d8a1ad022774d.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
@@ -12,8 +12,8 @@ metadata={
 
 [deps]
 
-source_file="res://addons/MarchingSquaresTerrain/documentation/documentation+/prefabs/caps_DD.png"
-dest_files=["res://.godot/imported/caps_DD.png-f83f2567f574f559806fa9388a013da3.s3tc.ctex", "res://.godot/imported/caps_DD.png-f83f2567f574f559806fa9388a013da3.etc2.ctex"]
+source_file="res://addons/MarchingSquaresTerrain/resources/plugin_materials/example_flower_sprite1.png"
+dest_files=["res://.godot/imported/example_flower_sprite1.png-7e9ca3528484190af37d8a1ad022774d.s3tc.ctex", "res://.godot/imported/example_flower_sprite1.png-7e9ca3528484190af37d8a1ad022774d.etc2.ctex"]
 
 [params]
 
