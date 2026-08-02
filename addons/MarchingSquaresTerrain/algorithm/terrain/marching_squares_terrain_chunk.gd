@@ -484,15 +484,21 @@ func _exit_tree() -> void:
 ## Rebuild in-memory cell_geometry without republishing mesh tiles.
 ## Used to recook grass when a baked MultiMesh cache is empty/unusable.
 func rebuild_cell_geometry_for_grass() -> void:
-	if needs_update == null or needs_update.is_empty():
+	# Always resize to current chunk dimensions so partial/stale needs_update
+	# arrays cannot leave cells unmarked (and therefore missing from cell_geometry).
+	var expected_z := dimensions.z - 1
+	var expected_x := dimensions.x - 1
+	if needs_update == null or needs_update.is_empty() \
+			or needs_update.size() != expected_z \
+			or (expected_z > 0 and needs_update[0].size() != expected_x):
 		needs_update = []
-		for z in range(dimensions.z - 1):
+		for z in range(expected_z):
 			needs_update.append([])
-			for x in range(dimensions.x - 1):
+			for x in range(expected_x):
 				needs_update[z].append(true)
 	else:
-		for z in range(mini(needs_update.size(), dimensions.z - 1)):
-			for x in range(mini(needs_update[z].size(), dimensions.x - 1)):
+		for z in range(expected_z):
+			for x in range(expected_x):
 				needs_update[z][x] = true
 	_cache_global_position_for_thread()
 	var collect_was := _collect_mesh_arrays

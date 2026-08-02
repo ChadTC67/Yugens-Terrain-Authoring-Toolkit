@@ -403,6 +403,38 @@ func ensure_multimesh_count() -> bool:
 	return false
 
 
+func _expected_grass_cell_count() -> int:
+	if _chunk == null:
+		return 0
+	return maxi((_chunk.dimensions.x - 1) * (_chunk.dimensions.z - 1), 0)
+
+
+func _cell_geometry_ready_for_grass() -> bool:
+	if _chunk == null or _chunk.cell_geometry == null:
+		return false
+	if _chunk.cell_geometry.is_empty():
+		return false
+	# Partial caches (common after bake strip / interrupted rebuild) still report
+	# non-empty; require a complete key set before iterating every cell.
+	return _chunk.cell_geometry.size() >= _expected_grass_cell_count()
+
+
+func _ensure_cell_geometry_for_grass(force_recook: bool = false) -> bool:
+	if _chunk == null:
+		return false
+	if _chunk._baked_mesh_is_complete and _chunk.cell_geometry.is_empty():
+		# Baked chunks strip cell_geometry; skip recook unless placement rules changed.
+		if is_multimesh_cooked(multimesh) and not force_recook:
+			reveal_cooked_multimesh()
+			return false
+	elif _cell_geometry_ready_for_grass() and not force_recook:
+		return true
+
+	_chunk.rebuild_cell_geometry_for_grass()
+	# Require a complete cell set — a partial dict is not enough to walk every cell.
+	return _cell_geometry_ready_for_grass()
+
+
 func regenerate_all_cells(force_recook: bool = false) -> void:
 	# Safety checks
 	if not _chunk:
@@ -413,25 +445,15 @@ func regenerate_all_cells(force_recook: bool = false) -> void:
 		push_error("terrain_system not set while regenerating cells")
 		return
 
-	if _chunk._baked_mesh_is_complete and _chunk.cell_geometry.is_empty():
-		# Baked chunks strip cell_geometry; skip recook unless placement rules changed
-		# (e.g. noisy blend threshold) and we must rebuild from source.
-		if is_multimesh_cooked(multimesh) and not force_recook:
-			reveal_cooked_multimesh()
-			return
-		# Empty/partial bake cache: rebuild cell geometry only, then cook grass.
-		_chunk.rebuild_cell_geometry_for_grass()
-		if _chunk.cell_geometry.is_empty():
-			return
-
 	if not multimesh:
 		setup(_chunk)
 
-	if not _chunk.cell_geometry:
-		_chunk.rebuild_cell_geometry_for_grass()
-		if not _chunk.cell_geometry:
+	if not _ensure_cell_geometry_for_grass(force_recook):
+		# Cooked bake already revealed inside ensure, or geometry is unavailable.
+		# Unbaked empty caches may still need a mesh pass before grass can cook.
+		if _chunk.cell_geometry.is_empty() and not _chunk._baked_mesh_is_complete:
 			_chunk.regenerate_mesh()
-			return
+		return
 
 	_hide_all_grass_instances()
 	for z in range(_chunk.dimensions.z - 1):
@@ -447,16 +469,10 @@ func regenerate_all_cells_deferred() -> void:
 	# Hydrated chunks intentionally do not retain cell_geometry. Their persisted
 	# MultiMesh is already usable, so do not launch a full grass rebuild that
 	# would repeatedly fail on the stripped source cache.
-	if _chunk._baked_mesh_is_complete and _chunk.cell_geometry.is_empty():
+	if not _ensure_cell_geometry_for_grass(false):
 		if is_multimesh_cooked(multimesh):
-			reveal_cooked_multimesh()
 			_deferred_grass_incomplete = false
-			return
-		# Persisted Multimesh was empty/partial — rebuild geometry, then cook.
-		_chunk.rebuild_cell_geometry_for_grass()
-		if _chunk.cell_geometry.is_empty():
-			_deferred_grass_incomplete = false
-			return
+		return
 	if not multimesh:
 		setup(_chunk)
 
@@ -634,14 +650,14 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 	if cell_coords.x < 0 or cell_coords.y < 0 or cell_coords.x >= _chunk.dimensions.x - 1 or cell_coords.y >= _chunk.dimensions.z - 1:
 		return
 
-	if _chunk.cell_geometry.is_empty():
-		if _chunk._baked_mesh_is_complete:
-			return
-		push_error("Couldn't find a reference to cell_geometry")
+	if _chunk.cell_geometry == null or _chunk.cell_geometry.is_empty():
+		# Baked chunks intentionally strip cell_geometry; other paths rebuild first.
 		return
 
 	if not _chunk.cell_geometry.has(cell_coords):
-		push_error("Couldn't find a reference to cell_coords")
+		# Void / unauthored / incomplete-cache cells have no floor geometry — hide
+		# any leftover instances quietly instead of spamming the editor log.
+		_hide_grass_cell(cell_coords)
 		return
 
 	var cell_geometry = _chunk.cell_geometry[cell_coords]
