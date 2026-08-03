@@ -83,14 +83,40 @@ var upper_thresh : float = 0.7 #, > 0.7 = upper color, middle = blend
 var blend_zone := upper_thresh - lower_thresh
 #endregion
 
+
+func _reset_needs_update() -> void:
+	needs_update = []
+	var z_count := max(0, dimensions.z - 1)
+	var x_count := max(0, dimensions.x - 1)
+	for z in range(z_count):
+		needs_update.append([])
+		for x in range(x_count):
+			needs_update[z].append(true)
+
+
+func _height_map_is_valid() -> bool:
+	if height_map == null or height_map.size() < dimensions.z:
+		return false
+	for z in range(dimensions.z):
+		if not (height_map[z] is Array) or height_map[z].size() < dimensions.x:
+			return false
+	return true
+
+
+func _needs_update_is_valid() -> bool:
+	var z_count := max(0, dimensions.z - 1)
+	var x_count := max(0, dimensions.x - 1)
+	if needs_update == null or needs_update.size() < z_count:
+		return false
+	for z in range(z_count):
+		if not (needs_update[z] is Array) or needs_update[z].size() < x_count:
+			return false
+	return true
+
+
 # Called by TerrainSystem parent
 func initialize_terrain(should_regenerate_mesh: bool = true):
-	needs_update = []
-	# Initally all cells will need to be updated to show the newly loaded height
-	for z in range(dimensions.z - 1):
-		needs_update.append([])
-		for x in range(dimensions.x - 1):
-			needs_update[z].append(true)
+	_reset_needs_update()
 	
 	if not get_node_or_null("GrassPlanter"):
 		grass_planter = get_node_or_null("GrassPlanter")
@@ -119,7 +145,7 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 	grass_planter.multimesh.mesh = terrain_system.grass_mesh
 	
 	# Generate maps if not loaded from external storage (works for both editor and runtime)
-	if not height_map:
+	if not _height_map_is_valid():
 		generate_height_map()
 	if not color_map_0 or not color_map_1:
 		generate_color_maps()
@@ -302,6 +328,10 @@ func regenerate_mesh(use_threads: bool = false):
 func generate_terrain_cells(use_threads: bool):
 	if not cell_geometry:
 		cell_geometry = {}
+	if not _height_map_is_valid():
+		generate_height_map()
+	if not _needs_update_is_valid():
+		_reset_needs_update()
 	
 	global_position_cached = global_position if is_inside_tree() else position
 	var thread_pool := MarchingSquaresThreadPool.new(max(1, OS.get_processor_count()))
@@ -311,7 +341,7 @@ func generate_terrain_cells(use_threads: bool):
 			var cell_coords = Vector2i(x, z)
 			var work_load : Callable
 			# If geometry did not change, copy already generated geometry and skip this cell
-			if not needs_update[z][x]:
+			if not needs_update[z][x] and cell_geometry.has(cell_coords):
 				work_load = func():
 					cell_generation_mutex.lock()
 					var verts = cell_geometry[cell_coords]["verts"]
