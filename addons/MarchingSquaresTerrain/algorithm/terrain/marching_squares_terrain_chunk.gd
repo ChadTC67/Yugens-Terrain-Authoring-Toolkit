@@ -103,6 +103,26 @@ func _height_map_is_valid() -> bool:
 	return true
 
 
+func _expected_color_map_size() -> int:
+	return max(0, dimensions.z * dimensions.x)
+
+
+func _packed_color_map_is_valid(color_array) -> bool:
+	return typeof(color_array) == TYPE_PACKED_COLOR_ARRAY and color_array.size() >= _expected_color_map_size()
+
+
+func _color_maps_are_valid() -> bool:
+	return _packed_color_map_is_valid(color_map_0) and _packed_color_map_is_valid(color_map_1)
+
+
+func _wall_color_maps_are_valid() -> bool:
+	return _packed_color_map_is_valid(wall_color_map_0) and _packed_color_map_is_valid(wall_color_map_1)
+
+
+func _grass_mask_map_is_valid() -> bool:
+	return _packed_color_map_is_valid(grass_mask_map)
+
+
 func _needs_update_is_valid() -> bool:
 	var z_count := max(0, dimensions.z - 1)
 	var x_count := max(0, dimensions.x - 1)
@@ -122,9 +142,9 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 		grass_planter = get_node_or_null("GrassPlanter")
 		if not grass_planter:
 			grass_planter = MarchingSquaresGrassPlanter.new()
-			if not color_map_0 or not color_map_1:
+			if not _color_maps_are_valid():
 				generate_color_maps()
-			if not grass_mask_map:
+			if not _grass_mask_map_is_valid():
 				generate_grass_mask_map()
 			add_child(grass_planter)
 		grass_planter.name = "GrassPlanter"
@@ -147,11 +167,11 @@ func initialize_terrain(should_regenerate_mesh: bool = true):
 	# Generate maps if not loaded from external storage (works for both editor and runtime)
 	if not _height_map_is_valid():
 		generate_height_map()
-	if not color_map_0 or not color_map_1:
+	if not _color_maps_are_valid():
 		generate_color_maps()
-	if not wall_color_map_0 or not wall_color_map_1:
+	if not _wall_color_maps_are_valid():
 		generate_wall_color_maps()
-	if not grass_mask_map:
+	if not _grass_mask_map_is_valid():
 		generate_grass_mask_map()
 	
 	if not mesh and should_regenerate_mesh:
@@ -330,6 +350,12 @@ func generate_terrain_cells(use_threads: bool):
 		cell_geometry = {}
 	if not _height_map_is_valid():
 		generate_height_map()
+	if not _color_maps_are_valid():
+		generate_color_maps()
+	if not _wall_color_maps_are_valid():
+		generate_wall_color_maps()
+	if not _grass_mask_map_is_valid():
+		generate_grass_mask_map()
 	if not _needs_update_is_valid():
 		_reset_needs_update()
 	
