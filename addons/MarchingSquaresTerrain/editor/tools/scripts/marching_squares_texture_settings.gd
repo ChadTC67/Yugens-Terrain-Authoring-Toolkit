@@ -1285,6 +1285,7 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 				else:
 					for idx in others:
 						terrain.palette_weights[idx] = float(terrain.palette_weights[idx]) / total_other * remaining
+			dialog.update_color_weight_rows(s, indices, terrain.palette_weights)
 			_mark_palette_refresh_pending(dialog)
 		)
 		dialog.weight_drag_finished.connect(func(s: int):

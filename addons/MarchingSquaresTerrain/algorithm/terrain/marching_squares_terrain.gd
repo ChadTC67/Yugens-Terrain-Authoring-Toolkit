@@ -171,6 +171,11 @@ var _data_directory : String = ""
 	set(value):
 		grass_visibility_end_distance = maxf(float(value), 0.0)
 		_visibility_detail_settings_dirty = true
+## Maximum draw distance for flower-populator instances. Zero disables flower culling.
+@export_range(0.0, 10000.0, 1.0) var flower_visibility_end_distance: float = 0.0:
+	set(value):
+		flower_visibility_end_distance = maxf(float(value), 0.0)
+		_visibility_detail_settings_dirty = true
 ## Extra distance margin used to reduce visibility-range popping.
 @export_range(0.0, 1000.0, 1.0) var visibility_range_margin: float = 0.0:
 	set(value):
@@ -1616,9 +1621,11 @@ func _apply_visibility_detail_settings() -> void:
 	_visibility_detail_settings_dirty = false
 	var terrain_end := 0.0
 	var grass_end := 0.0
+	var flower_end := 0.0
 	if visibility_detail_enabled:
 		terrain_end = chunk_visibility_end_distance
 		grass_end = grass_visibility_end_distance
+		flower_end = flower_visibility_end_distance
 	for chunk: MarchingSquaresTerrainChunk in chunks.values():
 		if not is_instance_valid(chunk):
 			continue
@@ -1631,6 +1638,12 @@ func _apply_visibility_detail_settings() -> void:
 			chunk.grass_planter.set_visibility_range(
 				grass_end,
 				visibility_range_margin if grass_end > 0.0 else 0.0
+			)
+	for child in get_children():
+		if child is MarchingSquaresFlowerPlanter:
+			child.set_flower_visibility_range(
+				flower_end,
+				visibility_range_margin if flower_end > 0.0 else 0.0
 			)
 	if _lod_controller != null:
 		_lod_controller.apply()

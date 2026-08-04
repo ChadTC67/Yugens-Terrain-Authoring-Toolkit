@@ -101,6 +101,29 @@ func rebuild_color_rows(slot_idx: int, blend_mode: int, slot_indices: Array, pal
 		)
 
 
+# Synchronize every visible weight control after one weight is normalized against
+# the others. Signals are blocked so these programmatic changes do not normalize
+# the same weights recursively.
+func update_color_weight_rows(slot_idx: int, slot_indices: Array, palette_weights: Array) -> void:
+	if slot_idx != _color_slot_idx:
+		return
+	var rows := colors_container.get_children()
+	for row_idx in range(mini(rows.size(), slot_indices.size())):
+		var row := rows[row_idx] as MSTSingleColorContainer
+		if row == null:
+			continue
+		var palette_idx := int(slot_indices[row_idx])
+		var weight := clampf(
+			float(palette_weights[palette_idx]) if palette_idx >= 0 and palette_idx < palette_weights.size() else 100.0,
+			0.0,
+			100.0
+		)
+		row.weight_percentage_label.text = str(int(round(weight))) + "%"
+		row.weight_slider.set_block_signals(true)
+		row.weight_slider.value = weight
+		row.weight_slider.set_block_signals(false)
+
+
 func connect_color_events_once() -> void:
 	if has_meta("_mst_modal_color_events_connected") and bool(get_meta("_mst_modal_color_events_connected")):
 		return

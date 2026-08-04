@@ -8,6 +8,10 @@ class_name MarchingSquaresFlowerPlanter
 const CLASS_NAME := "MarchingSquaresFlowerPlanter"
 
 var terrain_system : MarchingSquaresTerrain
+var _connected_color_gradient: Gradient
+var _gradient_refresh_queued := false
+var _flower_visibility_end_distance := 0.0
+var _flower_visibility_fade_margin := 0.0
 
 @export var flower_mesh : QuadMesh = null:
 	set(value):
@@ -16,12 +20,15 @@ var terrain_system : MarchingSquaresTerrain
 			multimesh.mesh = flower_mesh
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var color_gradient : GradientTexture1D = preload("uid://cjkufv3o3pg57"):
 	set(value):
+		_disconnect_color_gradient()
 		color_gradient = value
+		_connect_color_gradient()
 		var flower_mat := flower_mesh.material as ShaderMaterial
 		if value != null:
 			flower_mat.set_shader_parameter("use_custom_color", true)
 		else:
 			flower_mat.set_shader_parameter("use_custom_color", false)
+		_queue_color_gradient_refresh()
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var flower_sprite : CompressedTexture2D:
 	set(value):
 		flower_sprite = value
@@ -45,14 +52,19 @@ var terrain_system : MarchingSquaresTerrain
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var should_billboard : bool = false:
 	set(value):
 		should_billboard = value
-		var flower_mat := flower_mesh.material as ShaderMaterial
-		if value == true:
-			flower_mesh.orientation = PlaneMesh.FACE_Z
-			flower_mat.set_shader_parameter("should_billboard", true)
-		else:
-			flower_mesh.orientation = PlaneMesh.FACE_Y
-			flower_mat.set_shader_parameter("should_billboard", false)
-		multimesh.mesh.center_offset.y = base_height_offset + multimesh.mesh.size.y / 2
+		_apply_billboard_state()
+
+func _apply_billboard_state() -> void:
+	if flower_mesh == null or multimesh == null or multimesh.mesh == null:
+		return
+	var flower_mat := flower_mesh.material as ShaderMaterial
+	if should_billboard:
+		flower_mesh.orientation = PlaneMesh.FACE_Z
+		flower_mat.set_shader_parameter("should_billboard", true)
+	else:
+		flower_mesh.orientation = PlaneMesh.FACE_Y
+		flower_mat.set_shader_parameter("should_billboard", false)
+	multimesh.mesh.center_offset.y = base_height_offset + multimesh.mesh.size.y / 2
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var base_height_offset : float = 0.75:
 	set(value):
 		base_height_offset = value
@@ -105,16 +117,88 @@ func setup(redo: bool = true):
 	else:
 		multimesh.mesh = QuadMesh.new() # Create a temporary quad
 	multimesh.mesh.size = sprite_size
+	_apply_billboard_state()
 	
 	cast_shadow = SHADOW_CASTING_SETTING_OFF
 	if terrain_system != null:
+		set_flower_visibility_range(
+			terrain_system.flower_visibility_end_distance if terrain_system.visibility_detail_enabled else 0.0,
+			terrain_system.visibility_range_margin if terrain_system.visibility_detail_enabled else 0.0
+		)
 		terrain_system._sync_wind_state(false)
+	else:
+		_sync_flower_visibility_shader()
 
 
 func _init() -> void:
 	var fallback_flower_mesh := preload("uid://dp1hfchm2o7c3")
 	if not flower_mesh:
 		flower_mesh = fallback_flower_mesh.duplicate(true)
+
+
+func _ready() -> void:
+	# The default false value may not invoke the property setter during scene
+	# instantiation. Apply it once after the mesh and MultiMesh are available.
+	_apply_billboard_state()
+	_connect_color_gradient()
+	if terrain_system != null:
+		set_flower_visibility_range(
+			terrain_system.flower_visibility_end_distance if terrain_system.visibility_detail_enabled else 0.0,
+			terrain_system.visibility_range_margin if terrain_system.visibility_detail_enabled else 0.0
+		)
+
+
+func set_flower_visibility_range(p_end: float, p_fade_margin: float = 0.0) -> void:
+	_flower_visibility_end_distance = maxf(p_end, 0.0)
+	_flower_visibility_fade_margin = clampf(p_fade_margin, 0.0, _flower_visibility_end_distance)
+	_sync_flower_visibility_shader()
+
+
+func _sync_flower_visibility_shader() -> void:
+	if flower_mesh == null or not (flower_mesh.material is ShaderMaterial):
+		return
+	var flower_mat := flower_mesh.material as ShaderMaterial
+	flower_mat.set_shader_parameter("visibility_end_distance", _flower_visibility_end_distance)
+	flower_mat.set_shader_parameter("visibility_fade_margin", _flower_visibility_fade_margin)
+
+
+func _disconnect_color_gradient() -> void:
+	if _connected_color_gradient == null:
+		return
+	var callback := Callable(self, "_on_color_gradient_changed")
+	if _connected_color_gradient.changed.is_connected(callback):
+		_connected_color_gradient.changed.disconnect(callback)
+	_connected_color_gradient = null
+
+
+func _connect_color_gradient() -> void:
+	if color_gradient == null or color_gradient.gradient == null:
+		return
+	if _connected_color_gradient == color_gradient.gradient:
+		return
+	_disconnect_color_gradient()
+	_connected_color_gradient = color_gradient.gradient
+	var callback := Callable(self, "_on_color_gradient_changed")
+	if not _connected_color_gradient.changed.is_connected(callback):
+		_connected_color_gradient.changed.connect(callback)
+
+
+func _on_color_gradient_changed() -> void:
+	_queue_color_gradient_refresh()
+
+
+func _queue_color_gradient_refresh() -> void:
+	if not Engine.is_editor_hint() or not is_inside_tree() or _gradient_refresh_queued:
+		return
+	_gradient_refresh_queued = true
+	call_deferred("_refresh_color_gradient")
+
+
+func _refresh_color_gradient() -> void:
+	_gradient_refresh_queued = false
+	if not is_inside_tree() or multimesh == null or populated_chunks.is_empty():
+		return
+	regenerate_flowers()
 
 
 func regenerate_flowers() -> void:

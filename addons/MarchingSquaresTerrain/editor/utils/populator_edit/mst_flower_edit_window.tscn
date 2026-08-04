@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dcc8486bk3s08" path="res://addons/MarchingSquaresTerrain/editor/utils/populator_edit/mst_flower_edit_window.gd" id="1_i3rcu"]
 
-[node name="FlowerEditWindow" type="AcceptDialog" unique_id=1893742550 node_paths=PackedStringArray("albedo_texture_picker", "albedo_color_picker", "vec_2_left", "vec_2_right", "flower_h_map_picker", "height_range_h_slider", "size_range_h_slider", "billboard_check_box", "height_offset_spin_box", "flower_subdivions_spin_box")]
+[node name="FlowerEditWindow" type="AcceptDialog" unique_id=1893742550 node_paths=PackedStringArray("albedo_texture_picker", "albedo_color_picker", "edit_gradient_button", "vec_2_left", "vec_2_right", "flower_h_map_picker", "height_range_h_slider", "size_range_h_slider", "billboard_check_box", "height_offset_spin_box", "flower_subdivions_spin_box")]
 oversampling_override = 1.0
 title = "Edit Flower"
 position = Vector2i(0, 36)
@@ -14,6 +14,7 @@ ok_button_text = "      OK      "
 script = ExtResource("1_i3rcu")
 albedo_texture_picker = NodePath("WindowVBoxContainer/SettingsScrollContainer/SettingsContainer/AlbedoSettings/AlbedoTexturePicker")
 albedo_color_picker = NodePath("WindowVBoxContainer/SettingsScrollContainer/SettingsContainer/AlbedoSettings/AlbedoColorPicker")
+edit_gradient_button = NodePath("WindowVBoxContainer/SettingsScrollContainer/SettingsContainer/AlbedoSettings/EditGradientButton")
 vec_2_left = NodePath("WindowVBoxContainer/SettingsScrollContainer/SettingsContainer/AlbedoSettings/SpriteSizeHBox/Vec2Left")
 vec_2_right = NodePath("WindowVBoxContainer/SettingsScrollContainer/SettingsContainer/AlbedoSettings/SpriteSizeHBox/Vec2Right")
 flower_h_map_picker = NodePath("WindowVBoxContainer/SettingsScrollContainer/SettingsContainer/RNGSettings/FlowerHMapPicker")
@@ -64,6 +65,10 @@ text = "Gradient"
 [node name="AlbedoColorPicker" type="EditorResourcePicker" parent="WindowVBoxContainer/SettingsScrollContainer/SettingsContainer/AlbedoSettings" unique_id=738608988]
 layout_mode = 2
 base_type = "GradientTexture1D"
+
+[node name="EditGradientButton" type="Button" parent="WindowVBoxContainer/SettingsScrollContainer/SettingsContainer/AlbedoSettings" unique_id=738608989]
+layout_mode = 2
+text = "Edit Gradient"
 
 [node name="SpriteSizeLabel" type="Label" parent="WindowVBoxContainer/SettingsScrollContainer/SettingsContainer/AlbedoSettings" unique_id=317697969]
 layout_mode = 2

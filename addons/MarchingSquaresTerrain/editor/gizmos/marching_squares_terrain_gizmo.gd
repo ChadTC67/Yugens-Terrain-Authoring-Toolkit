@@ -99,6 +99,8 @@ func _redraw():
 		var has_pattern : bool = not terrain_plugin.current_draw_pattern.is_empty()
 		if not has_pattern and not Input.is_key_pressed(KEY_ALT):
 			terrain_plugin.current_draw_pattern.clear()
+			if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP:
+				terrain_plugin.heightmap_pattern_samples.clear()
 			terrain_plugin.is_setting = false
 			terrain_plugin.is_drawing = true
 			terrain_plugin.draw_height = pos.y
@@ -116,7 +118,6 @@ func _redraw():
 	if terrain_plugin.is_drawing and not terrain_plugin.draw_height_set:
 		terrain_plugin.draw_height_set = true
 		terrain_plugin.draw_height = terrain_plugin.brush_position.y
-
 	var terrain_chunk_hovered : bool = terrain_plugin.terrain_hovered
 
 	# Check if we're in wall painting mode
@@ -263,16 +264,21 @@ func _redraw():
 						# Only draw ground brush squares if NOT in wall paint mode
 						if not is_wall_painting and terrain_plugin.mode != terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT and (terrain_plugin.mode != terrain_plugin.TerrainToolMode.HEIGHTMAP or terrain_plugin.heightmap_tool_selected_tab == 2):
 							var cell_material := navmesh_material if nav_paint_mode != terrain_plugin.NavMeshPaintMode.NONE else brush_material
-							if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and pixel.r == 0.0:
+							# Once a heightmap stroke starts, the retained-pattern pass below
+							# draws every accumulated stamp, including the current one.
+							if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and (already_set_once or terrain_plugin.is_drawing):
+								pass
+							elif terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and pixel.r == 0.0:
 								pass
 							else:
 								add_mesh(terrain_plugin.BRUSH_VISUAL, cell_material, draw_transform)
 
-						if terrain_plugin.mode in [terrain_plugin.TerrainToolMode.HEIGHTMAP] and already_set_once:
-							continue
-
 						# Draw to current pattern
 						if terrain_plugin.is_drawing:
+							if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP:
+								if pixel.r <= 0.0:
+									continue
+								terrain_plugin.store_heightmap_pattern_sample(cursor_chunk_coords, cursor_cell_coords, pixel.r)
 							if not terrain_plugin.current_draw_pattern.has(cursor_chunk_coords):
 								terrain_plugin.current_draw_pattern[cursor_chunk_coords] = {}
 							if terrain_plugin.current_draw_pattern[cursor_chunk_coords].has(cursor_cell_coords):
@@ -309,17 +315,10 @@ func _redraw():
 					if chunk.height_map.size() > dz and dz >= 0 and chunk.height_map[dz].size() > dx and dx >= 0:
 						draw_y = chunk.height_map[dz][dx]
 				
-				var pixel : Color
+				var heightmap_sample := 1.0
 				if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP:
-					var img_size := terrain_plugin.current_heightmap_image.get_size()
-					var brush_min := Vector2(terrain_plugin.brush_position.x, terrain_plugin.brush_position.z) - Vector2.ONE * terrain_plugin.brush_size
-					var brush_extent := maxf(terrain_plugin.brush_size * 2.0, 0.001)
-					var brush_uv := (Vector2(draw_x, draw_z) - brush_min) / brush_extent
-					var p_coords := Vector2i(brush_uv * Vector2(img_size.x, img_size.y))
-					p_coords.x = clampi(p_coords.x, 0, img_size.x - 1)
-					p_coords.y = clampi(p_coords.y, 0, img_size.y - 1)
-					pixel = terrain_plugin.current_heightmap_image.get_pixel(p_coords.x, p_coords.y)
-					draw_y += terrain_plugin.brush_size / terrain_system.cell_size.x * pixel.r
+					heightmap_sample = terrain_plugin.get_heightmap_pattern_sample(draw_chunk_coords, draw_coords)
+					draw_y += terrain_plugin.brush_size / terrain_system.cell_size.x * heightmap_sample
 				
 				var sample : float = draw_chunk_dict[draw_coords]
 				
@@ -328,7 +327,7 @@ func _redraw():
 					var draw_position := Vector3(draw_x, draw_y + height_diff * sample, draw_z)
 					var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
 					if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT and (terrain_plugin.mode != terrain_plugin.TerrainToolMode.HEIGHTMAP or terrain_plugin.heightmap_tool_selected_tab == 2):
-						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and pixel.r == 0.0:
+						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and heightmap_sample <= 0.0:
 							pass
 						else:
 							add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)
@@ -336,7 +335,7 @@ func _redraw():
 					var draw_position := Vector3(draw_x, draw_y, draw_z)
 					var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
 					if not is_wall_painting and terrain_plugin.mode !=  terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT and (terrain_plugin.mode != terrain_plugin.TerrainToolMode.HEIGHTMAP or terrain_plugin.heightmap_tool_selected_tab == 2):
-						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and pixel.r == 0.0:
+						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.HEIGHTMAP and heightmap_sample <= 0.0:
 							pass
 						else:
 							add_mesh(terrain_plugin.BRUSH_VISUAL, null, draw_transform)

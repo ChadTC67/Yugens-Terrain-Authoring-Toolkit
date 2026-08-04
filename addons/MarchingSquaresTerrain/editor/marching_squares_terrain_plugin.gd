@@ -135,6 +135,7 @@ var mode : TerrainToolMode:
 	set(value):
 		_mode = value
 		current_draw_pattern.clear()
+		heightmap_pattern_samples.clear()
 		_update_falloff_visual()
 
 var navmesh_paint_mode: NavMeshPaintMode = NavMeshPaintMode.NONE
@@ -247,6 +248,10 @@ var hme_single_file : bool = false
 const MESH_HEIGHTMAPS_FOLDER_PATH : String = "res://addons/MarchingSquaresTerrain/resources/mesh_heightmaps/"
 var current_heightmap_image : Image
 var can_place_heightmaps : bool = false
+# Heightmap intensity captured per selected terrain cell. Keeping the sampled
+# values with the selection lets a stroke accumulate without later mouse motion
+# sliding one stamp across the entire retained pattern.
+var heightmap_pattern_samples : Dictionary = {}
 #endregion
 
 var vertex_color_idx : int = 0:
@@ -529,6 +534,7 @@ func _edit(object: Object) -> void:
 			if ui:
 				ui.set_visible(false)
 			current_draw_pattern.clear()
+			heightmap_pattern_samples.clear()
 			is_drawing = false
 			draw_height_set = false
 			gizmo_plugin.clear()
@@ -635,6 +641,7 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 		if not is_setting:
 			if _right_clicked or Input.is_key_pressed(KEY_ALT):
 				current_draw_pattern.clear()
+				heightmap_pattern_samples.clear()
 		
 		# Check for terrain collision
 		if draw_area_hovered:
@@ -727,6 +734,7 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 							draw_height = brush_position.y
 						else:
 							current_draw_pattern.clear()
+							heightmap_pattern_samples.clear()
 			gizmo_plugin.trigger_redraw(terrain)
 			if mode not in [TerrainToolMode.CHUNK_MANAGEMENT]:
 				return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -900,6 +908,21 @@ func update_draw_pattern(b_pos: Vector3):
 							current_draw_pattern[cursor_chunk_coords][cursor_cell_coords] = sample
 					else:
 						current_draw_pattern[cursor_chunk_coords][cursor_cell_coords] = sample
+
+
+func store_heightmap_pattern_sample(chunk_coords: Vector2i, cell_coords: Vector2i, value: float) -> void:
+	if not heightmap_pattern_samples.has(chunk_coords):
+		heightmap_pattern_samples[chunk_coords] = {}
+	var chunk_samples: Dictionary = heightmap_pattern_samples[chunk_coords]
+	var previous := float(chunk_samples.get(cell_coords, 0.0))
+	if value > previous:
+		chunk_samples[cell_coords] = value
+
+
+func get_heightmap_pattern_sample(chunk_coords: Vector2i, cell_coords: Vector2i) -> float:
+	if not heightmap_pattern_samples.has(chunk_coords):
+		return 0.0
+	return float((heightmap_pattern_samples[chunk_coords] as Dictionary).get(cell_coords, 0.0))
 
 
 static func _distance_sq_point_to_segment_2d(point: Vector2, start: Vector2, end: Vector2) -> float:
@@ -1342,24 +1365,15 @@ func draw_pattern(terrain: MarchingSquaresTerrain):
 				draw_value = restore_value
 			elif mode == TerrainToolMode.HEIGHTMAP:
 				restore_value = chunk.get_height(draw_cell_coords)
-				var img_size := current_heightmap_image.get_size()
-				var world_pos: Vector2 = BrushPatternCalculator.cell_to_world_pos(draw_chunk_coords, draw_cell_coords, terrain)
-				var brush_min: Vector2 = Vector2(brush_position.x, brush_position.z) - Vector2.ONE * brush_size
-				var brush_extent: float = maxf(brush_size * 2.0, 0.001)
-				var brush_uv: Vector2 = (world_pos - brush_min) / brush_extent
-				var p_coords := Vector2i(brush_uv * Vector2(img_size.x, img_size.y))
-				p_coords.x = clampi(p_coords.x, 0, img_size.x - 1)
-				p_coords.y = clampi(p_coords.y, 0, img_size.y - 1)
-				var pixel := current_heightmap_image.get_pixel(p_coords.x, p_coords.y)
+				var heightmap_sample := get_heightmap_pattern_sample(draw_chunk_coords, draw_cell_coords)
+				if heightmap_sample <= 0.0:
+					continue
 				if flatten:
 					draw_value = lerp(restore_value, brush_position.y, sample)
 				else:
 					var height_diff := brush_position.y - draw_height
 					draw_value = lerp(restore_value, restore_value + height_diff, sample)
-				if pixel.r == 0.0:
-					continue # Only draw 
-				else:
-					draw_value += brush_size / terrain.cell_size.x * pixel.r
+				draw_value += brush_size / terrain.cell_size.x * heightmap_sample
 			else: # Brush tool:
 				restore_value = chunk.get_height(draw_cell_coords)
 				if flatten:

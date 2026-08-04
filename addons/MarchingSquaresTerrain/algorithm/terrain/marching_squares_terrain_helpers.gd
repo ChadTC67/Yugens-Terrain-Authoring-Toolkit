@@ -27,7 +27,11 @@ static func ensure_texture_slots(terrain) -> void:
 		default_visible_count = clampi(int(terrain.get("visible_texture_slot_count")), 6, MAX_TEXTURE_SLOTS)
 	for i in range(MAX_TEXTURE_SLOTS):
 		if terrain.texture_slots[i] == null:
-			terrain.texture_slots[i] = _TEXTURE_SLOT_SCRIPT.new()
+			var new_slot = _TEXTURE_SLOT_SCRIPT.new()
+			# TextureSlot defaults `active` to true; new terrains should expose only
+			# the initial six slots until a preset changes the layout.
+			new_slot.active = (i < default_visible_count and i != VOID_TEXTURE_SLOT)
+			terrain.texture_slots[i] = new_slot
 		# Default missing 'active' from the current visible range instead of enabling all 256 slots.
 		if terrain.texture_slots[i] !=  null and terrain.texture_slots[i].get("active") == null:
 			terrain.texture_slots[i].active = (i < default_visible_count and i != VOID_TEXTURE_SLOT)

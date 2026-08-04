@@ -17,6 +17,11 @@ uniform int bands : hint_range(1, 10) = 5;
 uniform float shadow_intensity : hint_range(-1.0, 0.5, 0.05) = 0.0;
 group_uniforms;
 
+group_uniforms Visibility;
+uniform float visibility_end_distance : hint_range(0.0, 10000.0, 1.0) = 0.0;
+uniform float visibility_fade_margin : hint_range(0.0, 1000.0, 1.0) = 0.0;
+group_uniforms;
+
 group_uniforms Animations.Settings;
 uniform bool animate_active = true;
 uniform float fps : hint_range(0.0, 30.0, 1.0) = 0.0;
@@ -34,6 +39,7 @@ group_uniforms;
 varying vec3 model_origin;
 varying vec4 instance_color;
 varying vec3 light_vertex_position;
+varying float instance_visibility;
 
 float randf_from_id(float id) {
 	return fract(sin(id * 12.9898) * 43758.5453);
@@ -63,6 +69,16 @@ void vertex() {
 	}
 
 	vec3 instance_origin = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+	instance_visibility = 1.0;
+	if (visibility_end_distance > 0.0) {
+		float camera_distance = distance(CAMERA_POSITION_WORLD, instance_origin);
+		if (visibility_fade_margin > 0.0) {
+			float fade_start = max(visibility_end_distance - visibility_fade_margin, 0.0);
+			instance_visibility = 1.0 - smoothstep(fade_start, visibility_end_distance, camera_distance);
+		} else {
+			instance_visibility = camera_distance <= visibility_end_distance ? 1.0 : 0.0;
+		}
+	}
 	vec3 wind_world_offset = vec3(0.0);
 
 	// Animation FPS steps the shared wind sample clock. 0 = no frames / no motion.
@@ -127,6 +143,9 @@ void vertex() {
 
 	model_origin = (MODELVIEW_MATRIX * vec4(0.,0.,0.,1.)).xyz;
 	instance_color = INSTANCE_CUSTOM;
+	if (instance_visibility <= 0.001) {
+		POSITION = vec4(2.0, 2.0, 2.0, 1.0);
+	}
 }
 
 void fragment() {
@@ -135,7 +154,7 @@ void fragment() {
 	vec3 flower_color = flower_tex.rgb * instance_color.rgb;
 
 	ALBEDO = flower_color;
-	ALPHA = flower_tex.a * instance_color.a;
+	ALPHA = flower_tex.a * instance_color.a * instance_visibility;
 
 	if (ALPHA < 0.1) discard;
 
