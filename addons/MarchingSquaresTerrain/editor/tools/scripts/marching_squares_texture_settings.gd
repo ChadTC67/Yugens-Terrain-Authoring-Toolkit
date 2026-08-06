@@ -896,7 +896,6 @@ func add_texture_settings() -> void:
 	delete_unused_btn.tooltip_text = "Remove texture slots that are not painted on any ground or wall vertices (keeps slot 1 and Void)."
 	delete_unused_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	delete_unused_btn.custom_minimum_size = Vector2(0, 22)
-	delete_unused_btn.add_theme_font_size_override("font_size", 12)
 	delete_unused_btn.pressed.connect(_on_delete_unused_textures_pressed)
 	vbox.add_child(delete_unused_btn, true)
 	
