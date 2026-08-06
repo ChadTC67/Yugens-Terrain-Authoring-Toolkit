@@ -2046,4 +2046,3 @@ func _format_constant_string(text: String) -> String:
 	return " ".join(words)
 
 #endregion
-

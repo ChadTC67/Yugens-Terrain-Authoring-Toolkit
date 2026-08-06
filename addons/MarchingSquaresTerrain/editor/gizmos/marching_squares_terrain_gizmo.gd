@@ -204,7 +204,7 @@ func _redraw():
 							cursor_cell_coords,
 							terrain_system
 						)
-
+						
 						var use_falloff := terrain_plugin.falloff
 						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING:
 							use_falloff = (terrain_plugin.vp_falloff_mode == terrain_plugin.VertexPaintFalloffMode.DITHERED)
@@ -231,10 +231,10 @@ func _redraw():
 								use_falloff,
 								terrain_plugin.falloff_curve
 							)
-
+						
 						if sample < 0:
 							continue  # Outside brush
-
+						
 						var y : float
 						if not terrain_plugin.current_draw_pattern.is_empty() and terrain_plugin.flatten:
 							y = terrain_plugin.draw_height
@@ -258,9 +258,19 @@ func _redraw():
 							p_coords.y = clampi(p_coords.y, 0, img_size.y - 1)
 							pixel = terrain_plugin.current_heightmap_image.get_pixel(p_coords.x, p_coords.y)
 							y += terrain_plugin.brush_size / terrain_system.cell_size.x * pixel.r
-
+						
 						var draw_position := Vector3(world_pos.x, y, world_pos.y)
-						var draw_transform := Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
+						var draw_transform : Transform3D
+						if terrain_plugin.mode == terrain_plugin.TerrainToolMode.VERTEX_PAINTING and use_falloff:
+							# Checkerboard pattern
+							var visual_sample := 1.0
+							if (cursor_cell_coords.x + cursor_cell_coords.y) % 2:
+								visual_sample = 0.0
+							else:
+								visual_sample = 1.0 * sample
+							draw_transform = Transform3D(Vector3.RIGHT*visual_sample, Vector3.UP*visual_sample, Vector3.BACK*visual_sample, draw_position)
+						else:
+							draw_transform = Transform3D(Vector3.RIGHT*sample, Vector3.UP*sample, Vector3.BACK*sample, draw_position)
 						# Only draw ground brush squares if NOT in wall paint mode
 						if not is_wall_painting and terrain_plugin.mode != terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT and (terrain_plugin.mode != terrain_plugin.TerrainToolMode.HEIGHTMAP or terrain_plugin.heightmap_tool_selected_tab == 2):
 							var cell_material := navmesh_material if nav_paint_mode != terrain_plugin.NavMeshPaintMode.NONE else brush_material
