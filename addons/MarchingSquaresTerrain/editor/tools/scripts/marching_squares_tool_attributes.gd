@@ -1248,7 +1248,7 @@ func _create_post_process_effect_row(array_name: String, slot_idx: int) -> Contr
 	target.add_item("Terrain")
 	target.add_item("Grass")
 	target.add_item("Both")
-	target.selected = int(effect.target) if effect != null else 2
+	target.selected = int(effect.target) if effect != null else 0
 	header.add_child(target, true)
 	var clear := Button.new()
 	clear.text = "Clear" if slot_idx == 0 else "Delete"

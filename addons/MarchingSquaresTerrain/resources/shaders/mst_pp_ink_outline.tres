@@ -2,23 +2,29 @@
 
 [ext_resource type="Shader" uid="uid://by61gf5gfghue" path="res://addons/MarchingSquaresTerrain/resources/shaders/mst_pp_ink_outline.gdshader" id="1_inksh"]
 
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_knwhi"]
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_ed4yv"]
+noise = SubResource("FastNoiseLite_knwhi")
+
 [resource]
 render_priority = 0
 shader = ExtResource("1_inksh")
-shader_parameter/ink_color = Color(0.055, 0.05, 0.045, 0.92)
+shader_parameter/rl_noise_texture = SubResource("NoiseTexture2D_ed4yv")
+shader_parameter/ink_color = Color(0.26091656, 0.02369066, 0.01967448, 0.92156863)
 shader_parameter/line_opacity = 0.9
 shader_parameter/depth_edge_strength = 1.35
 shader_parameter/normal_edge_strength = 1.15
-shader_parameter/silhouette_strength = 0.5999999865888
-shader_parameter/silhouette_power = 1.6499999742952
+shader_parameter/silhouette_strength = 0.8
+shader_parameter/silhouette_power = 3.3
 shader_parameter/line_wobble = 0.18
 shader_parameter/enable_hatching = true
-shader_parameter/shadow_wash_opacity = 0.3
+shader_parameter/shadow_wash_opacity = 0.0
 shader_parameter/shadow_mid_threshold = 0.38
 shader_parameter/shadow_deep_threshold = 0.72
 shader_parameter/light_face_cleanup = 0.92
-shader_parameter/shadow_grouping = 0.31999999284736
-shader_parameter/hatch_opacity = 0.31
+shader_parameter/shadow_grouping = 0.72
+shader_parameter/hatch_opacity = 0.10999999754128
 shader_parameter/hatch_density = 2.4
 shader_parameter/hatch_width = 0.08999999798832001
 shader_parameter/hatch_shadow_threshold = 0.56

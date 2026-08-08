@@ -272,9 +272,17 @@ void fragment() {
 		hatch = max(hatch_a, hatch_b * hatch_b_weight) * hatch_opacity * tonal_focus * hatch_distance_fade * hatch_intensity;
 	}
 
-	float outline_mask = max(max(depth_edge, normal_edge), silhouette);
+	// Do not apply the tonal wash/hatching to broad, flat ground faces. Keep it
+	// on walls and angled corner faces, where it provides useful form separation.
+	float surface_normal_up = abs(normalize(v_world_normal).y);
+	float non_flat_surface = 1.0 - smoothstep(0.92, 0.995, surface_normal_up);
+	// Screen-space depth/normal edges see grass blades in front of the terrain.
+	// Restrict those edge tests to walls/corners so flat terrain does not ink
+	// every blade silhouette.
+	float outline_edges = max(depth_edge, normal_edge) * non_flat_surface;
+	float outline_mask = max(outline_edges, silhouette);
 	outline_mask = clamp(outline_mask * line_opacity, 0.0, 1.0);
-	float tonal_mask = clamp(max(shadow_wash, hatch), 0.0, 1.0);
+	float tonal_mask = clamp(max(shadow_wash, hatch) * non_flat_surface, 0.0, 1.0);
 	float ink_mask = clamp(max(outline_mask, tonal_mask), 0.0, 1.0) * ink_color.a;
 
 	ALBEDO = ink_color.rgb;

@@ -79,6 +79,12 @@ var ui : MarchingSquaresUI
 var is_initialized : bool = false
 var initialization_error : String = ""
 
+# Inspector edits to a ShaderMaterial/Shader do not reliably emit a change on
+# the terrain effect resource. Track the Inspector directly so post-processing
+# is rebuilt while editing, without requiring an effect toggle.
+var _post_process_inspector_connected := false
+var _post_process_inspector_refresh_queued := false
+
 var current_terrain_node : MarchingSquaresTerrain
 
 var current_heightmap_mesh : Mesh = null
@@ -352,6 +358,8 @@ func _safe_initialize() -> bool:
 		initialization_error = "No EditorInterface detected"
 		return false
 
+	_connect_post_process_inspector_signal()
+
 	if not get_tree():
 		initialization_error = "No tree detected while initializing"
 		return false
@@ -398,6 +406,7 @@ func _safe_initialize() -> bool:
 
 
 func _exit_tree():
+	_disconnect_post_process_inspector_signal()
 	if ui:
 		ui.queue_free()
 		ui = null
@@ -412,6 +421,63 @@ func _exit_tree():
 
 	is_initialized = false
 	initialization_error = ""
+
+
+func _connect_post_process_inspector_signal() -> void:
+	var inspector := EditorInterface.get_inspector()
+	if inspector == null or not inspector.has_signal("property_edited"):
+		return
+	if not inspector.property_edited.is_connected(_on_post_process_inspector_property_edited):
+		inspector.property_edited.connect(_on_post_process_inspector_property_edited)
+	_post_process_inspector_connected = true
+
+
+func _disconnect_post_process_inspector_signal() -> void:
+	if not _post_process_inspector_connected:
+		return
+	var inspector := EditorInterface.get_inspector()
+	if inspector != null and inspector.property_edited.is_connected(_on_post_process_inspector_property_edited):
+		inspector.property_edited.disconnect(_on_post_process_inspector_property_edited)
+	_post_process_inspector_connected = false
+
+
+func _on_post_process_inspector_property_edited(_property_name: String) -> void:
+	var terrain := current_terrain_node
+	if terrain == null or not is_instance_valid(terrain):
+		return
+	var inspector := EditorInterface.get_inspector()
+	if inspector == null:
+		return
+	var edited_object: Object = inspector.get_edited_object()
+	if not _is_active_post_process_source(terrain, edited_object):
+		return
+	if _post_process_inspector_refresh_queued:
+		return
+	_post_process_inspector_refresh_queued = true
+	call_deferred("_refresh_post_process_after_inspector_edit", terrain)
+
+
+func _refresh_post_process_after_inspector_edit(terrain: MarchingSquaresTerrain) -> void:
+	_post_process_inspector_refresh_queued = false
+	if terrain == null or not is_instance_valid(terrain) or not terrain.is_inside_tree():
+		return
+	terrain._rebuild_post_process_effects()
+
+
+func _is_active_post_process_source(terrain: MarchingSquaresTerrain, edited_object: Object) -> bool:
+	if edited_object == null:
+		return false
+	for array_name in ["surface_effects", "overlay_effects"]:
+		for effect in terrain.get(array_name):
+			if not (effect is MarchingSquaresPostProcessEffect):
+				continue
+			if effect.shader == edited_object:
+				return true
+			if effect.material_override == edited_object:
+				return true
+			if effect.material_override is ShaderMaterial and effect.material_override.shader == edited_object:
+				return true
+	return false
 
 
 func _refresh_editor_state() -> void:

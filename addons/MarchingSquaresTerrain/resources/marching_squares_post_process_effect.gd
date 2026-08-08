@@ -6,7 +6,7 @@ enum Target { TERRAIN, GRASS, BOTH }
 
 @export var enabled: bool = false
 @export var effect_name: String = ""
-@export var target: Target = Target.BOTH
+@export var target: Target = Target.TERRAIN
 @export var shader: Shader
 @export var material_override: Material
 
