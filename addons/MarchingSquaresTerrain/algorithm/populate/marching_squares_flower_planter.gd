@@ -496,5 +496,7 @@ func _create_flower_instance(index: int, instance_position: Vector3, a: Vector3,
 
 
 func _hide_flower_instance(index: int) -> void:
-	multimesh.set_instance_transform(index, Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO))
+	# Keep hidden slots finite so Godot's renderer does not normalize a degenerate
+	# plane while culling MultiMesh instances.
+	multimesh.set_instance_transform(index, Transform3D(Basis.from_scale(Vector3.ONE * 0.0001), Vector3.ZERO))
 	multimesh.set_instance_custom_data(index, Color(0,0,0,0))

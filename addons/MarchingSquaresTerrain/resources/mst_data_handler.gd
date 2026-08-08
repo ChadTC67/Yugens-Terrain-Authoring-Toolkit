@@ -639,6 +639,10 @@ static func _texture_idx_to_colors(idx: int) -> Array:
 ## Clean up terrain data directories for terrains that no longer exist in the scene.
 ## Called during save to prevent disk bloat from deleted terrains.
 static func cleanup_orphaned_terrain_directories(terrain: MarchingSquaresTerrain) -> void:
+	# This can be reached during editor teardown. A detached Node has no
+	# SceneTree, so avoid calling get_tree() after a scene switch.
+	if not is_instance_valid(terrain) or not terrain.is_inside_tree():
+		return
 	var tree := terrain.get_tree()
 	if not tree:
 		return

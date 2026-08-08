@@ -106,6 +106,10 @@ var _data_directory : String = ""
 		_data_directory = value
 
 
+@export_category("Performance")
+## Number of worker threads used when generating terrain cells concurrently.
+@export_range(1, 8, 1) var terrain_generation_threads: int = 4
+
 
 @export_category("Texture Arrays")
 # ---------------- Texture2DArray baking / library ----------------
@@ -1846,11 +1850,10 @@ func recover_missing_chunk_meshes() -> void:
 
 
 func _exit_tree() -> void:
-	# Ensure editor-time terrain data is saved when the terrain node is removed or scene switched.
+	# Scene switching detaches this node before _exit_tree() runs. Normal editor
+	# saves are handled by NOTIFICATION_EDITOR_PRE_SAVE above; do not call into
+	# the SceneTree from teardown, because data.tree is already null here.
 	if EngineWrapper.instance.is_editor():
-		# Only attempt save if data_directory is known (generated on enter_tree)
-		if data_directory != null and data_directory != "":
-			MSTDataHandler.save_all_chunks(self)
 		# Clear chunks map to avoid holding references after exit
 		chunks.clear()
 		# Let children handle their own cleanup (chunk._exit_tree will run)

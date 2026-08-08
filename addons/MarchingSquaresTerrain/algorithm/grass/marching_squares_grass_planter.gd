@@ -45,6 +45,9 @@ const _WALL_PUSH_SAMPLE_STEP_FRACTION: float = 0.25
 const _WALL_PUSH_MAX_FRACTION: float = 0.18
 const _WALL_PUSH_DROP_TRIGGER_FACTOR: float = 0.6
 const _MIN_NORMAL_LENGTH_SQUARED: float = 0.000001
+# A zero-scale MultiMesh transform is invisible, but produces invalid planes in
+# Godot's light culler. Keep hidden slots finite while remaining imperceptible.
+const _HIDDEN_INSTANCE_SCALE: float = 0.0001
 
 ## Cached CPU copy of the terrain rl_noise_texture for noisy floor-blend grass picks.
 var _cached_rl_noise_tex: Texture2D = null
@@ -126,8 +129,25 @@ func _ensure_multimesh_render_rid() -> void:
 	if count <= 0 or buf.is_empty():
 		_multimesh_rid_hydrated = true
 		return
+	# Older baked caches used an exact zero scale for hidden slots. Uploading
+	# those transforms makes the renderer normalize a degenerate plane.
+	var safe_buf := buf.duplicate()
+	var has_degenerate_transform := false
+	var hidden_scale := _HIDDEN_INSTANCE_SCALE
+	var stride := _multimesh_buffer_stride(_multimesh)
+	for i in count:
+		var o := i * stride
+		var basis_len2 := 0.0
+		for axis in 3:
+			var axis_offset := axis * 4
+			basis_len2 += Vector3(safe_buf[o + axis_offset], safe_buf[o + axis_offset + 1], safe_buf[o + axis_offset + 2]).length_squared()
+		if basis_len2 <= _MIN_NORMAL_LENGTH_SQUARED:
+			has_degenerate_transform = true
+			safe_buf[o] = hidden_scale
+			safe_buf[o + 5] = hidden_scale
+			safe_buf[o + 10] = hidden_scale
 	var rid := _multimesh.get_rid()
-	if rid.is_valid() and RenderingServer.multimesh_get_instance_count(rid) == count:
+	if not has_degenerate_transform and rid.is_valid() and RenderingServer.multimesh_get_instance_count(rid) == count:
 		_multimesh_rid_hydrated = true
 		return
 	# Rebuild a fresh MultiMesh so allocate+buffer upload happens on a new RID.
@@ -137,7 +157,7 @@ func _ensure_multimesh_render_rid() -> void:
 	live.use_custom_data = _multimesh.use_custom_data
 	live.instance_count = count
 	live.mesh = _multimesh.mesh
-	live.buffer = buf
+	live.buffer = safe_buf
 	live.visible_instance_count = _multimesh.visible_instance_count
 	_multimesh = live
 	_multimesh_rid_hydrated = true
@@ -323,7 +343,7 @@ func reveal_cooked_multimesh() -> void:
 func _hide_all_grass_instances() -> void:
 	if multimesh == null:
 		return
-	var hidden := Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO)
+	var hidden := Transform3D(Basis.from_scale(Vector3.ONE * _HIDDEN_INSTANCE_SCALE), Vector3.ZERO)
 	for i in multimesh.instance_count:
 		multimesh.set_instance_transform(i, hidden)
 
@@ -1119,6 +1139,6 @@ func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vecto
 
 ## Hides a grass instance by scaling it to zero.
 func _hide_grass_instance(index: int) -> void:
-	multimesh.set_instance_transform(index, Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO))
+	multimesh.set_instance_transform(index, Transform3D(Basis.from_scale(Vector3.ONE * _HIDDEN_INSTANCE_SCALE), Vector3.ZERO))
 
 #endregion
