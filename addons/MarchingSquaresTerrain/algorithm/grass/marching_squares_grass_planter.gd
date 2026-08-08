@@ -41,8 +41,12 @@ var visibility_range_end_margin: float = 0.0
 
 # Push grass points slightly inward when they're right next to a steep wall drop.
 # This preserves normal random scattering on flat floors.
-const _WALL_PUSH_SAMPLE_STEP_FRACTION: float = 0.25
-const _WALL_PUSH_MAX_FRACTION: float = 0.18
+const _WALL_PUSH_SAMPLE_STEP_FRACTION: float = 0.5
+# Pull blades back onto the upper surface before a steep drop.
+const _WALL_PUSH_MAX_FRACTION: float = 0.25
+# Reject triangles that are too steep to be a walkable grass surface. This is
+# also a guard against legacy geometry incorrectly tagged as floor geometry.
+const _MIN_GRASS_FACE_UP_DOT: float = 0.5
 const _WALL_PUSH_DROP_TRIGGER_FACTOR: float = 0.6
 const _MIN_NORMAL_LENGTH_SQUARED: float = 0.000001
 # A zero-scale MultiMesh transform is invisible, but produces invalid planes in
@@ -731,6 +735,11 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 		var a := verts[i]
 		var b := verts[i + 1]
 		var c := verts[i + 2]
+		var face_normal := _safe_normalized((b - a).cross(c - a), Vector3.ZERO)
+		# Floor winding can face either direction depending on the generated
+		# triangle order; use the absolute slope so valid flat floors survive.
+		if face_normal == Vector3.ZERO or absf(face_normal.dot(Vector3.UP)) < _MIN_GRASS_FACE_UP_DOT:
+			continue
 
 		var v0 := Vector2(c.x - a.x, c.z - a.z)
 		var v1 := Vector2(b.x - a.x, b.z - a.z)
@@ -769,9 +778,17 @@ func generate_grass_on_cell(cell_coords: Vector2i) -> void:
 				points.pop_back()
 				var p := a * (1 - u - v) + b * u + c * v
 
-				# If we're near a steep wall drop, nudge grass points inward so blades don't clip the wall.
+				# If we're near a steep ledge, pull the blade inward only when the
+				# destination remains on the same height surface. A large height
+				# change means the offset crossed into the wall or a lower layer.
 				var push := _wall_push_offset(p)
-				p += push
+				if push != Vector3.ZERO:
+					var pushed_p := p + push
+					var surface_tolerance := maxf(minf(terrain_system.cell_size.x, terrain_system.cell_size.y) * 0.15, 0.05)
+					var pushed_height := _sample_height_local(pushed_p.x, pushed_p.z)
+					if absf(pushed_height - p.y) > surface_tolerance:
+						continue
+					p = pushed_p
 
 				# Interpolated material blend payload (CUSTOM2) + extra weight (CUSTOM0.r)
 				var raw_blend := mat_blend[i] * wa + mat_blend[i + 1] * wb + mat_blend[i + 2] * wc

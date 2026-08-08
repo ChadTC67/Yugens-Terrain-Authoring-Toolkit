@@ -149,6 +149,13 @@ func set_navmesh_paint_mode(value: NavMeshPaintMode) -> void:
 		_navmesh_previous_tool_mode = mode
 		navmesh_paint_mode = value
 		mode = TerrainToolMode.BRUSH
+		if current_terrain_node != null and is_instance_valid(current_terrain_node):
+			# Baked scenes may not keep cell geometry in memory until a rebuild.
+			# The permission overlay uses that same geometry as the bake path.
+			current_terrain_node.navmesh_painting_enabled = true
+			current_terrain_node._ensure_nav_chunks_ready_for_bake()
+			if gizmo_plugin != null:
+				gizmo_plugin.trigger_redraw(current_terrain_node)
 	elif value == NavMeshPaintMode.NONE and navmesh_paint_mode != NavMeshPaintMode.NONE:
 		navmesh_paint_mode = value
 		mode = _navmesh_previous_tool_mode
@@ -1166,6 +1173,9 @@ func _apply_navmesh_pattern(terrain: MarchingSquaresTerrain, pattern: Dictionary
 			chunk.navmesh_permission[index] = value
 			_navmesh_stroke_do[chunk_coords][index] = value
 		chunk.mark_dirty()
+		# Painting changes the permission-filtered face cache as well as the
+		# editor overlay, so the next bake must rebuild this chunk.
+		terrain._nav_controller.invalidate_chunk(chunk_coords)
 		terrain._nav_controller.invalidate_preview()
 
 
@@ -1197,6 +1207,7 @@ func apply_navmesh_permission_action(terrain: MarchingSquaresTerrain, states: Di
 			if cell_index >= 0 and cell_index < chunk.navmesh_permission.size():
 				chunk.navmesh_permission[cell_index] = int(states[chunk_coords][index])
 		chunk.mark_dirty()
+		terrain._nav_controller.invalidate_chunk(chunk_coords)
 		terrain._nav_controller.invalidate_preview()
 
 
