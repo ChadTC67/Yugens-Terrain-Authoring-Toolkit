@@ -314,6 +314,11 @@ func initialize_terrain(should_regenerate_mesh: bool =  true, defer_grass_setup:
 				mat.albedo_texture = ImageTexture.create_from_image(img)
 			elif mat is ShaderMaterial:
 				mat.set_shader_parameter("texture_albedo", ImageTexture.create_from_image(img))
+			# Runtime texture baking replaces the normal terrain material. Preserve
+			# the post-processing chain, otherwise effects visible in the editor are
+			# silently lost as soon as the bake completes.
+			if mat != null and terrain_system != null and terrain_system.terrain_material != null:
+				mat.next_pass = terrain_system.terrain_material.next_pass
 			if mesh and mesh.get_surface_count() > 0:
 				mesh.surface_set_material(0, mat)
 		, CONNECT_ONE_SHOT)

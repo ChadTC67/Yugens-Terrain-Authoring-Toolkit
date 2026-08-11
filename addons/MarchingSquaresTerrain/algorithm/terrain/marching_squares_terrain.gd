@@ -1783,6 +1783,11 @@ func _deferred_enter_tree() -> void:
 			changed_default = bool(chunk.apply_default_wall_to_legacy_init(default_wall_texture)) or changed_default
 			if changed_default:
 				chunk.regenerate_all_cells(true)
+
+	# Chunk initialization can recreate or hydrate mesh materials after the
+	# initial post-process build. Reapply the chain once the runtime materials
+	# actually exist so the running scene cannot lose its configured effects.
+	_rebuild_post_process_effects(true)
 	
 	if EngineWrapper.instance.is_editor():
 		for child in get_children():

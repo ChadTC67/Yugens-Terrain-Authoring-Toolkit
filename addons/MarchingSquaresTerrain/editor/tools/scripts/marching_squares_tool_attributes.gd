@@ -1276,17 +1276,23 @@ func _create_post_process_effect_row(array_name: String, slot_idx: int) -> Contr
 	enabled.toggled.connect(func(value: bool):
 		var current = terrain.ensure_post_process_effect(slot_idx, array_name)
 		current.enabled = value
+		_commit_post_process_effect(terrain, array_name, slot_idx)
 		terrain._rebuild_post_process_effects()
+		EditorInterface.mark_scene_as_unsaved()
 	)
 	target.item_selected.connect(func(value: int):
 		var current = terrain.ensure_post_process_effect(slot_idx, array_name)
 		current.target = value
+		_commit_post_process_effect(terrain, array_name, slot_idx)
 		terrain._rebuild_post_process_effects()
+		EditorInterface.mark_scene_as_unsaved()
 	)
 	picker.resource_changed.connect(func(resource: Resource):
 		var current = terrain.ensure_post_process_effect(slot_idx, array_name)
 		current.shader = resource as Shader
+		_commit_post_process_effect(terrain, array_name, slot_idx)
 		terrain._rebuild_post_process_effects()
+		EditorInterface.mark_scene_as_unsaved()
 	)
 	picker.resource_selected.connect(func(resource: Resource, inspect: bool):
 		if inspect and resource != null:
@@ -1295,7 +1301,9 @@ func _create_post_process_effect_row(array_name: String, slot_idx: int) -> Contr
 	material_picker.resource_changed.connect(func(resource: Resource):
 		var current = terrain.ensure_post_process_effect(slot_idx, array_name)
 		current.material_override = resource as Material
+		_commit_post_process_effect(terrain, array_name, slot_idx)
 		terrain._rebuild_post_process_effects()
+		EditorInterface.mark_scene_as_unsaved()
 	)
 	material_picker.resource_selected.connect(func(resource: Resource, inspect: bool):
 		if inspect and resource != null:
@@ -1309,6 +1317,21 @@ func _create_post_process_effect_row(array_name: String, slot_idx: int) -> Contr
 		show_tool_attributes(plugin.active_tool)
 	)
 	return panel
+
+
+func _commit_post_process_effect(terrain: MarchingSquaresTerrain, array_name: String, slot_idx: int) -> void:
+	if terrain == null or slot_idx < 0:
+		return
+	var effects: Array = terrain.get(array_name).duplicate()
+	while effects.size() <= slot_idx:
+		effects.append(null)
+	var effect := terrain.get_post_process_effect(slot_idx, array_name)
+	if effect != null:
+		# Keep custom-created effect resources scene-local so nested shader/material
+		# assignments are serialized with the terrain scene.
+		effect.resource_local_to_scene = true
+		effects[slot_idx] = effect
+	terrain.set(array_name, effects)
 
 
 func _create_vertex_painter_tab() -> Control:
