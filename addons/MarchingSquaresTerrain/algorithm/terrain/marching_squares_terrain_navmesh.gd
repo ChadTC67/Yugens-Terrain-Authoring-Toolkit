@@ -2,6 +2,7 @@
 extends NavigationRegion3D
 class_name MarchingSquaresTerrainNavMesh
 
+
 ## Generated navigation output is cleared here; the terrain's painted
 ## permission mask is intentionally preserved.
 @export_tool_button("Clear Baked NavMesh") var clear_baked_navmesh_button = func():

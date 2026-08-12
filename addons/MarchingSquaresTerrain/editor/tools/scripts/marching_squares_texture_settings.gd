@@ -194,7 +194,7 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 			slots_var[i].has_grass = (i == 0)
 		if slots_var[i] != null and slots_var[i].get("grass_texture") == null:
 			slots_var[i].grass_texture = null
-
+	
 	# Palette-per-slot arrays (all optional, but expected for the UI).
 	var slot_color_indices = terrain.get("slot_color_indices")
 	if slot_color_indices is Array:
@@ -203,7 +203,7 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 		for i in range(MAX_TEXTURE_SLOTS):
 			if slot_color_indices[i] == null:
 				slot_color_indices[i] = []
-
+	
 	var slot_blend_modes = terrain.get("slot_blend_modes")
 	if slot_blend_modes is Array:
 		if slot_blend_modes.size() != MAX_TEXTURE_SLOTS:
@@ -211,7 +211,7 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 		for i in range(MAX_TEXTURE_SLOTS):
 			if slot_blend_modes[i] == null:
 				slot_blend_modes[i] = MarchingSquaresTerrainHelpers.default_slot_blend_mode(i)
-
+	
 	var slot_wet_enabled = terrain.get("slot_wet_enabled")
 	if slot_wet_enabled is Array:
 		if slot_wet_enabled.size() != MAX_TEXTURE_SLOTS:
@@ -219,7 +219,7 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 		for i in range(MAX_TEXTURE_SLOTS):
 			if slot_wet_enabled[i] == null:
 				slot_wet_enabled[i] = false
-
+	
 	var slot_wet_modes = terrain.get("slot_wet_modes")
 	if slot_wet_modes is Array:
 		if slot_wet_modes.size() != MAX_TEXTURE_SLOTS:
@@ -228,10 +228,10 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 			if slot_wet_modes[i] == null:
 				slot_wet_modes[i] = 0
 			slot_wet_modes[i] = clampi(int(slot_wet_modes[i]), 0, 1)
-
+	
 	var slot_roughnesses = terrain.get("slot_roughnesses")
 	if slot_roughnesses is Array:
-		var old_roughness_size: int = slot_roughnesses.size()
+		var old_roughness_size : int = slot_roughnesses.size()
 		if slot_roughnesses.size() != MAX_TEXTURE_SLOTS:
 			slot_roughnesses.resize(MAX_TEXTURE_SLOTS)
 		for i in range(MAX_TEXTURE_SLOTS):
@@ -240,10 +240,10 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 			if i >= old_roughness_size:
 				slot_roughnesses[i] = 1.0
 			slot_roughnesses[i] = clampf(float(slot_roughnesses[i]), 0.0, 1.0)
-
+	
 	var slot_grass_wetnesses = terrain.get("slot_grass_wetnesses")
 	if slot_grass_wetnesses is Array:
-		var old_grass_wetness_size: int = slot_grass_wetnesses.size()
+		var old_grass_wetness_size : int = slot_grass_wetnesses.size()
 		if slot_grass_wetnesses.size() != MAX_TEXTURE_SLOTS:
 			slot_grass_wetnesses.resize(MAX_TEXTURE_SLOTS)
 		for i in range(MAX_TEXTURE_SLOTS):
@@ -252,19 +252,19 @@ func _ensure_terrain_arrays(terrain: Object) -> bool:
 			if i >= old_grass_wetness_size:
 				slot_grass_wetnesses[i] = 0.0
 			slot_grass_wetnesses[i] = clampf(float(slot_grass_wetnesses[i]), 0.0, 1.0)
-
+	
 	_ensure_slot_noise_arrays(terrain)
 	return true
 
 
 func _ensure_slot_noise_arrays(terrain) -> void:
 	var strength_default := 1.0
-	var strength_value: Variant = terrain.get("global_noise_strength")
+	var strength_value : Variant = terrain.get("global_noise_strength")
 	if strength_value is float or strength_value is int:
 		strength_default = float(strength_value)
 	var scale_default := 0.037
-
-	var defs: Array = [
+	
+	var defs : Array = [
 		["slot_floor_noise_enabled", false],
 		["slot_floor_noise_strengths", strength_default],
 		["slot_floor_noise_scales", scale_default],
@@ -363,8 +363,8 @@ func _sync_slot_legacy_fields(terrain, slot_idx: int) -> void:
 	if terrain == null or slot_idx < 0 or slot_idx >= 15:
 		return
 	var slot = terrain.texture_slots[slot_idx] if slot_idx < terrain.texture_slots.size() else null
-	var tex: Texture2D = _coerce_texture2d(slot.texture) if slot != null else null
-	var scale = float(slot.scale) if slot != null and slot.get("scale") != null else 1.0
+	var tex : Texture2D = _coerce_texture2d(slot.texture) if slot != null else null
+	var _scale := float(slot._scale) if slot != null and slot.get("scale") != null else 1.0
 	var was_batch = terrain.get("is_batch_updating") if terrain.has_method("get") else null
 	if was_batch != null:
 		terrain.set("is_batch_updating", true)
@@ -440,7 +440,7 @@ func _compute_slot_albedo_color(terrain, texture: Texture2D) -> Color:
 		return Color(1, 1, 1, 0)
 	if img.get_format() != Image.FORMAT_RGBA8:
 		img.convert(Image.FORMAT_RGBA8)
-	var sample_img: Image = img
+	var sample_img : Image = img
 	var max_dim := maxi(sample_img.get_width(), sample_img.get_height())
 	if max_dim > 16:
 		var scale := 16.0 / float(max_dim)
@@ -452,7 +452,7 @@ func _compute_slot_albedo_color(terrain, texture: Texture2D) -> Color:
 	var count := 0.0
 	for y in range(sample_img.get_height()):
 		for x in range(sample_img.get_width()):
-			var px: Color = sample_img.get_pixel(x, y)
+			var px : Color = sample_img.get_pixel(x, y)
 			if px.a <= 0.001:
 				continue
 			accum.r += px.r
@@ -467,7 +467,7 @@ func _compute_slot_albedo_color(terrain, texture: Texture2D) -> Color:
 func _apply_slot_normal(terrain, slot_idx: int, resource: Variant, p_runtime_refresh: bool = true) -> void:
 	if terrain == null or slot_idx < 0 or slot_idx >= MAX_TEXTURE_SLOTS or slot_idx == 15:
 		return
-	var texture: Texture2D = _coerce_texture2d(resource)
+	var texture : Texture2D = _coerce_texture2d(resource)
 	if not _ensure_terrain_arrays(terrain):
 		return
 	var lib_res := _get_texture_library(terrain)
@@ -518,29 +518,29 @@ func _get_effective_visible_slot_count(terrain) -> int:
 func _activate_next_texture_slot(terrain) -> bool:
 	if terrain == null or not _ensure_terrain_arrays(terrain):
 		return false
-
+	
 	var current_visible := _get_effective_visible_slot_count(terrain)
-	var preferred_indices: Array[int] = []
-
+	var preferred_indices : Array[int] = []
+	
 	# First fill any inactive holes that already exist inside the visible range.
 	for idx in range(1, min(current_visible, MAX_TEXTURE_SLOTS)):
 		if idx == 15:
 			continue
 		preferred_indices.append(idx)
-
+	
 	# Then grow to the next logical visible slot.
 	for idx in range(current_visible, min(MAX_TEXTURE_SLOTS, current_visible + 2)):
 		if idx == 15:
 			continue
 		if not preferred_indices.has(idx):
 			preferred_indices.append(idx)
-
+	
 	# Finally, search the remaining slots.
 	for idx in range(current_visible + 1, MAX_TEXTURE_SLOTS):
 		if idx == 15:
 			continue
 		preferred_indices.append(idx)
-
+	
 	for idx in preferred_indices:
 		if idx < 0 or idx >= terrain.texture_slots.size():
 			continue
@@ -550,7 +550,7 @@ func _activate_next_texture_slot(terrain) -> bool:
 			terrain.texture_slots[idx].active = true
 			terrain.visible_texture_slot_count = clampi(max(current_visible, idx + 1), 6, MAX_TEXTURE_SLOTS)
 			return true
-
+	
 	return false
 
 
@@ -650,7 +650,7 @@ func _collect_used_texture_indices(terrain) -> Dictionary:
 
 
 func _collect_unused_texture_slots(terrain) -> Array[int]:
-	var unused: Array[int] = []
+	var unused : Array[int] = []
 	if terrain == null or not _ensure_terrain_arrays(terrain):
 		return unused
 	var used := _collect_used_texture_indices(terrain)
@@ -681,7 +681,7 @@ func _on_delete_unused_textures_pressed() -> void:
 		EditorInterface.get_base_control().add_child(none_dialog)
 		none_dialog.popup_centered()
 		return
-
+	
 	if _delete_unused_textures_dialog != null and is_instance_valid(_delete_unused_textures_dialog):
 		_delete_unused_textures_dialog.queue_free()
 	_delete_unused_textures_dialog = ConfirmationDialog.new()
@@ -706,7 +706,7 @@ func _delete_unused_textures(unused_slots: Array) -> void:
 	_delete_unused_textures_dialog = null
 	if terrain == null or unused_slots.is_empty():
 		return
-
+	
 	var cleared := 0
 	var needs_grass_refresh := false
 	for slot_idx in unused_slots:
@@ -718,7 +718,7 @@ func _delete_unused_textures(unused_slots: Array) -> void:
 			needs_grass_refresh = true
 		_clear_slot(terrain, idx, false, false)
 		cleared += 1
-
+	
 	if cleared <= 0:
 		return
 	_shrink_visible_texture_slots(terrain)
@@ -825,7 +825,7 @@ func add_texture_settings() -> void:
 	
 	var gn_picker := EditorResourcePicker.new()
 	gn_picker.set_base_type("Texture2D")
-	var gn_tex: Texture2D = _coerce_texture2d(terrain.get("global_noise_texture"))
+	var gn_tex : Texture2D = _coerce_texture2d(terrain.get("global_noise_texture"))
 	gn_picker.edited_resource = gn_tex
 	gn_picker.set_custom_minimum_size(Vector2(150, 25))
 	gn_picker.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -890,7 +890,7 @@ func add_texture_settings() -> void:
 	import_texture_folder_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	import_texture_folder_btn.pressed.connect(_open_texture_import_dialog)
 	vbox.add_child(import_texture_folder_btn, true)
-
+	
 	var delete_unused_btn := Button.new()
 	delete_unused_btn.text = "Delete Unused Texture"
 	delete_unused_btn.tooltip_text = "Remove texture slots that are not painted on any ground or wall vertices (keeps slot 1 and Void)."
@@ -1012,7 +1012,7 @@ func _open_texture_edit_window(slot_idx: int) -> void:
 	
 	# Material card preview source
 	var existing_alb_tex : Texture2D = _get_slot_albedo_texture(terrain, slot_idx)
-
+	
 	# Texture preview
 	dialog.reset_preview_sources()
 	if existing_alb_tex != null:
@@ -1193,7 +1193,7 @@ func _repair_slot_palette_indices(terrain, slot: int) -> void:
 		for idx in terrain.slot_color_indices[si]:
 			used_elsewhere[int(idx)] = true
 	var seen_in_slot := {}
-	var indices: Array = terrain.slot_color_indices[slot]
+	var indices : Array = terrain.slot_color_indices[slot]
 	var changed := false
 	for i in range(indices.size()):
 		var pidx := int(indices[i])
@@ -1261,7 +1261,7 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 			if not is_instance_valid(terrain) or not is_instance_valid(plugin.current_terrain_node) or plugin.current_terrain_node != terrain:
 				return
 			terrain._ensure_palette_weights()
-			var indices: Array = terrain.slot_color_indices[s]
+			var indices : Array = terrain.slot_color_indices[s]
 			if indices.size() <= 1:
 				return
 			if pidx < 0 or pidx >= terrain.palette_weights.size():
@@ -1269,7 +1269,7 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 			var new_v := clampf(float(val), 0.0, 100.0)
 			terrain.palette_weights[pidx] = new_v
 			var remaining := 100.0 - new_v
-			var others: Array = []
+			var others : Array = []
 			var total_other := 0.0
 			for idx in indices:
 				if idx == pidx:
@@ -1306,7 +1306,7 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 				return
 			terrain.slot_color_indices[s].remove_at(remove_at)
 			terrain._ensure_palette_weights()
-			var indices: Array = terrain.slot_color_indices[s]
+			var indices : Array = terrain.slot_color_indices[s]
 			if indices.size() > 0:
 				var each := 100.0 / float(indices.size())
 				for idx in indices:
@@ -1334,7 +1334,7 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 			terrain.palette_colors[next_idx] = _default_palette_color_for_slot(slot)
 			terrain.slot_color_indices[s].append(next_idx)
 			terrain._ensure_palette_weights()
-			var indices: Array = terrain.slot_color_indices[s]
+			var indices : Array = terrain.slot_color_indices[s]
 			var each := 100.0 / float(max(indices.size(), 1))
 			for idx in indices:
 				terrain.palette_weights[idx] = each
@@ -1496,7 +1496,7 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 		strength_slider.value_changed.connect(func(value: float):
 			if not _ensure_terrain_arrays(terrain):
 				return
-			var current_strengths: Array = terrain.get(noise_strength_prop)
+			var current_strengths : Array = terrain.get(noise_strength_prop)
 			current_strengths[slot] = clampf(float(value), 0.0, 1.0)
 			terrain._rebuild_palette_uniforms()
 			terrain.save_to_preset()
@@ -1504,7 +1504,7 @@ func _connect_color_ui(dialog: MarchingSquaresTextureEditWindow, terrain: Marchi
 		scale_slider.value_changed.connect(func(value: float):
 			if not _ensure_terrain_arrays(terrain):
 				return
-			var current_scales: Array = terrain.get(noise_scale_prop)
+			var current_scales : Array = terrain.get(noise_scale_prop)
 			current_scales[slot] = clampf(float(value), 0.001, 1.0)
 			terrain._rebuild_palette_uniforms()
 			terrain.save_to_preset()
@@ -1621,7 +1621,7 @@ func _on_texture_import_confirmed() -> void:
 	if not bool(result.get("ok", false)):
 		push_error(str(result.get("error", "[MST] Texture import failed.")))
 		return
-	var imported_preset: MarchingSquaresTexturePreset = result.get("preset")
+	var imported_preset : MarchingSquaresTexturePreset = result.get("preset")
 	_refresh_slot_runtime(terrain, true)
 	terrain.save_to_preset()
 	if texture_import_bake_check != null and texture_import_bake_check.button_pressed:

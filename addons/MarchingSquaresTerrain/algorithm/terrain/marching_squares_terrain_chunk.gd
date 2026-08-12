@@ -2,6 +2,7 @@
 extends MeshInstance3D
 class_name MarchingSquaresTerrainChunk
 
+
 # Explicit preloads avoid tool-script class resolution issues.
 const MSTVertexColorHelper := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_vertex_color_helper.gd")
 const MSTTerrainCell := preload("res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_cell.gd")
@@ -22,7 +23,7 @@ enum BuildPhase {
 enum Mode {CUBIC, POLYHEDRON, ROUNDED_POLYHEDRON, SEMI_ROUND, SPHERICAL}
 enum GrassMode {GRASS, GRASSLESS}
 
-const MERGE_MODE = {
+const MERGE_MODE := {
 	Mode.CUBIC: 0.6,
 	Mode.POLYHEDRON: 1.3,
 	Mode.ROUNDED_POLYHEDRON: 2.1,
@@ -94,13 +95,13 @@ var _mesh_custom_0 := PackedFloat32Array()
 var _mesh_custom_1 := PackedFloat32Array()
 var _mesh_custom_2 := PackedFloat32Array()
 var _mesh_floor_flags := PackedByteArray()
-var _mesh_tiles: Dictionary = {}
-var _dirty_mesh_tiles: Dictionary = {}
-var _dirty_grass_cells: Dictionary = {}
+var _mesh_tiles : Dictionary = {}
+var _dirty_mesh_tiles : Dictionary = {}
+var _dirty_grass_cells : Dictionary = {}
 var _collect_mesh_arrays := true
-var _chunk_surface_material: ShaderMaterial
-var _chunk_surface_material_source: ShaderMaterial
-var _chunk_surface_material_revision: int = -1
+var _chunk_surface_material : ShaderMaterial
+var _chunk_surface_material_source : ShaderMaterial
+var _chunk_surface_material_revision : int = -1
 
 var cell_geometry : Dictionary = {} # Stores all generated tiles so that their geometry can quickly be reused
 
@@ -116,18 +117,18 @@ var _temp_collision_shapes : Array[ConcavePolygonShape3D] = []  # COMMENT: Old s
 var _temp_height_map : Array  # Source data - saved to external storage, not scene file
 var _temp_navmesh_permission : PackedByteArray = PackedByteArray()
 # Runtime cache only — never serialized. Restored after save so grass cooking can resume.
-var _temp_cell_geometry: Dictionary = {}
+var _temp_cell_geometry : Dictionary = {}
 #endregion
 
-var _grass_regen_queued: bool = false
-var _mesh_regen_queued: bool = false
-var _scene_save_in_progress: bool = false
-var _suppress_grass_mode_side_effects: bool = false
-var _initial_build_thread: Thread
+var _grass_regen_queued : bool = false
+var _mesh_regen_queued : bool = false
+var _scene_save_in_progress : bool = false
+var _suppress_grass_mode_side_effects : bool = false
+var _initial_build_thread : Thread
 var _initial_build_pending := false
-var build_phase: BuildPhase = BuildPhase.IDLE
+var build_phase : BuildPhase = BuildPhase.IDLE
 var _defer_mesh_regeneration := false
-var _initial_build_tile_queue: Array[Vector2i] = []
+var _initial_build_tile_queue : Array[Vector2i] = []
 var _baked_mesh_is_complete := false
 
 #region blend option vars
@@ -136,7 +137,6 @@ var lower_thresh : float = 0.3 # Sharp bands: < 0.3 = lower color
 var upper_thresh : float = 0.7 #, > 0.7 = upper color, middle = blend
 var blend_zone := upper_thresh - lower_thresh
 #endregion
-
 
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var grass_mode : GrassMode = GrassMode.GRASS:
 	set(value):
@@ -191,7 +191,7 @@ func _ensure_grass_planter() -> bool:
 	grass_planter._chunk = self
 	grass_planter.terrain_system = terrain_system
 	EngineWrapper.instance.set_owner_recursive(grass_planter)
-
+	
 	var grass_count_changed := false
 	# Prefer a usable bake cache. Empty allocations (identity transforms /
 	# visible_instance_count=0) are rejected so we cook grass again.
@@ -204,7 +204,7 @@ func _ensure_grass_planter() -> bool:
 			# Empty or partial bake (virgin identity slots). Recook from geometry.
 			_temp_grass_multimesh = null
 			grass_count_changed = true
-
+	
 	if grass_planter.multimesh == null \
 			or not MarchingSquaresGrassPlanter.is_multimesh_cooked(grass_planter.multimesh):
 		# Drop partial buffers so setup() can allocate a hidden-slot MultiMesh.
@@ -215,7 +215,7 @@ func _ensure_grass_planter() -> bool:
 		grass_count_changed = true
 	else:
 		grass_planter.setup(self, false)
-
+	
 	grass_count_changed = grass_planter.ensure_multimesh_count() or grass_count_changed
 	if grass_planter.multimesh == null:
 		grass_planter.setup(self)
@@ -233,6 +233,7 @@ func _apply_grass_mode() -> void:
 	else:
 		_ensure_grass_planter()
 
+
 # Called by TerrainSystem parent
 func initialize_terrain(should_regenerate_mesh: bool =  true, defer_grass_setup: bool = false):
 	_apply_shadow_visibility_settings()
@@ -242,7 +243,7 @@ func initialize_terrain(should_regenerate_mesh: bool =  true, defer_grass_setup:
 		needs_update.append([])
 		for x in range(dimensions.x - 1):
 			needs_update[z].append(true)
-
+	
 	var has_baked_grass_multimesh := (
 		grass_mode == GrassMode.GRASS
 		and _temp_grass_multimesh != null
@@ -256,7 +257,7 @@ func initialize_terrain(should_regenerate_mesh: bool =  true, defer_grass_setup:
 			grass_count_changed = true
 	elif grass_mode == GrassMode.GRASSLESS:
 		_clear_grass_planter()
-
+	
 	# Generate maps if not loaded from external storage (works for both editor and runtime)
 	# Validate height_map shape — serialized scenes may contain empty arrays or malformed rows.
 	var need_hm := true
@@ -275,7 +276,7 @@ func initialize_terrain(should_regenerate_mesh: bool =  true, defer_grass_setup:
 		generate_wall_color_maps()
 	if not (grass_mask_map is PackedColorArray) or grass_mask_map.size() !=  dimensions.z * dimensions.x:
 		generate_grass_mask_map()
-
+	
 	if should_regenerate_mesh and (mesh == null or _mesh_tiles.is_empty()):
 		regenerate_mesh(true)
 	elif mesh or not _mesh_tiles.is_empty():
@@ -285,7 +286,7 @@ func initialize_terrain(should_regenerate_mesh: bool =  true, defer_grass_setup:
 			_recreate_collision_body()
 		else:
 			rebuild_collision()
-
+	
 	# Respect deferred initialization: chunk creation adds the node first, then paints/seams it,
 	# and only after that should the first full mesh/grass build happen.
 	var can_generate_grass_now := should_regenerate_mesh or mesh != null or has_baked_grass_multimesh
@@ -294,7 +295,7 @@ func initialize_terrain(should_regenerate_mesh: bool =  true, defer_grass_setup:
 			_queue_grass_regen()
 		else:
 			grass_planter.regenerate_all_cells()
-
+	
 	var has_texture_array_source := (
 		terrain_system.get("texture_library") != null
 		or str(terrain_system.get("baked_albedo_array_path")) != ""
@@ -309,7 +310,7 @@ func initialize_terrain(should_regenerate_mesh: bool =  true, defer_grass_setup:
 				mat = terrain_system.bake_material_override.duplicate()
 			else:
 				mat = bake_material.duplicate()
-
+			
 			if mat is StandardMaterial3D:
 				mat.albedo_texture = ImageTexture.create_from_image(img)
 			elif mat is ShaderMaterial:
@@ -344,10 +345,11 @@ func _save_external_data_before_scene_strip() -> bool:
 	terrain_system._storage_initialized = true
 	return MSTDataHandler.metadata_exists(dir_path, chunk_coords)
 
+
 func _notification(what: int) -> void:
 	if not EngineWrapper.instance.is_editor():
 		return
-
+	
 	match what:
 		NOTIFICATION_EDITOR_PRE_SAVE:
 			_scene_save_in_progress = true
@@ -365,20 +367,20 @@ func _notification(what: int) -> void:
 			height_map = []
 			_temp_navmesh_permission = navmesh_permission
 			navmesh_permission = PackedByteArray()
-
+			
 			# Stash then clear so Vector2i keys are never serialized into the scene.
 			_temp_cell_geometry = cell_geometry
 			cell_geometry = {}
-
+			
 			# Store mesh and clear to prevent serialization
 			_temp_mesh = mesh
 			mesh = null
-
+			
 			# Store grass multimesh and clear
 			if grass_planter and grass_planter.multimesh:
 				_temp_grass_multimesh = grass_planter.multimesh
 				grass_planter.multimesh = null
-
+			
 			# Handle ALL collision bodies (old scenes may have multiple duplicates!)
 			_temp_collision_shapes.clear()
 			var bodies_to_free : Array[StaticBody3D] = []
@@ -395,7 +397,7 @@ func _notification(what: int) -> void:
 			for body in bodies_to_free:
 				body.name += "_"
 				body.queue_free()
-
+		
 		NOTIFICATION_EDITOR_POST_SAVE:
 			_scene_save_in_progress = false
 			# Restore height_map
@@ -405,32 +407,32 @@ func _notification(what: int) -> void:
 			if not _temp_navmesh_permission.is_empty():
 				navmesh_permission = _temp_navmesh_permission
 				_temp_navmesh_permission = PackedByteArray()
-
+			
 			# Restore mesh
 			if _temp_mesh:
 				mesh = _temp_mesh
 				_temp_mesh = null
-
+			
 			# Restore runtime cell geometry so interrupted grass cooks can resume.
 			if not _temp_cell_geometry.is_empty():
 				cell_geometry = _temp_cell_geometry
 				_temp_cell_geometry = {}
-
+			
 			# Restore grass multimesh and rebind the RenderingServer instance.
 			if _temp_grass_multimesh and grass_planter:
 				grass_planter.multimesh = _temp_grass_multimesh
 				_temp_grass_multimesh = null
 				grass_planter.sync_render_instance()
-
+			
 			# Recreate ONE collision body (only need one, even if old scene had duplicates)
 			if not _temp_collision_shapes.is_empty():
 				_recreate_collision_body.call_deferred()
-
+			
 			# A mid-cook save previously left missing grass rows until the user painted.
 			# Resume the full cook now that source geometry is back.
 			if grass_mode == GrassMode.GRASS and grass_planter != null and grass_planter.is_deferred_grass_incomplete():
 				_queue_grass_regen()
-
+		
 		NOTIFICATION_PREDELETE:
 			# Safety cleanup - clear owner on ALL collision nodes
 			for child in get_children():
@@ -455,7 +457,7 @@ func _enter_tree() -> void:
 		if not keys_valid:
 			cell_geometry.clear()
 			push_warning("[MST] Cleared unexpected serialized cell_geometry: please re-save the scene to remove runtime caches.")
-
+	
 	if get_parent() !=  terrain_system:
 		push_error("Chunk must remain within its parent!")
 		return
@@ -471,7 +473,7 @@ func _exit_tree() -> void:
 	_temp_grass_multimesh = null
 	_temp_cell_geometry = {}
 	_temp_collision_shapes.clear()
-
+	
 	# Clear owner on ALL collision nodes to prevent serialization edge cases
 	if EngineWrapper.instance.is_editor():
 		for child in get_children():
@@ -480,7 +482,7 @@ func _exit_tree() -> void:
 				for shape_child in child.get_children():
 					if shape_child is CollisionShape3D:
 						shape_child.owner = null
-
+	
 	# Only erase if terrain_system still has THIS chunk at chunk_coords
 	if terrain_system and terrain_system.chunks.get(chunk_coords) == self:
 		terrain_system.chunks.erase(chunk_coords)
@@ -593,14 +595,14 @@ func regenerate_mesh(use_threads: bool =  false):
 	if _mesh_tiles.is_empty():
 		_mark_all_mesh_tiles_dirty()
 	_clear_mesh_build_arrays()
-
+	
 	_collect_mesh_arrays = false
 	generate_terrain_cells(use_threads)
 	_collect_mesh_arrays = true
-
+	
 	_rebuild_dirty_mesh_tiles()
 	_apply_chunk_surface_material()
-
+	
 	for child in get_children():
 		if child is StaticBody3D:
 			child.free()
@@ -609,7 +611,7 @@ func regenerate_mesh(use_threads: bool =  false):
 	else:
 		rebuild_collision()
 	if grass_mode == GrassMode.GRASS and grass_planter != null and not _scene_save_in_progress:
-		var dirty_grass_cells: Array = _dirty_grass_cells.keys()
+		var dirty_grass_cells : Array = _dirty_grass_cells.keys()
 		_dirty_grass_cells.clear()
 		if was_hydrated_mesh:
 			# A persisted MultiMesh can contain blades from the old texture
@@ -618,7 +620,7 @@ func regenerate_mesh(use_threads: bool =  false):
 			grass_planter.regenerate_all_cells_deferred()
 		elif not dirty_grass_cells.is_empty():
 			grass_planter.queue_cells_for_regeneration(dirty_grass_cells)
-
+	
 	if terrain_system != null and terrain_system.has_method("_invalidate_terrain_lod_chunk"):
 		terrain_system._invalidate_terrain_lod_chunk(chunk_coords)
 
@@ -718,15 +720,15 @@ func _build_mesh_surface_arrays_for_tile(tile_coords: Vector2i) -> Array:
 	var end_z := mini(start_z + MESH_TILE_SIZE, dimensions.z - 1)
 	for z in range(start_z, end_z):
 		for x in range(start_x, end_x):
-			var entry: Dictionary = cell_geometry.get(Vector2i(x, z), {})
-			var verts: PackedVector3Array = entry.get("verts", PackedVector3Array())
-			var uvs: PackedVector2Array = entry.get("uvs", PackedVector2Array())
-			var uv2s: PackedVector2Array = entry.get("uv2s", PackedVector2Array())
-			var color_0s: PackedColorArray = entry.get("color_0s", PackedColorArray())
-			var color_1s: PackedColorArray = entry.get("color_1s", PackedColorArray())
-			var custom_values: PackedColorArray = entry.get("custom_1_values", PackedColorArray())
-			var mat_blends: PackedColorArray = entry.get("mat_blend", PackedColorArray())
-			var floor_flags: Array = entry.get("is_floor", [])
+			var entry : Dictionary = cell_geometry.get(Vector2i(x, z), {})
+			var verts : PackedVector3Array = entry.get("verts", PackedVector3Array())
+			var uvs : PackedVector2Array = entry.get("uvs", PackedVector2Array())
+			var uv2s : PackedVector2Array = entry.get("uv2s", PackedVector2Array())
+			var color_0s : PackedColorArray = entry.get("color_0s", PackedColorArray())
+			var color_1s : PackedColorArray = entry.get("color_1s", PackedColorArray())
+			var custom_values : PackedColorArray = entry.get("custom_1_values", PackedColorArray())
+			var mat_blends : PackedColorArray = entry.get("mat_blend", PackedColorArray())
+			var floor_flags : Array = entry.get("is_floor", [])
 			for i in range(verts.size()):
 				tool.set_smooth_group(0 if bool(floor_flags[i]) else -1)
 				tool.set_uv(uvs[i])
@@ -745,7 +747,7 @@ func _build_mesh_surface_arrays_for_tile(tile_coords: Vector2i) -> Array:
 
 
 func _get_or_create_mesh_tile(tile_coords: Vector2i) -> MeshInstance3D:
-	var tile: MeshInstance3D = _mesh_tiles.get(tile_coords)
+	var tile : MeshInstance3D = _mesh_tiles.get(tile_coords)
 	if tile != null and is_instance_valid(tile):
 		return tile
 	if tile_coords == Vector2i.ZERO:
@@ -776,7 +778,7 @@ func hydrate_mesh_tiles_from_persisted_mesh(persisted_mesh: Mesh) -> bool:
 		return false
 	if not _mesh_tiles.is_empty():
 		return true
-
+	
 	var tile_count_x := ceili(float(dimensions.x - 1) / float(MESH_TILE_SIZE))
 	var tile_count_z := ceili(float(dimensions.z - 1) / float(MESH_TILE_SIZE))
 	var expected_surface_count := tile_count_x * tile_count_z
@@ -787,13 +789,13 @@ func hydrate_mesh_tiles_from_persisted_mesh(persisted_mesh: Mesh) -> bool:
 			expected_surface_count,
 		])
 		return false
-
-	var surface_arrays: Array[Array] = []
-	var surface_primitives: Array[int] = []
-	var surface_formats: Array[int] = []
-	var surface_materials: Array[Material] = []
+	
+	var surface_arrays : Array[Array] = []
+	var surface_primitives : Array[int] = []
+	var surface_formats : Array[int] = []
+	var surface_materials : Array[Material] = []
 	for source_surface in range(expected_surface_count):
-		var arrays: Array = persisted_mesh.surface_get_arrays(source_surface)
+		var arrays : Array = persisted_mesh.surface_get_arrays(source_surface)
 		if arrays.is_empty():
 			print("[MST Persistence] hydrate chunk=%s skipped empty_surface=%d" % [
 				str(chunk_coords),
@@ -804,7 +806,7 @@ func hydrate_mesh_tiles_from_persisted_mesh(persisted_mesh: Mesh) -> bool:
 		surface_primitives.append(persisted_mesh.surface_get_primitive_type(source_surface))
 		surface_formats.append(persisted_mesh.surface_get_format(source_surface))
 		surface_materials.append(persisted_mesh.surface_get_material(source_surface))
-
+	
 	var surface_index := 0
 	for tile_z in range(tile_count_z):
 		for tile_x in range(tile_count_x):
@@ -818,12 +820,12 @@ func hydrate_mesh_tiles_from_persisted_mesh(persisted_mesh: Mesh) -> bool:
 				{},
 				surface_formats[surface_index]
 			)
-			var material: Material = surface_materials[surface_index]
+			var material : Material = surface_materials[surface_index]
 			if material != null:
 				tile_mesh.surface_set_material(0, material)
 			tile.mesh = tile_mesh
 			surface_index += 1
-
+	
 	_dirty_mesh_tiles.clear()
 	_baked_mesh_is_complete = true
 	print("[MST Persistence] hydrate chunk=%s tiles=%d surfaces=%d" % [
@@ -863,17 +865,17 @@ func _rebuild_mesh_tile(tile_coords: Vector2i) -> void:
 func generate_terrain_cells(use_threads: bool):
 	if not cell_geometry:
 		cell_geometry = {}
-
+	
 	var thread_pool: MarchingSquaresThreadPool = null
 	if use_threads:
 		var worker_count := 1
 		if terrain_system != null:
 			worker_count = clampi(terrain_system.terrain_generation_threads, 1, 8)
 		thread_pool = MarchingSquaresThreadPool.new(worker_count)
-
+	
 	for z in range(dimensions.z - 1):
 		for x in range(dimensions.x - 1):
-			var cell_coords = Vector2i(x, z)
+			var cell_coords := Vector2i(x, z)
 			var work_load : Callable
 			# If geometry did not change, copy already generated geometry and skip this cell
 			if not needs_update[z][x]:
@@ -881,7 +883,7 @@ func generate_terrain_cells(use_threads: bool):
 				if not cell_geometry.has(cell_coords) or not _cached_cell_geometry_is_valid(cell_coords):
 					needs_update[z][x] = true
 					# fall through to generation
-
+					
 					# continue to next iteration so generation handles it
 					# (avoid executing the cached-copy branch)
 					# Note: do NOT call continue here because we want the generation code below to run in this iteration.
@@ -896,10 +898,10 @@ func generate_terrain_cells(use_threads: bool):
 					else:
 						_append_cached_cell_geometry(cell_coords)
 					continue
-
+			
 			# Cell is now being updated
 			needs_update[z][x] = false
-
+			
 			# If geometry did change or none exists yet,
 			# Create an entry for this cell (will also override any existing one)
 			cell_geometry[cell_coords] = {
@@ -912,7 +914,7 @@ func generate_terrain_cells(use_threads: bool):
 				"mat_blend": PackedColorArray(),
 				"is_floor": [],
 			}
-
+			
 			var color_helper := MSTVertexColorHelper.new()
 			# Defensive: guard against malformed/serialized height_map rows
 			var h00 := 0.0
@@ -940,14 +942,14 @@ func generate_terrain_cells(use_threads: bool):
 				cell = MSTTerrainCell.new(self, color_helper, h00, h01, h10, h11, merge_threshold)
 			color_helper.chunk = self
 			color_helper.cell = cell
-
+			
 			work_load =  func():
 				cell.generate_geometry(cell_coords)
 			if use_threads:
 				thread_pool.enqueue(work_load)
 			else:
 				work_load.call()
-
+	
 	if use_threads:
 		thread_pool.start()
 		thread_pool.wait()
@@ -959,14 +961,14 @@ func _append_cached_cell_geometry(cell_coords: Vector2i) -> void:
 	var entry: Dictionary = cell_geometry.get(cell_coords, {})
 	if not entry.has("verts"):
 		return
-	var verts: PackedVector3Array = entry["verts"]
-	var uvs: PackedVector2Array = entry["uvs"]
-	var uv2s: PackedVector2Array = entry["uv2s"]
-	var color_0s: PackedColorArray = entry["color_0s"]
-	var color_1s: PackedColorArray = entry["color_1s"]
-	var custom_1_values: PackedColorArray = entry["custom_1_values"]
-	var mat_blend: PackedColorArray = entry["mat_blend"]
-	var is_floor: Array = entry["is_floor"]
+	var verts : PackedVector3Array = entry["verts"]
+	var uvs : PackedVector2Array = entry["uvs"]
+	var uv2s : PackedVector2Array = entry["uv2s"]
+	var color_0s : PackedColorArray = entry["color_0s"]
+	var color_1s : PackedColorArray = entry["color_1s"]
+	var custom_1_values : PackedColorArray = entry["custom_1_values"]
+	var mat_blend : PackedColorArray = entry["mat_blend"]
+	var is_floor : Array = entry["is_floor"]
 	for i in range(verts.size()):
 		_append_mesh_vertex(verts[i], uvs[i], uv2s[i], color_0s[i], color_1s[i], custom_1_values[i], mat_blend[i], bool(is_floor[i]))
 
@@ -1005,7 +1007,7 @@ func add_polygons(
 		assert(pts.size() == custom_1_values.size())
 		assert(pts.size() == mat_blends.size())
 		assert(pts.size() == floors.size())
-
+		
 		cell_generation_mutex.lock()
 		for i in range(pts.size()):
 			_add_point(cell_coords, pts[i], uvs[i], uv2s[i], color_0s[i], color_1s[i], custom_1_values[i], mat_blends[i], floors[i])
@@ -1016,7 +1018,7 @@ func add_polygons(
 # UV.x is closeness to the bottom of an edge. UV.Y is closeness to the edge of a cliff
 func _add_point(cell_coords: Vector2i, vert: Vector3, uv: Vector2, uv2: Vector2, color_0: Color, color_1: Color, custom_1_value: Color, mat_blend: Color, is_floor: bool):
 	_append_mesh_vertex(vert, uv, uv2, color_0, color_1, custom_1_value, mat_blend, is_floor)
-
+	
 	cell_geometry[cell_coords]["verts"].append(vert)
 	cell_geometry[cell_coords]["uvs"].append(uv)
 	cell_geometry[cell_coords]["uv2s"].append(uv2)
@@ -1036,7 +1038,7 @@ func generate_height_map(base_height: float = 0.0):
 		height_map[z].resize(dimensions.x)
 		for x in range(dimensions.x):
 			height_map[z][x] = base_height
-
+	
 	var noise := terrain_system.noise_hmap
 	if noise:
 		for z in range(dimensions.z):
@@ -1267,10 +1269,10 @@ func set_wall_paint_stamp_state(state: Dictionary) -> void:
 
 
 func append_wall_paint_stamp_to_state(state: Dictionary, world_pos: Vector3, world_normal: Vector3, radius: float, texture_idx: int) -> Dictionary:
-	var positions: PackedVector3Array = state.get("positions", PackedVector3Array()).duplicate()
-	var normals: PackedVector3Array = state.get("normals", PackedVector3Array()).duplicate()
-	var radii: PackedFloat32Array = state.get("radii", PackedFloat32Array()).duplicate()
-	var texture_indices: PackedInt32Array = state.get("texture_indices", PackedInt32Array()).duplicate()
+	var positions : PackedVector3Array = state.get("positions", PackedVector3Array()).duplicate()
+	var normals : PackedVector3Array = state.get("normals", PackedVector3Array()).duplicate()
+	var radii : PackedFloat32Array = state.get("radii", PackedFloat32Array()).duplicate()
+	var texture_indices : PackedInt32Array = state.get("texture_indices", PackedInt32Array()).duplicate()
 	if positions.size() >= MAX_WALL_PAINT_STAMPS:
 		positions.remove_at(0)
 		normals.remove_at(0)
@@ -1298,10 +1300,10 @@ func _apply_chunk_surface_material() -> void:
 	if terrain_system == null:
 		return
 	var base_mat := terrain_system.get_chunk_surface_material()
-	var material_to_apply: Material = base_mat
+	var material_to_apply : Material = base_mat
 	if base_mat is ShaderMaterial:
 		var source_material := base_mat as ShaderMaterial
-		var source_revision: int = terrain_system._surface_material_revision
+		var source_revision : int = terrain_system._surface_material_revision
 		if _chunk_surface_material == null or _chunk_surface_material_source != source_material or _chunk_surface_material_revision != source_revision:
 			_chunk_surface_material = source_material.duplicate(true)
 			_chunk_surface_material_source = source_material
@@ -1355,14 +1357,14 @@ func get_persisted_mesh() -> ArrayMesh:
 		return mesh as ArrayMesh
 	var persisted_mesh := ArrayMesh.new()
 	for tile_coords in _mesh_tiles.keys():
-		var tile: MeshInstance3D = _mesh_tiles[tile_coords]
+		var tile : MeshInstance3D = _mesh_tiles[tile_coords]
 		if not is_instance_valid(tile) or tile.mesh == null:
 			continue
 		for surface_idx in range(tile.mesh.get_surface_count()):
-			var arrays: Array = tile.mesh.surface_get_arrays(surface_idx)
+			var arrays : Array = tile.mesh.surface_get_arrays(surface_idx)
 			if arrays.is_empty():
 				continue
-			var surface_format: int = tile.mesh.surface_get_format(surface_idx)
+			var surface_format : int = tile.mesh.surface_get_format(surface_idx)
 			persisted_mesh.add_surface_from_arrays(tile.mesh.surface_get_primitive_type(surface_idx), arrays, [], {}, surface_format)
 			var material := tile.mesh.surface_get_material(surface_idx)
 			if material != null:
@@ -1599,8 +1601,8 @@ func _run_deferred_grass_regen() -> void:
 
 
 func _sync_wall_paint_shader_params(mat: ShaderMaterial) -> void:
-	var positions: Array[Vector4] = []
-	var data_b: Array[Vector4] = []
+	var positions : Array[Vector4] = []
+	var data_b : Array[Vector4] = []
 	var stamp_count := min(
 		wall_paint_stamp_positions.size(),
 		min(wall_paint_stamp_normals.size(), min(wall_paint_stamp_radii.size(), wall_paint_stamp_texture_indices.size()))
@@ -1621,10 +1623,11 @@ func _sync_wall_paint_shader_params(mat: ShaderMaterial) -> void:
 	mat.set_shader_parameter("wall_paint_plane_thickness", maxf(minf(cell_size.x, cell_size.y) * 0.08, 0.03))
 	mat.set_shader_parameter("wall_paint_blend_width", maxf(minf(cell_size.x, cell_size.y) * 0.18, 0.06))
 
+
 func notify_needs_update(z: int, x: int):
 	if z < 0 or z >=  terrain_system.dimensions.z-1 or x < 0 or x >= terrain_system.dimensions.x-1:
 		return
-
+	
 	needs_update[z][x] = true
 	_mark_mesh_tile_dirty_for_cell(Vector2i(x, z))
 
@@ -1681,7 +1684,7 @@ func get_nav_walkable_faces_for_permission(max_slope_degrees: float, permission:
 	var fallback_faces := PackedVector3Array()
 	if not cell_geometry:
 		return faces
-
+	
 	var max_angle := deg_to_rad(clampf(max_slope_degrees, 0.0, 89.0))
 	var up := Vector3.UP
 	var min_triangle_area := maxf(cell_size.x * cell_size.y * 0.00005, 0.000001)
@@ -1699,11 +1702,11 @@ func get_nav_walkable_faces_for_permission(max_slope_degrees: float, permission:
 		var entry = cell_geometry[entry_key]
 		if not entry.has("verts") or not entry.has("is_floor"):
 			continue
-		var verts: PackedVector3Array = entry["verts"]
-		var is_floor: Array = entry["is_floor"]
+		var verts : PackedVector3Array = entry["verts"]
+		var is_floor : Array = entry["is_floor"]
 		if verts.is_empty() or is_floor.is_empty():
 			continue
-
+		
 		var tri_count := int(verts.size() / 3)
 		for tri_idx in range(tri_count):
 			var base := tri_idx * 3
@@ -1711,23 +1714,23 @@ func get_nav_walkable_faces_for_permission(max_slope_degrees: float, permission:
 				break
 			if not (bool(is_floor[base]) and bool(is_floor[base + 1]) and bool(is_floor[base + 2])):
 				continue
-
+			
 			var a := verts[base]
 			var b := verts[base + 1]
 			var c := verts[base + 2]
 			fallback_faces.append(a)
 			fallback_faces.append(b)
 			fallback_faces.append(c)
-
+			
 			a = _snap_nav_vertex_to_chunk_bounds(a, chunk_max_x, chunk_max_z, seam_snap_epsilon)
 			b = _snap_nav_vertex_to_chunk_bounds(b, chunk_max_x, chunk_max_z, seam_snap_epsilon)
 			c = _snap_nav_vertex_to_chunk_bounds(c, chunk_max_x, chunk_max_z, seam_snap_epsilon)
-
+			
 			var cross := (b - a).cross(c - a)
 			var area := cross.length() * 0.5
 			if area < min_triangle_area:
 				continue
-
+			
 			var normal := cross.normalized()
 			if normal.length_squared() <= 0.000001:
 				continue
@@ -1736,16 +1739,16 @@ func get_nav_walkable_faces_for_permission(max_slope_degrees: float, permission:
 			var slope_angle := acos(clampf(normal.dot(up), -1.0, 1.0))
 			if slope_angle > max_angle:
 				continue
-
+			
 			var triangle_key := _make_nav_triangle_key(a, b, c)
 			if seen_triangles.has(triangle_key):
 				continue
 			seen_triangles[triangle_key] = true
-
+			
 			faces.append(a)
 			faces.append(b)
 			faces.append(c)
-
+	
 	if faces.is_empty() and not fallback_faces.is_empty():
 		return fallback_faces
 	return faces
@@ -1757,12 +1760,12 @@ func _snap_nav_vertex_to_chunk_bounds(vertex: Vector3, max_x: float, max_z: floa
 		snapped.x = 0.0
 	elif absf(snapped.x - max_x) <= epsilon:
 		snapped.x = max_x
-
+	
 	if absf(snapped.z) <= epsilon:
 		snapped.z = 0.0
 	elif absf(snapped.z - max_z) <= epsilon:
 		snapped.z = max_z
-
+	
 	return snapped
 
 
@@ -1779,18 +1782,18 @@ func _make_nav_triangle_key(a: Vector3, b: Vector3, c: Vector3) -> String:
 func _create_simplified_proxy_collision_shape() -> ConcavePolygonShape3D:
 	if not (height_map is Array) or height_map.size() < dimensions.z:
 		return null
-
-	var faces: Array[Vector3] = []
+	
+	var faces : Array[Vector3] = []
 	var base_height := INF
 	for z in range(dimensions.z):
 		if z >= height_map.size() or not (height_map[z] is Array):
 			return null
-		var row: Array = height_map[z]
+		var row : Array = height_map[z]
 		if row.size() < dimensions.x:
 			return null
 		for x in range(dimensions.x):
 			base_height = minf(base_height, float(row[x]))
-
+	
 	var extra_thickness := terrain_system.collision_thickness
 	base_height -= extra_thickness
 	var cell_rows := dimensions.z - 1
@@ -1802,12 +1805,12 @@ func _create_simplified_proxy_collision_shape() -> ConcavePolygonShape3D:
 		merged_cells[z].resize(cell_cols)
 		for x in range(cell_cols):
 			merged_cells[z][x] = false
-
+	
 	for z in range(cell_rows):
 		for x in range(cell_cols):
 			if bool(merged_cells[z][x]):
 				continue
-
+			
 			var flat_height := _get_flat_cell_height(z, x)
 			if flat_height == null:
 				_append_cell_top_surface(faces, z, x)
@@ -1818,7 +1821,7 @@ func _create_simplified_proxy_collision_shape() -> ConcavePolygonShape3D:
 				_append_cell_top_surface(faces, z, x)
 				_append_merged_wall_strips(faces, z, x, 1, 1, float(flat_height), base_height)
 				continue
-
+			
 			var width := 1
 			while x + width < cell_cols:
 				if bool(merged_cells[z][x + width]):
@@ -1828,7 +1831,7 @@ func _create_simplified_proxy_collision_shape() -> ConcavePolygonShape3D:
 				if _should_keep_flat_cell_unmerged(z, x + width, float(flat_height)):
 					break
 				width += 1
-
+			
 			var depth := 1
 			var can_extend := true
 			while z + depth < cell_rows and can_extend:
@@ -1844,19 +1847,19 @@ func _create_simplified_proxy_collision_shape() -> ConcavePolygonShape3D:
 						break
 				if can_extend:
 					depth += 1
-
+			
 			for mark_z in range(z, z + depth):
 				for mark_x in range(x, x + width):
 					merged_cells[mark_z][mark_x] = true
-
+			
 			_append_merged_top_surface(faces, z, x, width, depth, float(flat_height))
 			_append_merged_wall_strips(faces, z, x, width, depth, float(flat_height), base_height)
-
+	
 	for z in range(dimensions.z - 1):
 		for x in range(dimensions.x - 1):
 			if is_zero_approx(extra_thickness):
 				continue
-
+			
 			var x0 := float(x) * cell_size.x
 			var x1 := float(x + 1) * cell_size.x
 			var z0 := float(z) * cell_size.y
@@ -1869,7 +1872,7 @@ func _create_simplified_proxy_collision_shape() -> ConcavePolygonShape3D:
 			var b10 := Vector3(x1, base_height, z0)
 			var b01 := Vector3(x0, base_height, z1)
 			var b11 := Vector3(x1, base_height, z1)
-
+			
 			if z == 0:
 				_append_proxy_quad(faces, p10, p00, b00, b10)
 			if x == 0:
@@ -1878,7 +1881,7 @@ func _create_simplified_proxy_collision_shape() -> ConcavePolygonShape3D:
 				_append_proxy_quad(faces, p11, p10, b10, b11)
 			if z == dimensions.z - 2:
 				_append_proxy_quad(faces, p01, p11, b11, b01)
-
+	
 	if not is_zero_approx(extra_thickness):
 		var chunk_max_x := float(dimensions.x - 1) * cell_size.x
 		var chunk_max_z := float(dimensions.z - 1) * cell_size.y
@@ -1887,7 +1890,7 @@ func _create_simplified_proxy_collision_shape() -> ConcavePolygonShape3D:
 		var b01 := Vector3(0.0, base_height, chunk_max_z)
 		var b11 := Vector3(chunk_max_x, base_height, chunk_max_z)
 		_append_proxy_quad(faces, b01, b11, b10, b00)
-
+	
 	if faces.is_empty():
 		return null
 	var shape := ConcavePolygonShape3D.new()
@@ -1942,7 +1945,7 @@ func _append_exact_cell_floor_triangles(faces: Array[Vector3], cell_coords: Vect
 	var is_floor: Array = entry["is_floor"]
 	if verts.is_empty() or is_floor.is_empty():
 		return false
-
+	
 	var appended := false
 	var tri_count := int(verts.size() / 3)
 	for tri_idx in range(tri_count):
@@ -1964,11 +1967,11 @@ func _append_exact_cell_wall_triangles(faces: Array[Vector3], cell_coords: Vecto
 	var entry = cell_geometry[cell_coords]
 	if not entry.has("verts") or not entry.has("is_floor"):
 		return false
-	var verts: PackedVector3Array = entry["verts"]
-	var is_floor: Array = entry["is_floor"]
+	var verts : PackedVector3Array = entry["verts"]
+	var is_floor : Array = entry["is_floor"]
 	if verts.is_empty() or is_floor.is_empty():
 		return false
-
+	
 	var appended := false
 	var tri_count := int(verts.size() / 3)
 	for tri_idx in range(tri_count):
@@ -2034,7 +2037,7 @@ func _append_vertical_edge_walls(faces: Array[Vector3], start_z: int, x: int, de
 		if float(merged_bottom) < top_height:
 			_append_vertical_wall_quad(faces, start_z, start_z + depth, x if west else x + 1, top_height, float(merged_bottom), west)
 		return
-
+	
 	for z in range(start_z, start_z + depth):
 		var info := _get_adjacent_edge_info(z, x, Vector2i(-1 if west else 1, 0))
 		if not bool(info.get("has_cell", false)) or bool(info.get("has_neighbor_chunk", false)):
@@ -2066,7 +2069,7 @@ func _try_get_flat_horizontal_edge_bottom(z: int, start_x: int, width: int, nort
 
 
 func _try_get_flat_vertical_edge_bottom(start_z: int, x: int, depth: int, west: bool, fallback_bottom: float) -> Variant:
-	var bottom: Variant = null
+	var bottom : Variant = null
 	for z in range(start_z, start_z + depth):
 		var info := _get_adjacent_edge_info(z, x, Vector2i(-1 if west else 1, 0))
 		if not bool(info.get("has_cell", false)):
@@ -2099,10 +2102,10 @@ func _get_adjacent_edge_info(local_z: int, local_x: int, dir: Vector2i) -> Dicti
 		info["has_cell"] = true
 		info["flat_height"] = _get_flat_cell_height(target_z, target_x)
 		return info
-
+	
 	if terrain_system == null:
 		return info
-
+	
 	var chunk_dx := 0
 	var chunk_dy := 0
 	if target_x < 0:
@@ -2111,18 +2114,18 @@ func _get_adjacent_edge_info(local_z: int, local_x: int, dir: Vector2i) -> Dicti
 	elif target_x >= dimensions.x - 1:
 		chunk_dx = 1
 		target_x = 0
-
+	
 	if target_z < 0:
 		chunk_dy = -1
 		target_z = dimensions.z - 2
 	elif target_z >= dimensions.z - 1:
 		chunk_dy = 1
 		target_z = 0
-
-	var neighbor_chunk: MarchingSquaresTerrainChunk = terrain_system.chunks.get(chunk_coords + Vector2i(chunk_dx, chunk_dy))
+	
+	var neighbor_chunk : MarchingSquaresTerrainChunk = terrain_system.chunks.get(chunk_coords + Vector2i(chunk_dx, chunk_dy))
 	if neighbor_chunk == null or not is_instance_valid(neighbor_chunk):
 		return info
-
+	
 	info["has_cell"] = true
 	info["has_neighbor_chunk"] = true
 	info["flat_height"] = _get_flat_cell_height_from_chunk(neighbor_chunk, target_z, target_x)
@@ -2287,14 +2290,14 @@ func _create_collision_body_from_shape(shape: ConcavePolygonShape3D) -> void:
 	body.collision_layer = 17
 	if terrain_system:
 		body.set_collision_layer_value(terrain_system.extra_collision_layer, true)
-
+	
 	var col_shape := CollisionShape3D.new()
 	col_shape.name = "CollisionShape3D"
 	col_shape.shape = shape
 	col_shape.visible = false
 	body.add_child(col_shape)
 	add_child(body)
-
+	
 	# Set owner for editor visibility at first, but we clear it later
 	if EngineWrapper.instance.is_editor():
 		var scene_root = EngineWrapper.instance.get_root_for_node(self)
@@ -2311,11 +2314,11 @@ func _recreate_collision_body() -> void:
 	if not is_inside_tree() or _temp_collision_shapes.is_empty():
 		_temp_collision_shapes.clear()
 		return
-
+	
 	for child in get_children():
 		if child is StaticBody3D:
 			child.free()
-
+	
 	# Only create ONE body with the FIRST shape
 	var shape : ConcavePolygonShape3D = null
 	if _temp_collision_shapes.size() > 0 and _temp_collision_shapes[0] !=  null:
@@ -2343,22 +2346,22 @@ func regenerate_all_cells(use_threads: bool):
 	for z in range(dimensions.z-1):
 		for x in range(dimensions.x-1):
 			needs_update[z][x] = true
-
+	
 	regenerate_mesh(use_threads)
 
 
 @export_tool_button("Export GLB") var bake =  func():
 	var tree := get_tree()
-
-	var baker = MarchingSquaresGeometryBaker.new()
+	
+	var baker := MarchingSquaresGeometryBaker.new()
 	baker.polygon_texture_resolution = terrain_system.polygon_texture_resolution
-
+	
 	var f := func(bakedMesh: Mesh, original: MeshInstance3D, bakedTexture: Image):
 		var dialog := FileDialog.new()
 		get_tree().root.add_child(dialog)
 		dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
 		dialog.access = FileDialog.ACCESS_FILESYSTEM
-
+		
 		var inst := MeshInstance3D.new()
 		inst.mesh = bakedMesh
 		var mat := StandardMaterial3D.new()
@@ -2374,6 +2377,6 @@ func regenerate_all_cells(use_threads: bool):
 		dialog.add_filter("*.glb", "GLB file")
 		dialog.connect("file_selected", file_selected)
 		dialog.popup_centered()
-
+	
 	baker.finished.connect(f, CONNECT_ONE_SHOT)
 	baker.bake_geometry_texture(self, tree)

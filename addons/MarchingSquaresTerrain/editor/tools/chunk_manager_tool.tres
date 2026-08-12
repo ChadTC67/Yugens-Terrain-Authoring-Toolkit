@@ -13,7 +13,7 @@ metadata/_custom_type_script = "uid://b6jopat61dbd3"
 script = ExtResource("1_j1t8c")
 icon = ExtResource("1_ir1w2")
 label = "Chunk Manager"
-tooltip = "Manages the creation, deletion and changing of individual chunk settings. Chunk dimensions and cell related settings can be changed in the [u][EDITOR_ACCENT]Terrain Settings[/EDITOR_ACCENT][/u] tool.
+tooltip = "Manages the creation, deletion and changing of individual and global chunk settings.
 
 [b]Info:[/b]
 Chunk cell merge modes can be used to alter the merge thresholds of neighbouring vertices. These have the biggest impact on the overall [i]feel[/i] of the terrain.

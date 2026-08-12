@@ -2,8 +2,9 @@
 extends RefCounted
 class_name MSTTerrainLodController
 
+
 var terrain
-var _proxies: Dictionary = {}
+var _proxies : Dictionary = {}
 var _pending_updates := false
 
 
@@ -18,26 +19,26 @@ func apply() -> void:
 		_clear_proxies()
 		return
 	_pending_updates = false
-
+	
 	var step := maxi(2, int(terrain.terrain_lod_step))
 	for coords in terrain.chunks.keys():
 		var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(coords)
 		if not is_instance_valid(chunk):
 			continue
-		var proxy: MeshInstance3D = _proxies.get(coords)
+		var proxy : MeshInstance3D = _proxies.get(coords)
 		if proxy == null or not is_instance_valid(proxy):
 			proxy = _build_proxy(chunk, step)
 			if proxy == null:
 				continue
 			_proxies[coords] = proxy
 		_configure_proxy_visibility(chunk, proxy)
-
-	var stale_coords: Array[Vector2i] = []
+	
+	var stale_coords : Array[Vector2i] = []
 	for coords in _proxies.keys():
 		if not terrain.chunks.has(coords):
 			stale_coords.append(coords)
 	for coords in stale_coords:
-		var stale_proxy: Node = _proxies[coords]
+		var stale_proxy : Node = _proxies[coords]
 		if is_instance_valid(stale_proxy):
 			stale_proxy.queue_free()
 		_proxies.erase(coords)
@@ -58,7 +59,7 @@ func _build_proxy(chunk: MarchingSquaresTerrainChunk, step: int) -> MeshInstance
 		sample_z.append(z)
 	if sample_z.is_empty() or sample_z[-1] != dims_z - 1:
 		sample_z.append(dims_z - 1)
-
+	
 	var width := sample_x.size()
 	var depth := sample_z.size()
 	var vertices := PackedVector3Array()
@@ -77,14 +78,14 @@ func _build_proxy(chunk: MarchingSquaresTerrainChunk, step: int) -> MeshInstance
 	custom0.resize(width * depth * 4)
 	custom1.resize(width * depth * 4)
 	custom2.resize(width * depth * 4)
-
+	
 	var height_at := func(x: int, z: int) -> float:
 		x = clampi(x, 0, dims_x - 1)
 		z = clampi(z, 0, dims_z - 1)
 		if not (chunk.height_map[z] is Array) or chunk.height_map[z].size() <= x:
 			return 0.0
 		return float(chunk.height_map[z][x])
-
+	
 	for z_idx in range(depth):
 		var z := sample_z[z_idx]
 		for x_idx in range(width):
@@ -96,14 +97,14 @@ func _build_proxy(chunk: MarchingSquaresTerrainChunk, step: int) -> MeshInstance
 			var right := height_at.call(x + step, z)
 			var down := height_at.call(x, z - step)
 			var up := height_at.call(x, z + step)
-			var dx: float = (left - right) / maxf(0.0001, 2.0 * chunk.cell_size.x * float(step))
-			var dz: float = (down - up) / maxf(0.0001, 2.0 * chunk.cell_size.y * float(step))
+			var dx : float = (left - right) / maxf(0.0001, 2.0 * chunk.cell_size.x * float(step))
+			var dz : float = (down - up) / maxf(0.0001, 2.0 * chunk.cell_size.y * float(step))
 			normals[vertex_idx] = Vector3(dx, 1.0, dz).normalized()
 			uvs[vertex_idx] = Vector2(float(x) / maxf(1.0, float(dims_x - 1)), float(z) / maxf(1.0, float(dims_z - 1)))
 			uv2s[vertex_idx] = Vector2(float(x), float(z))
 			colors[vertex_idx] = Color.WHITE
 			custom2[vertex_idx * 4 + 3] = 1.0
-
+	
 	var indices := PackedInt32Array()
 	indices.resize((width - 1) * (depth - 1) * 6)
 	var write_idx := 0
@@ -120,7 +121,7 @@ func _build_proxy(chunk: MarchingSquaresTerrainChunk, step: int) -> MeshInstance
 			indices[write_idx + 4] = i3
 			indices[write_idx + 5] = i2
 			write_idx += 6
-
+	
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
@@ -138,7 +139,7 @@ func _build_proxy(chunk: MarchingSquaresTerrainChunk, step: int) -> MeshInstance
 	format |= Mesh.ARRAY_FORMAT_CUSTOM2 | (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM2_SHIFT)
 	var lod_mesh := ArrayMesh.new()
 	lod_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, format)
-
+	
 	var proxy := MeshInstance3D.new()
 	proxy.name = "TerrainLODProxy"
 	proxy.mesh = lod_mesh
@@ -148,6 +149,7 @@ func _build_proxy(chunk: MarchingSquaresTerrainChunk, step: int) -> MeshInstance
 	var source_material := chunk.mesh.surface_get_material(0) if chunk.mesh != null and chunk.mesh.get_surface_count() > 0 else null
 	if source_material != null:
 		proxy.material_override = source_material
+	
 	return proxy
 
 
@@ -176,7 +178,7 @@ func _clear_proxies() -> void:
 
 
 func invalidate_chunk(coords: Vector2i) -> void:
-	var proxy: Node = _proxies.get(coords)
+	var proxy : Node = _proxies.get(coords)
 	if is_instance_valid(proxy):
 		proxy.queue_free()
 	_proxies.erase(coords)

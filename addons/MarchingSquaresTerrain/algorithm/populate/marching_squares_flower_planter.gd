@@ -54,6 +54,7 @@ var _flower_visibility_fade_margin := 0.0
 		should_billboard = value
 		_apply_billboard_state()
 
+
 func _apply_billboard_state() -> void:
 	if flower_mesh == null or multimesh == null or multimesh.mesh == null:
 		return
@@ -65,6 +66,8 @@ func _apply_billboard_state() -> void:
 		flower_mesh.orientation = PlaneMesh.FACE_Y
 		flower_mat.set_shader_parameter("should_billboard", false)
 	multimesh.mesh.center_offset.y = base_height_offset + multimesh.mesh.size.y / 2
+
+
 @export_custom(PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE) var base_height_offset : float = 0.75:
 	set(value):
 		base_height_offset = value
@@ -275,7 +278,7 @@ func generate_flowers_on_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i
 		printerr("[MarchingSquaresFlowerPlanter] current_cell_data doesn't have one of the following required data: 1) verts, 2) uvs, 3) custom_1_values, 4) is_floor")
 		return start_index
 	
-	var points: PackedVector2Array = []
+	var points : PackedVector2Array = []
 	var count := flower_subdivisions * flower_subdivisions
 	var chunk_offset: Vector3
 	if chunk.is_inside_tree():
@@ -285,7 +288,7 @@ func generate_flowers_on_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i
 	else:
 		chunk_offset = chunk.position
 	
-	var pos_rng  := RandomNumberGenerator.new()
+	var pos_rng := RandomNumberGenerator.new()
 	pos_rng.seed = hash(Vector3i(
 		chunk.chunk_coords.x,
 		cell.x,
@@ -358,7 +361,7 @@ func generate_flowers_on_cell(chunk: MarchingSquaresTerrainChunk, cell: Vector2i
 				
 				# Don't place flowers on ledge or ridges
 				var uv = uvs[i]*u + uvs[i+1]*v + uvs[i+2]*(1-u-v)
-				var on_ledge_or_ridge: bool = uv.y > 0.0 or uv.x > 0.5
+				var on_ledge_or_ridge : bool = uv.y > 0.0 or uv.x > 0.5
 				
 				if not on_ledge_or_ridge:
 					_create_flower_instance(index, p, a, b, c, color_rng)

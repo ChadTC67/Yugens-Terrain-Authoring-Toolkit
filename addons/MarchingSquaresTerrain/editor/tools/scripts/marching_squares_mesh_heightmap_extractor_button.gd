@@ -86,7 +86,7 @@ func _on_filename_confirmed() -> void:
 
 
 func _show_overwrite_confirmation(path: String, filename: String) -> void:
-	var confirm_dialog = ConfirmationDialog.new()
+	var confirm_dialog := ConfirmationDialog.new()
 	confirm_dialog.title = "Overwrite File?"
 	confirm_dialog.dialog_text = "A heightmap with this name already exists.\nDo you want to overwrite it?"
 	

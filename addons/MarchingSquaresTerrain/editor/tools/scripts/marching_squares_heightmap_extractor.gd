@@ -199,14 +199,14 @@ static func run(
 						
 						if w1 >= 0.0 and w2 >= 0.0 and w3 >= 0.0 and w1 + w2 + w3 <= 1.0:
 							# Interpolate the height (y)
-							var p_height = (
+							var p_height := (
 								w1 * v1.y +
 								w2 * v2.y +
 								w3 * v3.y
 							)
 							# Look if this pixel already exists and if so if its the highest value
 							# This way meshes with non-heightmap based shapes still convert properly
-							var p_idx = py * IMAGE_RESOLUTION + px
+							var p_idx := py * IMAGE_RESOLUTION + px
 							heights[p_idx] = max(heights[p_idx], p_height)
 						else:
 							continue # Pixel lies outside the triangle
@@ -267,6 +267,7 @@ static func convert_to_array_mesh(mesh: Mesh) -> ArrayMesh:
 
 static func global_to_pixel_x(x: float, min_x: float, max_x: float) -> float:
 	return inverse_lerp(min_x, max_x, x) * (IMAGE_RESOLUTION - 1)
+
 
 static func global_to_pixel_y(z: float, min_z: float, max_z: float) -> float:
 	return inverse_lerp(min_z, max_z, z) * (IMAGE_RESOLUTION - 1)

@@ -2,13 +2,15 @@
 extends Resource
 class_name MarchingSquaresPostProcessEffect
 
+
 enum Target { TERRAIN, GRASS, BOTH }
 
-@export var enabled: bool = false
-@export var effect_name: String = ""
-@export var target: Target = Target.TERRAIN
-@export var shader: Shader
-@export var material_override: Material
+
+@export var enabled : bool = false
+@export var effect_name : String = ""
+@export var target : Target = Target.TERRAIN
+@export var shader : Shader
+@export var material_override : Material
 
 
 func build_runtime_material() -> Material:

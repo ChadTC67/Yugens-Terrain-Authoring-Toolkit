@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://sx50shr1w2g0"
-path="res://.godot/imported/3D_planters_icon.png-c52ac251e0889df980b84d9ac76f9fe6.ctex"
+path="res://.godot/imported/3D_populators_icon.png-5e0fe0148504cd7f5a0b91fe0689a399.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://addons/MarchingSquaresTerrain/editor/icons/3D_planters_icon.png"
-dest_files=["res://.godot/imported/3D_planters_icon.png-c52ac251e0889df980b84d9ac76f9fe6.ctex"]
+source_file="res://addons/MarchingSquaresTerrain/editor/icons/3D_populators_icon.png"
+dest_files=["res://.godot/imported/3D_populators_icon.png-5e0fe0148504cd7f5a0b91fe0689a399.ctex"]
 
 [params]
 

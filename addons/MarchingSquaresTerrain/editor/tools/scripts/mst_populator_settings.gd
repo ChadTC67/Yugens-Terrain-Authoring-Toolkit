@@ -4,7 +4,7 @@ class_name MarchingSquaresPopulatorSettings
 
 
 var plugin : MarchingSquaresTerrainPlugin
-var _built_for_terrain_id: int = 0
+var _built_for_terrain_id : int = 0
 
 const TEXTURE_SETTINGS_MIN_WIDTH_SMALL := 205
 const TEXTURE_SETTINGS_MIN_WIDTH_LARGE := 324
@@ -73,7 +73,7 @@ func add_populator_settings() -> void:
 	var populator_preview_size := _get_populator_preview_size()
 	vbox.set_custom_minimum_size(Vector2(texture_settings_min_width, 0))
 	
-	var pop_button = MarchingSquaresPopulateButton.new()
+	var pop_button := MarchingSquaresPopulateButton.new()
 	pop_button.current_terrain_node = plugin.current_terrain_node
 	var pop_cont := MarginContainer.new()
 	pop_cont.add_theme_constant_override("margin_bottom", 2)

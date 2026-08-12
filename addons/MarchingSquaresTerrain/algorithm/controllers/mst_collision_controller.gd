@@ -1,17 +1,18 @@
 extends RefCounted
 class_name MSTCollisionController
 
+
 const COLLISION_REFRESH_DEBOUNCE_MSEC := 180
 const COLLISION_REBUILDS_PER_EDITOR_FRAME := 1
 
 var terrain
 var _refresh_pending := false
-var _refresh_deadline_msec: int = 0
-var _rebuild_queue: Array[Vector2i] = []
-var _rebuild_queue_modes: Dictionary = {}
+var _refresh_deadline_msec : int = 0
+var _rebuild_queue : Array[Vector2i] = []
+var _rebuild_queue_modes : Dictionary = {}
 var in_progress := false
-var completed: int = 0
-var total: int = 0
+var completed : int = 0
+var total : int = 0
 
 
 func _init(terrain_owner) -> void:
@@ -23,7 +24,7 @@ func refresh_chunks(mark_dirty: bool = false, rebuild_from_source: bool = false)
 		return
 	if EngineWrapper.instance.is_editor():
 		for chunk_coords: Vector2i in terrain.chunks.keys():
-			var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(chunk_coords)
+			var chunk : MarchingSquaresTerrainChunk = terrain.chunks.get(chunk_coords)
 			if not is_instance_valid(chunk):
 				continue
 			if mark_dirty:
@@ -34,7 +35,7 @@ func refresh_chunks(mark_dirty: bool = false, rebuild_from_source: bool = false)
 		total = _rebuild_queue.size()
 		return
 	for chunk_coords: Vector2i in terrain.chunks.keys():
-		var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(chunk_coords)
+		var chunk : MarchingSquaresTerrainChunk = terrain.chunks.get(chunk_coords)
 		if not is_instance_valid(chunk):
 			continue
 		if mark_dirty:
@@ -71,8 +72,8 @@ func process_queue() -> void:
 	in_progress = true
 	var rebuild_count := mini(COLLISION_REBUILDS_PER_EDITOR_FRAME, _rebuild_queue.size())
 	for _i in range(rebuild_count):
-		var chunk_coords: Vector2i = _rebuild_queue.pop_front()
-		var rebuild_from_source: bool = bool(_rebuild_queue_modes.get(chunk_coords, false))
+		var chunk_coords : Vector2i = _rebuild_queue.pop_front()
+		var rebuild_from_source : bool = bool(_rebuild_queue_modes.get(chunk_coords, false))
 		_rebuild_queue_modes.erase(chunk_coords)
 		var chunk: MarchingSquaresTerrainChunk = terrain.chunks.get(chunk_coords)
 		if is_instance_valid(chunk):

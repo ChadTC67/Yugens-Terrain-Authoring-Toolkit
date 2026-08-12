@@ -1,6 +1,7 @@
 extends RefCounted
 class_name MSTMaterialController
 
+
 var terrain
 
 
@@ -37,7 +38,7 @@ func apply_global_wind(material: ShaderMaterial) -> void:
 func get_flower_planter_material(planter) -> ShaderMaterial:
 	if planter == null:
 		return null
-	var mesh: Mesh = null
+	var mesh : Mesh = null
 	if planter.get("flower_mesh") is Mesh:
 		mesh = planter.flower_mesh as Mesh
 	elif planter is MultiMeshInstance3D and planter.multimesh != null:
@@ -104,7 +105,7 @@ func sync_global_noise_to_grass() -> void:
 
 func sync_prefab_material_state() -> void:
 	var has_map := terrain.prefab_set != null and terrain.prefab_set.color_map != null
-	var color_map: Texture2D = terrain.prefab_set.color_map if has_map else null
+	var color_map : Texture2D = terrain.prefab_set.color_map if has_map else null
 	if terrain.terrain_material != null:
 		terrain.terrain_material.set_shader_parameter("tex_prefab_colormap", color_map)
 		terrain.terrain_material.set_shader_parameter("has_prefab_colormap", has_map)

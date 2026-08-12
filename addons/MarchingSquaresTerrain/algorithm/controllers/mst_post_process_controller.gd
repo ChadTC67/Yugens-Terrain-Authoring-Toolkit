@@ -1,10 +1,11 @@
 extends RefCounted
 class_name MSTPostProcessController
 
+
 var terrain
-var _connected_sources: Array[Resource] = []
-var _rebuild_in_progress: bool = false
-var _source_rebuild_queued: bool = false
+var _connected_sources : Array[Resource] = []
+var _rebuild_in_progress : bool = false
+var _source_rebuild_queued : bool = false
 
 
 func _init(terrain_owner) -> void:
@@ -55,10 +56,10 @@ func _on_effect_source_changed() -> void:
 
 
 func _build_chain(target: int) -> Material:
-	var head: Material = null
-	var tail: Material = null
+	var head : Material = null
+	var tail : Material = null
 	for array_name in ["surface_effects", "overlay_effects"]:
-		var effects: Array = terrain.get(array_name)
+		var effects : Array = terrain.get(array_name)
 		for effect in effects:
 			if not (effect is MarchingSquaresPostProcessEffect) or not effect.enabled or not effect.has_source():
 				continue
@@ -66,7 +67,7 @@ func _build_chain(target: int) -> Material:
 				continue
 			_connect_source_signal(effect.shader)
 			_connect_source_signal(effect.material_override)
-			var material: Material = effect.build_runtime_material()
+			var material : Material = effect.build_runtime_material()
 			if material == null:
 				continue
 			material.next_pass = null

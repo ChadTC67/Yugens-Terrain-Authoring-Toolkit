@@ -15,8 +15,9 @@ func is_editor() -> bool:
 
 
 func get_edited_scene_root() -> Node:
-	var editor_interface = Engine.get_singleton('EditorInterface')
+	var editor_interface := Engine.get_singleton('EditorInterface')
 	return editor_interface.get_edited_scene_root()
+
 
 func mark_scene_as_unsaved() -> void:
 	var editor_interface = Engine.get_singleton('EditorInterface')

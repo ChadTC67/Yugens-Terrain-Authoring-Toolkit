@@ -50,7 +50,7 @@ func ensure_initialized() -> void:
 			texture_names.append(_default_texture_slot_label(i))
 	elif texture_names.size() > MAX_TEXTURE_SLOTS:
 		texture_names.resize(MAX_TEXTURE_SLOTS)
-
+	
 	# Keep the legacy void slot name stable/obvious.
 	var VOID_SLOT := 15
 	if texture_names.size() > VOID_SLOT:

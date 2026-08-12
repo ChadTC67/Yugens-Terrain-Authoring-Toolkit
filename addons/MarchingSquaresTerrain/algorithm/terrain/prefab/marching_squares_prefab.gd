@@ -1,8 +1,9 @@
 @tool
 extends Resource
 class_name MarchingSquaresPrefab
-			
-	
+
+
+
 @export var size : Vector3 = Vector3(0.5, 0.5, 0.5)
 
 class PrefabData:
@@ -11,20 +12,21 @@ class PrefabData:
 	var weights : Dictionary[String, PackedFloat32Array]
 	var size : Vector3
 
+var _arrays : Dictionary[String, PrefabData] = {}
+
 
 func get_data(key: String) -> PrefabData:
 	if _arrays.has(key):
 		return _arrays[key]
 	return null
 
-var _arrays: Dictionary[String, PrefabData] = {}
 
 func _prepare(key: String, scene: PackedScene, is_diag_floor: bool = false, is_cap_floor: bool = false) -> void:
 	if not scene:
 		return
 	var _inst : Node3D = scene.instantiate()
 	var n := _inst.name
-	var inst = _inst.get_child(0) as MeshInstance3D
+	var inst := _inst.get_child(0) as MeshInstance3D
 	
 	if not inst or not inst.mesh:
 		return
@@ -56,7 +58,6 @@ func _prepare(key: String, scene: PackedScene, is_diag_floor: bool = false, is_c
 		var u : float = verts[i].x / size.x
 		var v : float = verts[i].y / size.y
 		var w : float = verts[i].z / size.z
-
 		
 		var iu := 1.0 - u
 		var iv := 1.0 - v
@@ -71,20 +72,19 @@ func _prepare(key: String, scene: PackedScene, is_diag_floor: bool = false, is_c
 		weights["b"][i] = u  * v  * iw  # w110  c2 └────────┘ d2   
 		weights["d"][i] = u  * v  * w   # w111     
 		
-		
-		if is_diag_floor:# key.begins_with("m1.2"):
+		if is_diag_floor: # key.begins_with("m1.2"):
 			weights["d"][i] = 0
 			weights["a2"][i] = 0
-		if is_cap_floor: #key.begins_with("m3.2"):
+		if is_cap_floor: # key.begins_with("m3.2"):
 			weights["b2"][i] = 0
 			weights["c2"][i] = 0
-			
+		
 		# Normalize the weights
 		var sum := 0.0
 		for k in ["a","b","c","d","a2","b2","c2","d2"]:
 			sum += weights[k][i]
 		for k in ["a","b","c","d","a2","b2","c2","d2"]:
 			weights[k][i] /= sum
-				
+	
 	data.weights = weights
 	_arrays[key] = data

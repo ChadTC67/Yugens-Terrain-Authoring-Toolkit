@@ -89,7 +89,6 @@ var material : Dictionary = {
 	"default": 0,
 }
 
-
 var texture_preset : Dictionary = {
 	"name": "texture_preset",
 	"type": "preset",

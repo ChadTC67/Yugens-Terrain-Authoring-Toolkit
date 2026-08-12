@@ -3,7 +3,7 @@ extends Resource
 class_name MarchingSquaresQuickPaint
 
 
-const TEXTURE_NAMES = preload("uid://dd7fens03aosa")
+const TEXTURE_NAMES := preload("uid://dd7fens03aosa")
 
 @export var paint_name : String = "New Paint"
 
@@ -19,7 +19,7 @@ var ground_texture_slot : int = 0
 func _get_property_list() -> Array[Dictionary]:
 	MarchingSquaresTerrainPlugin._ensure_texture_names_resource(TEXTURE_NAMES)
 	var properties : Array[Dictionary] = []
-
+	
 	# Wall texture dropdown (uses unified texture names - any of 16 textures can be used for walls)
 	properties.append({
 		"name": "wall_texture_slot",
@@ -28,7 +28,7 @@ func _get_property_list() -> Array[Dictionary]:
 		"hint_string": ",".join(TEXTURE_NAMES.texture_names),
 		"usage": PROPERTY_USAGE_DEFAULT,
 	})
-
+	
 	# Ground texture dropdown (uses unified texture names)
 	properties.append({
 		"name": "ground_texture_slot",
@@ -37,5 +37,5 @@ func _get_property_list() -> Array[Dictionary]:
 		"hint_string": ",".join(TEXTURE_NAMES.texture_names),
 		"usage": PROPERTY_USAGE_DEFAULT,
 	})
-
+	
 	return properties

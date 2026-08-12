@@ -1,8 +1,9 @@
 @tool
 class_name BrushPatternCalculator
-
 ## Calculates which cells fall within a brush and their falloff samples.
 ## Used by both plugin (for editing) and gizmo (for visualization).
+
+
 class BrushBounds:
 	var chunk_tl : Vector2i
 	var chunk_br : Vector2i
@@ -75,13 +76,13 @@ static func calculate_falloff_sample(
 	var t : float = 0.0
 	match brush_index:
 		0: # Round brush (linear by radius, not squared-distance)
-			var denom: float = max(brush_size, 0.0001)
-			var dist: float = sqrt(distance_squared)
+			var denom : float = max(brush_size, 0.0001)
+			var dist : float = sqrt(distance_squared)
 			t = 1.0 - clamp(dist / denom, 0.0, 1.0)
 		1: # Square brush
-			var local: Vector2 = world_pos - brush_pos
-			var denom: float = max(brush_size, 0.0001)
-			var uv: Vector2 = local / denom
+			var local : Vector2 = world_pos - brush_pos
+			var denom : float = max(brush_size, 0.0001)
+			var uv : Vector2 = local / denom
 			var d : float = max(abs(uv.x), abs(uv.y))
 			t = 1.0 - clamp(d, 0.0, 1.0)
 	
@@ -104,13 +105,16 @@ static func calculate_wall_falloff_sample(
 	var n := wall_normal.normalized()
 	if n.length_squared() < 0.001:
 		n = Vector3.BACK
+	
 	var tangent := Vector3.UP.cross(n)
 	if tangent.length_squared() < 0.001:
 		tangent = Vector3.RIGHT.cross(n)
 	tangent = tangent.normalized()
+	
 	var bitangent := n.cross(tangent).normalized()
 	var delta := world_pos - brush_pos
 	var plane_pos := Vector2(delta.dot(tangent), delta.dot(bitangent))
+	
 	return calculate_falloff_sample(
 		plane_pos,
 		Vector2.ZERO,
@@ -148,7 +152,8 @@ static func cell_to_wall_sample_pos(
 	var world_pos := cell_to_world_pos(chunk_coords, cell_coords, terrain, true)
 	if terrain == null or not terrain.chunks.has(chunk_coords):
 		return Vector3(world_pos.x, brush_pos.y, world_pos.y)
-	var chunk: MarchingSquaresTerrainChunk = terrain.chunks[chunk_coords]
+	
+	var chunk : MarchingSquaresTerrainChunk = terrain.chunks[chunk_coords]
 	var center_height := _sample_chunk_height(chunk, cell_coords.x, cell_coords.y, brush_pos.y)
 	var min_height := center_height
 	var max_height := center_height
@@ -159,7 +164,9 @@ static func cell_to_wall_sample_pos(
 			var h := _sample_chunk_height(chunk, cell_coords.x + dx, cell_coords.y + dz, center_height)
 			min_height = min(min_height, h)
 			max_height = max(max_height, h)
+	
 	var sample_y := clampf(brush_pos.y, min_height, max_height)
+	
 	return Vector3(world_pos.x, sample_y, world_pos.y)
 
 

@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://sydb48gksm6o"]
 
-[ext_resource type="Script" uid="uid://bhr82jo0k7guh" path="res://scripts/rotating_camera.gd" id="1_0xhur"]
+[ext_resource type="Script" uid="uid://bhr82jo0k7guh" path="res://scripts/camera_controller.gd" id="1_0xhur"]
 [ext_resource type="Script" uid="uid://6pvgykbbdsmg" path="res://scripts/demo_scene.gd" id="1_rcx4y"]
 [ext_resource type="Script" uid="uid://cddg1xr5hye1d" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain.gd" id="3_sfax4"]
 [ext_resource type="Texture2D" uid="uid://dbnc04k3n0sro" path="res://addons/MarchingSquaresTerrain/resources/plugin_materials/grass_terrain_noise.res" id="4_7be7e"]

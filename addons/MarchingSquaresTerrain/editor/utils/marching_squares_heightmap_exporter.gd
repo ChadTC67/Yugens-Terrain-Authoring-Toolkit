@@ -23,14 +23,14 @@ static func run(
 ) -> void:
 	# --- Build progress dialog ---
 	var base_control := EditorInterface.get_base_control()
-	
+		
 	var dialog := Popup.new()
 	dialog.exclusive = true
 	dialog.unresizable = true
 	var window_size := DisplayServer.window_get_size()
 	dialog.size = Vector2i(int(window_size.x * 0.3), int(window_size.y * 0.15))
 	dialog.theme = base_control.get_theme()
-	
+		
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = base_control.get_theme_color("base_color", "Editor")
 	panel_style.corner_radius_top_left = 10

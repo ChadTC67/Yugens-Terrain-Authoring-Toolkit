@@ -141,10 +141,10 @@ var last_setting_type : SettingType = SettingType.ERROR
 var selected_chunk : MarchingSquaresTerrainChunk
 var current_available_chunks : Array[MarchingSquaresTerrainChunk] = []
 
-var _terrain_settings_selected_tab: int = 0
-var _chunk_management_selected_tab: int = 0
-var _terrain_settings_scroll_positions: Dictionary = {}
-var _wind_setting_rows: Dictionary = {}
+var _terrain_settings_selected_tab : int = 0
+var _chunk_management_selected_tab : int = 0
+var _terrain_settings_scroll_positions : Dictionary = {}
+var _wind_setting_rows : Dictionary = {}
 
 var _heightmap_tool_selected_tab : int = 0
 var _heightmap_tool_scroll_positions : Dictionary = {}
@@ -195,12 +195,12 @@ func _resource_label_from_file(path: String, property_name: String, fallback: St
 
 
 func _get_vertex_paint_material_slots() -> Array[int]:
-	var slots: Array[int] = []
+	var slots : Array[int] = []
 	var terrain = plugin.current_terrain_node if plugin != null else null
 	if terrain == null:
 		slots.append(0)
 		return slots
-
+	
 	slots.append(15)
 	var highest_active_slot := 0
 	for slot_idx in range(plugin.MAX_TEXTURE_SLOTS):
@@ -212,7 +212,7 @@ func _get_vertex_paint_material_slots() -> Array[int]:
 			is_active = bool(slot_obj.get("active")) or slot_idx == 0
 		if is_active:
 			highest_active_slot = slot_idx
-
+	
 	for slot_idx in range(highest_active_slot + 1):
 		if slot_idx == 15:
 			continue
@@ -222,14 +222,14 @@ func _get_vertex_paint_material_slots() -> Array[int]:
 			is_active = bool(slot_obj.get("active"))
 		if slot_idx == 0 or is_active:
 			slots.append(slot_idx)
-
+	
 	if slots.is_empty():
 		slots.append(0)
 	return slots
 
 
 func _get_visible_texture_option_slots(include_void: bool = false) -> Array[int]:
-	var slots: Array[int] = []
+	var slots : Array[int] = []
 	var terrain = plugin.current_terrain_node if plugin != null else null
 	if terrain == null:
 		for slot_idx in range(6):
@@ -237,16 +237,16 @@ func _get_visible_texture_option_slots(include_void: bool = false) -> Array[int]
 				continue
 			slots.append(slot_idx)
 		return slots
-
+	
 	var visible_count := 6
 	if terrain.get("visible_texture_slot_count") != null:
 		visible_count = clampi(int(terrain.get("visible_texture_slot_count")), 6, plugin.MAX_TEXTURE_SLOTS)
-
+	
 	for slot_idx in range(visible_count):
 		if slot_idx == 15 and not include_void:
 			continue
 		slots.append(slot_idx)
-
+	
 	if slots.is_empty():
 		slots.append(0)
 	return slots
@@ -271,20 +271,20 @@ func show_tool_attributes(tool_index: int) -> void:
 	hbox_container.add_theme_constant_override("separation", 5)
 	hbox_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hbox_container.size_flags_vertical = Control.SIZE_FILL
-
+	
 	if not visible:
 		return
-
+	
 	for child in get_children():
 		child.queue_free()
 	settings.clear()
-
+	
 	if not plugin.toolbar.toolbox:
 		return
-
+	
 	var tool := plugin.toolbar.toolbox.tools.get(tool_index)
 	var tool_attributes : MarchingSquaresToolAttributeSettings = tool.get("attributes")
-	var type_map = {
+	var type_map := {
 		"slider": SettingType.SLIDER,
 		"checkbox": SettingType.CHECKBOX,
 		"option": SettingType.OPTION,
@@ -295,7 +295,7 @@ func show_tool_attributes(tool_index: int) -> void:
 		"quick_paint": SettingType.QUICK_PAINT,
 		"heightmap": SettingType.HEIGHTMAP,
 	}
-
+	
 	var new_attributes := []
 	if tool_attributes.brush_type:
 		new_attributes.append(attribute_list.brush_type)
@@ -342,7 +342,7 @@ func show_tool_attributes(tool_index: int) -> void:
 		terrain_names = plugin.current_terrain_node.current_texture_preset.new_tex_names.texture_names
 	else:
 		terrain_names = attribute_list.vp_tex_names.texture_names  # fallback
-	var material_options: Array[String] = []
+	var material_options : Array[String] = []
 	for slot_idx in _get_vertex_paint_material_slots():
 		material_options.append(_get_vertex_paint_material_label(slot_idx, terrain_names))
 	attribute_list.material["options"] = material_options
@@ -378,7 +378,7 @@ func add_setting(p_params: Dictionary) -> void:
 		label.set_text(label_text + ':')
 		label.set_vertical_alignment(VERTICAL_ALIGNMENT_CENTER)
 		label.set_custom_minimum_size(Vector2(50, 25))
-
+	
 		var c_cont := CenterContainer.new()
 		c_cont.set_custom_minimum_size(Vector2(50, 35))
 		c_cont.add_child(label, true)
@@ -448,7 +448,7 @@ func add_setting(p_params: Dictionary) -> void:
 		SettingType.OPTION:
 			var options : Array = p_params.get("options", [])
 			var option_button := OptionButton.new()
-			var material_slots: Array[int] = []
+			var material_slots : Array[int] = []
 			var default_value = p_params.get("default", 0) # Fallback base value
 			if setting_name == "material":
 				material_slots = _get_vertex_paint_material_slots()
@@ -544,7 +544,7 @@ func add_setting(p_params: Dictionary) -> void:
 				
 				# Sync dropdown selection with current plugin.current_texture_preset
 				var terrain := MarchingSquaresTerrainPlugin.instance.current_terrain_node
-				var current_texture_preset = terrain.current_texture_preset if terrain else null
+				var current_texture_preset := terrain.current_texture_preset if terrain else null
 				if current_texture_preset == null:
 					preset_button.select(0)  # Select "None"
 				else:
@@ -1059,7 +1059,7 @@ func _create_chunk_configuration_page() -> Control:
 			chunk_button.add_item("Chunk " + str(terrain_chunk.chunk_coords))
 			current_available_chunks.append(terrain_chunk)
 	if not current_available_chunks.is_empty():
-		var preferred_chunk: MarchingSquaresTerrainChunk = plugin.selected_chunk
+		var preferred_chunk : MarchingSquaresTerrainChunk = plugin.selected_chunk
 		if preferred_chunk == null and plugin.current_terrain_node.chunks.has(plugin.current_hovered_chunk):
 			preferred_chunk = plugin.current_terrain_node.chunks[plugin.current_hovered_chunk]
 		if preferred_chunk == null:
@@ -1069,21 +1069,21 @@ func _create_chunk_configuration_page() -> Control:
 		chunk_button.selected = current_available_chunks.find(preferred_chunk)
 	else:
 		chunk_button.selected = -1
-
+	
 	var option_button := OptionButton.new()
 	option_button.set_flat(true)
 	for mode in MarchingSquaresTerrainChunk.Mode:
 		option_button.add_item(_format_constant_string(mode))
 	option_button.selected = plugin.selected_chunk.merge_mode if not current_available_chunks.is_empty() and plugin.selected_chunk else -1
 	option_button.item_selected.connect(_on_chunk_mode_changed)
-
+	
 	var grass_mode_button := OptionButton.new()
 	grass_mode_button.set_flat(true)
 	grass_mode_button.add_item("Grass")
 	grass_mode_button.add_item("Grassless")
 	grass_mode_button.selected = plugin.selected_chunk.grass_mode if not current_available_chunks.is_empty() and plugin.selected_chunk else -1
 	grass_mode_button.item_selected.connect(_on_chunk_grass_mode_changed)
-
+	
 	chunk_button.set_flat(true)
 	chunk_button.item_selected.connect(func(chunk): _on_chunk_selected(option_button, grass_mode_button, chunk_button.get_item_text(chunk)))
 	var mult_apply_button := Button.new()
@@ -1168,16 +1168,16 @@ func _create_terrain_settings_tabs() -> Control:
 	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tabs.size_flags_vertical = Control.SIZE_FILL
 	tabs.set_custom_minimum_size(Vector2(0, TOOL_TAB_MIN_HEIGHT))
-
+	
 	tabs.add_child(_create_vertex_painter_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Vertex Painter")
 	
 	tabs.add_child(_create_environment_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Environment")
-
+	
 	tabs.add_child(_create_wind_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Wind")
-
+	
 	tabs.add_child(_create_post_processing_tab())
 	tabs.set_tab_title(tabs.get_tab_count() - 1, "Post-Processing")
 	
@@ -1443,39 +1443,39 @@ func _create_terrain_settings_list(setting_names: Array) -> Control:
 	var left_spacer := Control.new()
 	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wrapper.add_child(left_spacer, true)
-
+	
 	var columns := HBoxContainer.new()
 	columns.add_theme_constant_override("separation", 18)
 	columns.set_custom_minimum_size(Vector2(1060, 0))
 	columns.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	columns.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-
+	
 	var left_column := VBoxContainer.new()
 	left_column.add_theme_constant_override("separation", 6)
 	left_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var right_column := VBoxContainer.new()
 	right_column.add_theme_constant_override("separation", 6)
 	right_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	var valid_settings: Array[String] = []
+	
+	var valid_settings : Array[String] = []
 	for setting_name_variant in setting_names:
 		var setting_name := str(setting_name_variant)
 		if not terrain_settings_data.has(setting_name):
 			continue
 		valid_settings.append(setting_name)
-
+	
 	for i in range(valid_settings.size()):
 		var setting_row := _create_terrain_setting_row(valid_settings[i])
 		if i % 2 == 0:
 			left_column.add_child(setting_row, true)
 		else:
 			right_column.add_child(setting_row, true)
-
+	
 	columns.add_child(left_column, true)
 	columns.add_child(VSeparator.new(), true)
 	columns.add_child(right_column, true)
 	wrapper.add_child(columns, true)
-
+	
 	var right_spacer := Control.new()
 	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wrapper.add_child(right_spacer, true)
@@ -1489,7 +1489,7 @@ func _create_terrain_setting_row(setting: String) -> Control:
 	var floor_blend_is_noisy := int(plugin.current_terrain_node.get("floor_blend_mode")) == 1
 	if setting == "blend_sharpness" and floor_blend_is_noisy:
 		s_value = plugin.current_terrain_node.get("blend_noise_threshold")
-
+	
 	var hbox := HBoxContainer.new()
 	hbox.name = setting
 	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2049,8 +2049,10 @@ func _make_exporter_checkbox_row(label_text: String, setting_name: String, curre
 func on_exporter_setting_changed(p_name: String, p_value: Variant) -> void:
 	emit_signal("setting_changed", p_name, p_value)
 
+
 func on_extractor_setting_changed(p_name: String, p_value: Variant) -> void:
 	emit_signal("setting_changed", p_name, p_value)
+
 
 func export_terrain_heightmap(filename) -> void:
 	plugin.terrain_heightmap_folder_name = filename

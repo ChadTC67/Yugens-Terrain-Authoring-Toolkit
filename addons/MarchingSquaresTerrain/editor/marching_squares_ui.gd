@@ -50,22 +50,22 @@ func _deferred_enter_tree() -> void:
 	if not EngineWrapper.instance.is_editor():
 		push_error("Attempt to load during runtime (NOT SUPPORTED IN CURRENT BUILD)")
 		return
-
+	
 	if not plugin:
 		push_error("Plugin not ready")
 		return
-
+	
 	toolbar = TOOLBAR.new()
 	toolbar.tool_changed.connect(_on_tool_changed)
 	toolbar.hide()
-
+	
 	tool_attributes = TOOL_ATTRIBUTES.new()
 	tool_attributes.setting_changed.connect(_on_setting_changed)
 	tool_attributes.terrain_setting_changed.connect(_on_terrain_setting_changed)
 	tool_attributes.plugin = plugin
 	tool_attributes.attribute_list = MarchingSquaresToolAttributesList.new()
 	tool_attributes.hide()
-
+	
 	texture_settings = TEXTURE_SETTINGS.new()
 	texture_settings.texture_setting_changed.connect(_on_texture_setting_changed)
 	texture_settings.plugin = plugin
@@ -157,7 +157,7 @@ func _on_setting_changed(p_setting_name: String, p_value: Variant) -> void:
 			if p_value is int:
 				plugin.current_brush_index = p_value
 				plugin.BRUSH_RADIUS_VISUAL = plugin.BrushMode.get(str(p_value))
-				var mat = plugin.BrushMat.get(str(p_value))
+				var mat := plugin.BrushMat.get(str(p_value))
 				plugin.BRUSH_RADIUS_MATERIAL = mat.duplicate(true) if mat != null else null
 				if plugin.BRUSH_RADIUS_MATERIAL:
 					var visible := plugin.falloff

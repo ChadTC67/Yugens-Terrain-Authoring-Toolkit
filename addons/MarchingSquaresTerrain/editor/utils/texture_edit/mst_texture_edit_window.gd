@@ -2,6 +2,7 @@
 extends AcceptDialog
 class_name MarchingSquaresTextureEditWindow
 
+
 signal blend_mode_changed(slot_idx: int, blend_mode: int)
 signal color_value_changed(slot_idx: int, palette_idx: int, color: Color)
 signal color_picker_closed(slot_idx: int)
@@ -13,10 +14,10 @@ signal add_color_requested(slot_idx: int)
 const SINGLE_COLOR_CONTAINER := preload("uid://cf8710euu81ol")
 const MSTextureLibraryScript := preload("uid://iyvy0c8carkd")
 
-var available_preview_sources: Array = []
-var current_preview_index: int = 0
-var _material_preview_cache: Dictionary = {}
-var _color_slot_idx: int = -1
+var available_preview_sources : Array = []
+var current_preview_index : int = 0
+var _material_preview_cache : Dictionary = {}
+var _color_slot_idx : int = -1
 
 # Viewport nodes
 @export var texture_preview : TextureRect
@@ -296,12 +297,14 @@ func _compute_slot_albedo_color(terrain, texture: Texture2D) -> Color:
 		return Color(1, 1, 1, 0)
 	if not terrain.has_method("_get_decompressed_image"):
 		return Color(1, 1, 1, 0)
-	var img: Image = terrain._get_decompressed_image(texture)
+	
+	var img : Image = terrain._get_decompressed_image(texture)
 	if img == null or img.is_empty():
 		return Color(1, 1, 1, 0)
 	if img.get_format() != Image.FORMAT_RGBA8:
 		img.convert(Image.FORMAT_RGBA8)
-	var sample_img: Image = img
+	
+	var sample_img : Image = img
 	var max_dim := maxi(sample_img.get_width(), sample_img.get_height())
 	if max_dim > 16:
 		var scale := 16.0 / float(max_dim)
@@ -309,39 +312,45 @@ func _compute_slot_albedo_color(terrain, texture: Texture2D) -> Color:
 		var target_h := maxi(1, int(round(sample_img.get_height() * scale)))
 		sample_img = sample_img.duplicate()
 		sample_img.resize(target_w, target_h, Image.INTERPOLATE_BILINEAR)
+	
 	var accum := Color(0, 0, 0, 0)
 	var count := 0.0
 	for y in range(sample_img.get_height()):
 		for x in range(sample_img.get_width()):
-			var px: Color = sample_img.get_pixel(x, y)
+			var px : Color = sample_img.get_pixel(x, y)
 			if px.a <= 0.001:
 				continue
 			accum.r += px.r
 			accum.g += px.g
 			accum.b += px.b
 			count += 1.0
+	
 	if count <= 0.0:
 		return Color(1, 1, 1, 0)
+	
 	return Color(accum.r / count, accum.g / count, accum.b / count, 1.0)
 
 
 func _material_preview_cache_key(terrain, slot_idx: int) -> String:
-	var terrain_id: int = terrain.get_instance_id() if terrain != null else 0
+	var terrain_id : int = terrain.get_instance_id() if terrain != null else 0
 	return "%s:%s" % [terrain_id, slot_idx]
 
 
 func _build_material_preview_signature(terrain, slot_idx: int) -> String:
 	if terrain == null or slot_idx < 0:
 		return "invalid"
-	var parts: Array[String] = []
+	
+	var parts : Array[String] = []
 	var albedo_tex := _get_slot_albedo_texture(terrain, slot_idx)
 	parts.append(str(albedo_tex.get_rid()) if albedo_tex != null else "no_albedo")
+	
 	var noise_tex := _coerce_texture2d(terrain.get("global_noise_texture")) if terrain.has_method("get") else null
 	parts.append(str(noise_tex.get_rid()) if noise_tex != null else "no_noise")
+	
 	if slot_idx < terrain.texture_slots.size() and terrain.texture_slots[slot_idx] != null:
-		var raw_scale: Variant = terrain.texture_slots[slot_idx].get("scale")
+		var raw_scale : Variant = terrain.texture_slots[slot_idx].get("scale")
 		parts.append(str(raw_scale))
-		var raw_albedo: Variant = terrain.texture_slots[slot_idx].get("albedo")
+		var raw_albedo : Variant = terrain.texture_slots[slot_idx].get("albedo")
 		parts.append(str(raw_albedo))
 	if slot_idx < terrain.slot_blend_modes.size():
 		parts.append(str(terrain.slot_blend_modes[slot_idx]))
@@ -353,11 +362,12 @@ func _build_material_preview_signature(terrain, slot_idx: int) -> String:
 				parts.append(str(terrain.palette_colors[palette_idx]))
 			if palette_idx >= 0 and palette_idx < terrain.palette_weights.size():
 				parts.append(str(terrain.palette_weights[palette_idx]))
+	
 	return "|".join(parts)
 
 
 func _clear_material_preview_cache_for_slot(terrain, slot_idx: int) -> void:
-	var preview_cache: Variant = _material_preview_cache
+	var preview_cache : Variant = _material_preview_cache
 	if not (preview_cache is Dictionary):
 		_material_preview_cache = {}
 		return
@@ -376,7 +386,7 @@ func _get_preview_noise_image(terrain) -> Image:
 
 
 func _get_slot_preview_entries(terrain, slot_idx: int) -> Array:
-	var entries: Array = []
+	var entries : Array = []
 	if terrain == null or slot_idx < 0 or slot_idx >= terrain.slot_color_indices.size():
 		return entries
 	var indices: Array = terrain.slot_color_indices[slot_idx]
@@ -398,19 +408,19 @@ func _sample_preview_noise(noise_img: Image, uv: Vector2) -> float:
 	if noise_img == null:
 		var seed_value: float = sin(uv.dot(Vector2(12.9898, 78.233))) * 43758.5453
 		return seed_value - floor(seed_value)
-	var w: int = noise_img.get_width()
-	var h: int = noise_img.get_height()
+	var w : int = noise_img.get_width()
+	var h : int = noise_img.get_height()
 	if w <= 0 or h <= 0:
 		return 0.5
-	var fx: float = uv.x - floor(uv.x)
-	var fy: float = uv.y - floor(uv.y)
-	var px: int = clampi(int(floor(fx * float(w))), 0, w - 1)
-	var py: int = clampi(int(floor(fy * float(h))), 0, h - 1)
+	var fx : float = uv.x - floor(uv.x)
+	var fy : float = uv.y - floor(uv.y)
+	var px : int = clampi(int(floor(fx * float(w))), 0, w - 1)
+	var py : int = clampi(int(floor(fy * float(h))), 0, h - 1)
 	return noise_img.get_pixel(px, py).r
 
 
 func _preview_hash(coord: Vector2) -> float:
-	var seed_value: float = sin(coord.dot(Vector2(127.1, 311.7))) * 43758.5453
+	var seed_value : float = sin(coord.dot(Vector2(127.1, 311.7))) * 43758.5453
 	return seed_value - floor(seed_value)
 
 
@@ -424,14 +434,14 @@ func _preview_smoothstep(edge0: float, edge1: float, x: float) -> float:
 func _sample_preview_albedo(albedo_img: Image, uv: Vector2) -> Color:
 	if albedo_img == null:
 		return Color(1.0, 1.0, 1.0, 1.0)
-	var w: int = albedo_img.get_width()
-	var h: int = albedo_img.get_height()
+	var w : int = albedo_img.get_width()
+	var h : int = albedo_img.get_height()
 	if w <= 0 or h <= 0:
 		return Color(1.0, 1.0, 1.0, 1.0)
-	var fx: float = clampf(uv.x, 0.0, 1.0)
-	var fy: float = clampf(uv.y, 0.0, 1.0)
-	var px: int = clampi(int(floor(fx * float(w))), 0, w - 1)
-	var py: int = clampi(int(floor(fy * float(h))), 0, h - 1)
+	var fx : float = clampf(uv.x, 0.0, 1.0)
+	var fy : float = clampf(uv.y, 0.0, 1.0)
+	var px : int = clampi(int(floor(fx * float(w))), 0, w - 1)
+	var py : int = clampi(int(floor(fy * float(h))), 0, h - 1)
 	return albedo_img.get_pixel(px, py)
 
 
@@ -440,8 +450,10 @@ func _preview_palette_color(entries: Array, blend_mode: int, noise_uv: Vector2, 
 		return Color(1.0, 1.0, 1.0, 0.0)
 	if entries.size() == 1:
 		return entries[0]["color"]
+	
 	var color_count := entries.size()
 	var gradient_mode := blend_mode != 1 and blend_mode != 2 and blend_mode != 3
+	
 	# Match terrain palette remap scales (gradient 0.014 / discrete 0.008).
 	var palette_gn_scale := 0.014 if gradient_mode else 0.008
 	var n := 1.0 - _sample_preview_noise(noise_img, noise_uv * palette_gn_scale)
@@ -450,17 +462,20 @@ func _preview_palette_color(entries: Array, blend_mode: int, noise_uv: Vector2, 
 		n = clampf(sign(centered) * pow(absf(centered), 0.55) * 0.5 + 0.5, 0.0, 1.0)
 	else:
 		n = _preview_smoothstep(0.0, 1.0, n)
-	var ws: Array[float] = []
+	
+	var ws : Array[float] = []
 	ws.resize(color_count)
 	var total := 0.0
 	for i in range(color_count):
 		var current_weight := maxf(float(entries[i]["weight"]) / 100.0, 0.0)
 		ws[i] = current_weight
 		total += current_weight
+	
 	if total <= 0.0001:
 		total = float(color_count)
 		for i in range(color_count):
 			ws[i] = 1.0
+	
 	var x := clampf(n, 0.0, 1.0) * total
 	var i0 := 0
 	var start := 0.0
@@ -474,6 +489,7 @@ func _preview_palette_color(entries: Array, blend_mode: int, noise_uv: Vector2, 
 			w0 = wi
 			break
 		cumulative += wi
+	
 	var i1 := mini(i0 + 1, color_count - 1)
 	var t := 0.0
 	if w0 > 0.00001:
@@ -481,7 +497,7 @@ func _preview_palette_color(entries: Array, blend_mode: int, noise_uv: Vector2, 
 	if blend_mode == 1:
 		return entries[i0]["color"]
 	elif blend_mode == 2:
-		var result: Color = entries[i0]["color"]
+		var result : Color = entries[i0]["color"]
 		var boundary := 0.0
 		var transition := maxf(total * 0.09, 0.0001)
 		var dither_coord := Vector2(floor(surface_coords.x * 8.0), floor(surface_coords.y * 8.0))
@@ -495,7 +511,7 @@ func _preview_palette_color(entries: Array, blend_mode: int, noise_uv: Vector2, 
 				result = entries[i + 1]["color"]
 		return result
 	elif blend_mode == 3:
-		var result: Color = entries[i0]["color"]
+		var result : Color = entries[i0]["color"]
 		var boundary := 0.0
 		var transition := maxf(total * 0.09, 0.0001)
 		var seam := 0.12
@@ -512,6 +528,7 @@ func _preview_palette_color(entries: Array, blend_mode: int, noise_uv: Vector2, 
 			elif blend_t >= 0.5 - seam:
 				result = next_color if checker > 0.5 else result
 		return result
+	
 	var accum_color := Color(0.0, 0.0, 0.0, 0.0)
 	var accum_weight := 0.0
 	var band_start := 0.0
@@ -532,8 +549,10 @@ func _preview_palette_color(entries: Array, blend_mode: int, noise_uv: Vector2, 
 				accum_color += entries[i]["color"] * band_weight
 				accum_weight += band_weight
 		band_start = band_end
+	
 	if accum_weight > 0.0001:
 		return accum_color / accum_weight
+	
 	return entries[i0]["color"].lerp(entries[i1]["color"], t)
 
 
@@ -541,6 +560,7 @@ func _tint_preview_pixel(src: Color, palette: Color, base_albedo: Color) -> Colo
 	var alpha := clampf(palette.a, 0.0, 1.0)
 	if alpha <= 0.0001:
 		return src
+	
 	var src_linear := src.srgb_to_linear()
 	var palette_linear := palette.srgb_to_linear()
 	var base_linear := base_albedo.srgb_to_linear()
@@ -559,30 +579,35 @@ func _tint_preview_pixel(src: Color, palette: Color, base_albedo: Color) -> Colo
 		clampf(src_linear.b * mul_b, 0.0, 1.0),
 		src.a
 	)
+	
 	return tinted_linear.linear_to_srgb()
 
 
 func _make_material_preview_texture(terrain, slot_idx: int) -> Texture2D:
 	if terrain == null or slot_idx < 0:
 		return null
-	var preview_cache: Variant = _material_preview_cache
+	
+	var preview_cache : Variant = _material_preview_cache
 	if not (preview_cache is Dictionary):
 		_material_preview_cache = {}
 		preview_cache = _material_preview_cache
+	
 	var cache_key := _material_preview_cache_key(terrain, slot_idx)
 	var signature := _build_material_preview_signature(terrain, slot_idx)
 	if preview_cache.has(cache_key):
-		var cached: Variant = preview_cache[cache_key]
+		var cached : Variant = preview_cache[cache_key]
 		if cached is Dictionary and str(cached.get("signature", "")) == signature:
-			var cached_texture: Variant = cached.get("texture")
+			var cached_texture : Variant = cached.get("texture")
 			if cached_texture is Texture2D:
 				return cached_texture
+	
 	var texture := _get_slot_albedo_texture(terrain, slot_idx)
 	if texture == null:
 		return null
 	if not terrain.has_method("_get_decompressed_image"):
 		return texture
-	var img: Image = terrain._get_decompressed_image(texture)
+	
+	var img : Image = terrain._get_decompressed_image(texture)
 	if img == null:
 		return texture
 	img = img.duplicate()
@@ -590,17 +615,19 @@ func _make_material_preview_texture(terrain, slot_idx: int) -> Texture2D:
 		return texture
 	if img.get_format() != Image.FORMAT_RGBA8:
 		img.convert(Image.FORMAT_RGBA8)
+	
 	var iw := img.get_width()
 	var ih := img.get_height()
 	if iw <= 0 or ih <= 0:
 		return texture
+	
 	var frame_w := 484
 	var frame_h := 267
 	var card_size := 256
 	var card_img := Image.create_empty(card_size, card_size, false, Image.FORMAT_RGBA8)
 	var base_albedo := Color(1.0, 1.0, 1.0, 0.0)
 	if slot_idx < terrain.texture_slots.size() and terrain.texture_slots[slot_idx] != null:
-		var raw_albedo: Variant = terrain.texture_slots[slot_idx].get("albedo")
+		var raw_albedo : Variant = terrain.texture_slots[slot_idx].get("albedo")
 		if raw_albedo is Color:
 			base_albedo = raw_albedo
 	if base_albedo.a <= 0.0001:
@@ -608,6 +635,7 @@ func _make_material_preview_texture(terrain, slot_idx: int) -> Texture2D:
 	var noise_img := _get_preview_noise_image(terrain)
 	if noise_img != null:
 		noise_img = noise_img.duplicate()
+	
 	var entries := _get_slot_preview_entries(terrain, slot_idx)
 	var mode := 0
 	if slot_idx < terrain.slot_blend_modes.size():
@@ -616,9 +644,10 @@ func _make_material_preview_texture(terrain, slot_idx: int) -> Texture2D:
 	var tile_scale := 0.62
 	var slot_scale := 1.0
 	if slot_idx < terrain.texture_slots.size() and terrain.texture_slots[slot_idx] != null:
-		var raw_scale: Variant = terrain.texture_slots[slot_idx].get("scale")
+		var raw_scale : Variant = terrain.texture_slots[slot_idx].get("scale")
 		if raw_scale is float or raw_scale is int:
 			slot_scale = maxf(float(raw_scale), 0.01)
+	
 	var preview_zoom := tile_scale / slot_scale
 	var preview_extent := clampf(preview_zoom, 0.2, 1.0)
 	var preview_offset := Vector2((1.0 - preview_extent) * 0.5, (1.0 - preview_extent) * 0.5)
@@ -639,6 +668,7 @@ func _make_material_preview_texture(terrain, slot_idx: int) -> Texture2D:
 			px.g = clampf(px.g * edge_fade, 0.0, 1.0)
 			px.b = clampf(px.b * edge_fade, 0.0, 1.0)
 			card_img.set_pixel(x, y, px)
+	
 	var preview_img := Image.create_empty(frame_w, frame_h, false, Image.FORMAT_RGBA8)
 	preview_img.fill(Color(0.0, 0.0, 0.0, 0.0))
 	var shadow_size := card_size + 12
@@ -650,6 +680,7 @@ func _make_material_preview_texture(terrain, slot_idx: int) -> Texture2D:
 			var dist := centered.length()
 			var alpha := clampf(1.0 - _preview_smoothstep(0.44, 0.72, dist), 0.0, 1.0) * 0.18
 			shadow_img.set_pixel(x, y, Color(0.0, 0.0, 0.0, alpha))
+	
 	var offset_x := int((frame_w - card_size) * 0.5)
 	var offset_y := int((frame_h - card_size) * 0.5)
 	preview_img.blit_rect(shadow_img, Rect2i(0, 0, shadow_size, shadow_size), Vector2i(offset_x - 6, offset_y + 8))
@@ -659,4 +690,5 @@ func _make_material_preview_texture(terrain, slot_idx: int) -> Texture2D:
 		"signature": signature,
 		"texture": preview_texture,
 	}
+	
 	return preview_texture

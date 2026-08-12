@@ -2,13 +2,14 @@
 extends RefCounted
 class_name MarchingSquaresTextureImportHelper
 
+
 const _TEXTURE_EXTENSIONS := [".png", ".jpg", ".jpeg", ".webp", ".tga", ".exr"]
 
-var max_texture_slots: int
-var default_preset_dir: String
+var max_texture_slots : int
+var default_preset_dir : String
 var texture_slot_script
 var texture_library_script
-var names_template: MarchingSquaresTextureNames
+var names_template : MarchingSquaresTextureNames
 
 
 func _init(
@@ -37,39 +38,39 @@ func import_to_terrain(
 ) -> Dictionary:
 	if terrain == null:
 		return {"ok": false, "error": "[MST] No terrain selected for texture import."}
-
+	
 	var preset_slug := preset_name.strip_edges().to_lower().to_snake_case()
 	if preset_name.strip_edges().is_empty() or preset_slug.is_empty():
 		return {"ok": false, "error": "[MST] Texture import requires a preset name."}
-
+	
 	var clean_albedo_dir := albedo_dir.strip_edges()
 	var clean_normal_dir := normal_dir.strip_edges()
 	if clean_albedo_dir.is_empty() or clean_normal_dir.is_empty():
 		return {"ok": false, "error": "[MST] Choose both an Albedo or Diffuse Maps folder and a Normal Maps folder."}
-
+	
 	var pairs := build_texture_import_pairs(clean_albedo_dir, clean_normal_dir)
 	if pairs.is_empty():
 		return {"ok": false, "error": "[MST] No matching albedo/diffuse and normal texture pairs were found."}
-
+	
 	var save_dir := normalize_texture_import_save_dir(raw_save_dir)
 	var preset_folder := save_dir.path_join(preset_slug)
 	var preset_folder_abs := ProjectSettings.globalize_path(preset_folder)
 	if not DirAccess.dir_exists_absolute(preset_folder_abs):
 		DirAccess.make_dir_recursive_absolute(preset_folder_abs)
-
+	
 	var preset_path := preset_folder.path_join(preset_slug + ".tres")
 	var texture_names_path := preset_folder.path_join("texture_names.tres")
 	var texture_library_path := preset_folder.path_join("texture_library.tres")
-
-	var names_res: MarchingSquaresTextureNames = names_template.duplicate(true)
+	
+	var names_res : MarchingSquaresTextureNames = names_template.duplicate(true)
 	MarchingSquaresTerrainPlugin._ensure_texture_names_resource(names_res)
 	if ResourceSaver.save(names_res, texture_names_path) != OK:
 		return {"ok": false, "error": "[MST] Failed to save texture names resource for import."}
 	var saved_names := ResourceLoader.load(texture_names_path) as MarchingSquaresTextureNames
 	if saved_names != null:
 		names_res = saved_names
-
-	var texture_library: Resource = texture_library_script.new()
+	
+	var texture_library : Resource = texture_library_script.new()
 	if texture_library.has_method("ensure_length"):
 		texture_library.ensure_length()
 	if ResourceSaver.save(texture_library, texture_library_path) != OK:
@@ -79,7 +80,7 @@ func import_to_terrain(
 		texture_library = saved_library
 	if texture_library != null and texture_library.has_method("ensure_length"):
 		texture_library.ensure_length()
-
+	
 	var imported_preset := MarchingSquaresTexturePreset.new()
 	imported_preset.preset_name = preset_name.strip_edges()
 	imported_preset.new_tex_names = names_res
@@ -98,14 +99,14 @@ func import_to_terrain(
 		imported_preset.texture_library = texture_library
 	if imported_preset.new_tex_names == null:
 		imported_preset.new_tex_names = names_res
-
+	
 	terrain.set("current_texture_preset", imported_preset)
 	terrain.set("texture_library", texture_library)
 	_reset_terrain_texture_state(terrain, texture_library)
-
+	
 	var occupied_slots := {}
-	var explicit_pairs: Array = []
-	var auto_pairs: Array = []
+	var explicit_pairs : Array = []
+	var auto_pairs : Array = []
 	for pair in pairs:
 		var forced_slot := int(pair.get("slot_idx", -1))
 		if forced_slot >= 0 and forced_slot < max_texture_slots and forced_slot != 15:
@@ -114,7 +115,7 @@ func import_to_terrain(
 				occupied_slots[forced_slot] = true
 		else:
 			auto_pairs.append(pair)
-
+	
 	var assigned := 0
 	var highest_slot := -1
 	for pair in explicit_pairs:
@@ -130,7 +131,7 @@ func import_to_terrain(
 		):
 			assigned += 1
 			highest_slot = maxi(highest_slot, slot_idx)
-
+	
 	var next_auto_slot := 0
 	for pair in auto_pairs:
 		next_auto_slot = next_texture_import_slot(next_auto_slot, occupied_slots)
@@ -149,15 +150,15 @@ func import_to_terrain(
 			assigned += 1
 			highest_slot = maxi(highest_slot, next_auto_slot)
 		next_auto_slot += 1
-
+	
 	if assigned <= 0:
 		return {"ok": false, "error": "[MST] Texture import found files but could not assign any valid pairs."}
-
+	
 	terrain.visible_texture_slot_count = clampi(maxi(highest_slot + 1, 6), 6, max_texture_slots)
 	if save_resource_if_external.is_valid():
 		save_resource_if_external.call(texture_library)
 		save_resource_if_external.call(names_res)
-
+	
 	return {
 		"ok": true,
 		"preset": imported_preset,
@@ -197,6 +198,7 @@ func assign_texture_import_pair(
 	if albedo_tex == null or normal_tex == null:
 		push_warning("[MST] Skipping unreadable texture pair: " + str(pair))
 		return false
+	
 	if terrain.texture_slots[slot_idx] == null:
 		terrain.texture_slots[slot_idx] = texture_slot_script.new()
 	terrain.texture_slots[slot_idx].active = true
@@ -204,6 +206,7 @@ func assign_texture_import_pair(
 	terrain.texture_slots[slot_idx].grass_texture = null
 	terrain.texture_slots[slot_idx].has_grass = (slot_idx == 0)
 	terrain.texture_slots[slot_idx].scale = 1.0
+	
 	if compute_slot_albedo_color.is_valid():
 		terrain.texture_slots[slot_idx].albedo = compute_slot_albedo_color.call(terrain, albedo_tex)
 	if sync_slot_legacy_fields.is_valid():
@@ -221,6 +224,7 @@ func assign_texture_import_pair(
 			if not display_name.is_empty():
 				names[slot_idx] = display_name
 			names_res.texture_names = names
+	
 	return true
 
 
@@ -233,12 +237,14 @@ func build_texture_import_pairs(albedo_dir: String, normal_dir: String) -> Array
 		var normal_key := str(normal_info["key"])
 		if not normal_by_key.has(normal_key):
 			normal_by_key[normal_key] = path
-	var pairs: Array = []
+	
+	var pairs : Array = []
 	for albedo_path in albedo_files:
 		var albedo_info := texture_import_file_info(albedo_path, false)
 		var key := str(albedo_info["key"])
 		if not normal_by_key.has(key):
 			continue
+		
 		pairs.append({
 			"key": key,
 			"albedo": albedo_path,
@@ -246,6 +252,7 @@ func build_texture_import_pairs(albedo_dir: String, normal_dir: String) -> Array
 			"slot_idx": int(albedo_info["slot_idx"]),
 			"display_name": str(albedo_info["display_name"]),
 		})
+	
 	pairs.sort_custom(func(a, b):
 		var a_slot := int(a["slot_idx"])
 		var b_slot := int(b["slot_idx"])
@@ -257,11 +264,12 @@ func build_texture_import_pairs(albedo_dir: String, normal_dir: String) -> Array
 			return false
 		return str(a["key"]) < str(b["key"])
 	)
+	
 	return pairs
 
 
 func list_texture_import_files(dir_path: String) -> Array:
-	var out: Array = []
+	var out : Array = []
 	var dir := DirAccess.open(dir_path)
 	if dir == null:
 		push_error("[MST] Directory not found: " + dir_path)

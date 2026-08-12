@@ -17,7 +17,7 @@ prefab models. Use this set if you only want to replace or customize specific pa
 
 ## Template
 
-`template/template.tres` is a complete prefab set intended as a starting point for creating a new 
+`template/template_set.tres` is a complete prefab set intended as a starting point for creating a new 
 prefab set. While it closely resembles the original geometry, it is not an exact match. Instead, 
 it maximizes the number of prefabs to demonstrate the variety of pieces that may be required to 
 cover all gaps, transitions, and edge cases.

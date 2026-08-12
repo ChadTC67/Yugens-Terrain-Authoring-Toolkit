@@ -7,7 +7,7 @@ class_name MarchingSquaresTerrainChunkGizmo
 
 func _redraw():
 	clear()
-
+	
 	var terrain := get_node_3d() as MarchingSquaresTerrainChunk
 	if terrain == null:
 		return
@@ -16,13 +16,13 @@ func _redraw():
 		return
 	var dx := (terrain.dimensions.x - 1) * terrain.cell_size.x
 	var dz := (terrain.dimensions.z - 1) * terrain.cell_size.y
-
+	
 	# Only draw the gizmo if this is the only selected node
 	if len(EditorInterface.get_selection().get_selected_nodes()) !=  1:
 		return
 	if EditorInterface.get_selection().get_selected_nodes()[0] !=  terrain:
 		return
-
+	
 	# Handles for raising/lowering terrain (will probably be removed later in favor of brush)
 	var corners := PackedVector3Array()
 	var ids := PackedInt32Array()
@@ -65,20 +65,20 @@ func _commit_handle(handle_id: int, secondary: bool, restore: Variant, cancel: b
 	var x = handle_id % terrain.dimensions.x
 	if z < 0 or z >=  terrain.height_map.size() or x < 0 or x >= terrain.height_map[z].size():
 		return
-
+	
 	if cancel:
 		terrain.height_map[z][x] = restore
 		terrain.mark_dirty()
 	else:
 		var undo_redo := MarchingSquaresTerrainPlugin.instance.get_undo_redo()
-
+		
 		var do_value = terrain.height_map[z][x]
-
+		
 		undo_redo.create_action("move terrain point")
 		undo_redo.add_do_method(self, "move_terrain_point", terrain, handle_id, do_value)
 		undo_redo.add_undo_method(self, "move_terrain_point", terrain, handle_id, restore)
 		undo_redo.commit_action()
-
+	
 	terrain.update_gizmos()
 
 

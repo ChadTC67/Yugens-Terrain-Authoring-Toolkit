@@ -1,12 +1,13 @@
 extends RefCounted
 class_name MSTNavMeshController
 
+
 var terrain
-var preview_revision: int = 0
-var dirty_chunks: Dictionary = {}
-var chunk_face_cache: Dictionary = {}
-var cache_signature: String = ""
-var needs_bake: bool = false
+var preview_revision : int = 0
+var dirty_chunks : Dictionary = {}
+var chunk_face_cache : Dictionary = {}
+var cache_signature : String = ""
+var needs_bake : bool = false
 
 
 func _init(terrain_owner) -> void:
@@ -19,7 +20,7 @@ func invalidate_preview() -> void:
 
 func invalidate_chunk(chunk_coords: Vector2i) -> void:
 	for offset in [Vector2i.ZERO, Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
-		var affected: Vector2i = chunk_coords + offset
+		var affected : Vector2i = chunk_coords + offset
 		if terrain.chunks.has(affected):
 			dirty_chunks[affected] = true
 	needs_bake = true
@@ -37,7 +38,7 @@ func clear_bake_state() -> void:
 
 
 func clear_debug_mesh() -> void:
-	var debug_mesh: Node = terrain.get_node_or_null("TerrainNavDebug")
+	var debug_mesh : Node = terrain.get_node_or_null("TerrainNavDebug")
 	if debug_mesh != null:
 		debug_mesh.queue_free()
 
@@ -48,11 +49,11 @@ func bake() -> void:
 		push_warning("[MST] NavMesh bake skipped because no scene root could be found.")
 		return
 	terrain._ensure_nav_chunks_ready_for_bake()
-	var nav_region: NavigationRegion3D = terrain._get_or_create_navmesh_region(scene_root)
+	var nav_region : NavigationRegion3D = terrain._get_or_create_navmesh_region(scene_root)
 	if nav_region == null:
 		push_warning("[MST] NavMesh bake skipped because a NavigationRegion3D could not be created.")
 		return
-	var bake_signature: String = terrain._get_navmesh_bake_signature()
+	var bake_signature : String = terrain._get_navmesh_bake_signature()
 	if cache_signature != bake_signature:
 		chunk_face_cache.clear()
 		cache_signature = bake_signature
@@ -61,7 +62,7 @@ func bake() -> void:
 		return
 	var nav_mesh := NavigationMesh.new()
 	terrain._configure_navigation_mesh(nav_mesh)
-	var bake_result: Dictionary = terrain._build_navigation_mesh_from_walkable_faces(nav_mesh)
+	var bake_result : Dictionary = terrain._build_navigation_mesh_from_walkable_faces(nav_mesh)
 	nav_region.navigation_mesh = nav_mesh
 	terrain._clear_nav_source_root()
 	clear_debug_mesh()
