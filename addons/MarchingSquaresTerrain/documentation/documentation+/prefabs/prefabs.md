@@ -175,16 +175,16 @@ Note: due to current limitations of GDscripts type systems
 it is possible to add a prefab of wrong type to the prefab set.
 Be careful not to do that!
 
-## Examples and templates
+## Examples and Templates
 
-If you can't quite imagine it all, it's best to look at the examples. There is a blender-file that serves as a template.
+If you can't quite imagine it all, it's best to look at the examples. There is a blender-file that serves as a template if you downloaded the github repo instead of only the addon.
 It includes linked-geometry "test cases". You can edit them in place there. Since the geometry is linked, the pieces themselves
 will update automatically.
 
 When done you can then simply export all the pieces and create the resource files described in the previous section. 
 I would recomend [this blender extension](https://extensions.blender.org/add-ons/superduperbatchexporter/).
 
-### Screenshot time
+### Screenshot Time!
 
 ![example1](textures2.png)
 ![example2](example2.png)
