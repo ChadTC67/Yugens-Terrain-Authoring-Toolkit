@@ -1,7 +1,6 @@
 group_uniforms Effects.Wind;
 uniform sampler2D wind_noise_texture : hint_default_white, repeat_enable, filter_linear;
 uniform float wind_direction_degrees : hint_range(0.0, 360.0, 0.1) = 45.0;
-uniform vec2 wind_direction = vec2(0.70710678, 0.70710678);
 uniform float wind_speed : hint_range(0.0, 1.0, 0.01) = 0.08;
 uniform float wind_strength : hint_range(0.0, 2.0, 0.01) = 1.0;
 uniform float wind_scale : hint_range(0.005, 1.0, 0.005) = 0.037;

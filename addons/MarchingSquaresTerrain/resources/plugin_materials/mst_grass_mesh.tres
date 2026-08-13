@@ -34,7 +34,6 @@ shader_parameter/global_noise_strength = 1.0
 shader_parameter/global_noise_scroll = 0.0
 shader_parameter/wind_noise_texture = ExtResource("2_windn")
 shader_parameter/wind_direction_degrees = 45.0
-shader_parameter/wind_direction = Vector2(1, 1)
 shader_parameter/wind_speed = 0.14
 shader_parameter/wind_strength = 1.0
 shader_parameter/wind_scale = 1.0

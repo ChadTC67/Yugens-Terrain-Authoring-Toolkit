@@ -18,7 +18,7 @@ metadata/_custom_type_script = "uid://b6jopat61dbd3"
 script = ExtResource("1_xy6if")
 icon = ExtResource("1_xvlk8")
 label = "Bridge"
-tooltip = "An intuitive handy brush for creating bridges between two points.
+tooltip = "An intuitive brush for creating bridges between two points.
 
 [b]Info[/b]:
 The [EDITOR_KEYWORD]bridge_curve_falloff[/EDITOR_KEYWORD] can be set via the [EDITOR_ACCENT]Ease Value[/EDITOR_ACCENT] attribute. For further reference see the ease value cheatsheet in the [u]documentation+[/u] folder.

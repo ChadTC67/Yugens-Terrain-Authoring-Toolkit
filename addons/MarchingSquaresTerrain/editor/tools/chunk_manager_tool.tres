@@ -16,6 +16,10 @@ label = "Chunk Manager"
 tooltip = "Manages the creation, deletion and changing of individual and global chunk settings.
 
 [b]Info:[/b]
+Inside the [EDITOR_ACCENT]Chunk Tab[/EDITOR_ACCENT] settings such as the [EDITOR_KEYWORD]chunk_dimensions[/EDITOR_KEYWORD] and [EDITOR_KEYWORD]cell_size[/EDITOR_KEYWORD] can be changed. Additionally, this is where prefabs can be applied.
+
+Terrain specific NavMesh groups can be applied via this tool as well!
+
 Chunk cell merge modes can be used to alter the merge thresholds of neighbouring vertices. These have the biggest impact on the overall [i]feel[/i] of the terrain.
 
 [ul][EDITOR_ACCENT]Cubic[/EDITOR_ACCENT]: The most blocky of all the modes. Has minimal smoothing between cells;[/ul]

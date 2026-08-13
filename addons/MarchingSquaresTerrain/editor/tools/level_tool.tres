@@ -17,7 +17,7 @@ metadata/_custom_type_script = "uid://b6jopat61dbd3"
 script = ExtResource("1_qrcvc")
 icon = ExtResource("1_q142h")
 label = "Level"
-tooltip = "An handy brush that levels the terrain to a certain height.
+tooltip = "A handy brush that levels the terrain to a certain height.
 
 [b]Shortcuts[/b]
 [ul]Ctrl+LMB: Set the terrain level height to the hovered cell's Y value.[/ul]"

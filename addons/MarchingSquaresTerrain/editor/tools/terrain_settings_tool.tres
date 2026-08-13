@@ -16,8 +16,6 @@ label = "Terrain Settings"
 tooltip = "Allows the user to tweak existing and add custom global terrain settings.
 
 [b]Info[/b]:
-Inside the [EDITOR_ACCENT]Chunk Tab[/EDITOR_ACCENT] settings such as the [EDITOR_KEYWORD]chunk_dimensions[/EDITOR_KEYWORD] and [EDITOR_KEYWORD]cell_size[/EDITOR_KEYWORD] can be changed. Additionally, this is where prefabs can be applied.
-
 The [EDITOR_ACCENT]Vertex Painter Tab[/EDITOR_ACCENT] is mainly used for changing texture blending related settings.
 
 The [EDITOR_ACCENT]Environment Tab[/EDITOR_ACCENT] and [EDITOR_ACCENT]Wind Tab[/EDITOR_ACCENT] can be used to alter terrain generation and the feel of vegetation.

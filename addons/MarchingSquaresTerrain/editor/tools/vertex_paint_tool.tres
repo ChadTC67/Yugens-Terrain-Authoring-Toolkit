@@ -19,7 +19,7 @@ metadata/_custom_type_script = "uid://b6jopat61dbd3"
 script = ExtResource("1_7okwl")
 icon = ExtResource("2_rbatu")
 label = "Vertex Painter"
-tooltip = "A vertex-based painting brush that allows for up to 256 custom textures to be edited and applied onto the terrain.
+tooltip = "A vertex-based painting brush that allows for up to 255 custom textures to be edited and applied onto the terrain.
 
 [b]Info[/b]:
 A [EDITOR_ACCENT]Texture Preset[/EDITOR_ACCENT] is a resource that stores and loads a group of vertex painter settings and textures. Use these for editing and saving different environments or quickly testing custom palettes.

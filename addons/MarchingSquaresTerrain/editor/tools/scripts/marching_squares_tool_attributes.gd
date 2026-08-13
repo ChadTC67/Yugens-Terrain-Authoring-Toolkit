@@ -1084,6 +1084,71 @@ func _create_chunk_configuration_page() -> Control:
 	grass_mode_button.selected = plugin.selected_chunk.grass_mode if not current_available_chunks.is_empty() and plugin.selected_chunk else -1
 	grass_mode_button.item_selected.connect(_on_chunk_grass_mode_changed)
 	
+	var height_button := EditorSpinSlider.new()
+	height_button.set_flat(true)
+	height_button.allow_greater = true
+	height_button.allow_lesser = true
+	height_button.set_min(-50.0)
+	height_button.set_max(50.0)
+	height_button.set_step(0.1)
+	height_button.set_value(plugin.height)
+	height_button.value_changed.connect(func(value): _on_setting_changed("height", value))
+	height_button.set_custom_minimum_size(Vector2(110, 35))
+	
+	var qp_selection_button := OptionButton.new()
+	qp_selection_button.add_item("None")  # First option is no paint. #TODO Doesn't seem to work right now and needs to be fixed later.
+	qp_selection_button.set_item_metadata(0, null)
+	
+	# 1. Load GLOBAL quick paints from folder (always available)
+	var dir := DirAccess.open(GLOBAL_QUICK_PAINTS_PATH)
+	if dir:
+		dir.list_dir_begin()
+		var file_name := dir.get_next()
+		while file_name !=  "":
+			if file_name.ends_with(".tres") or file_name.ends_with(".res"):
+				var quick_paint_path := GLOBAL_QUICK_PAINTS_PATH + file_name
+				qp_selection_button.add_item(_resource_label_from_file(quick_paint_path, "paint_name", file_name.get_basename()))
+				qp_selection_button.set_item_metadata(qp_selection_button.item_count - 1, quick_paint_path)
+			file_name = dir.get_next()
+		dir.list_dir_end()
+	
+	# 2. Load PRESET-SPECIFIC quick paints (if preset is selected and has any)
+	var terrain := MarchingSquaresTerrainPlugin.instance.current_terrain_node
+	if terrain and terrain.current_texture_preset:
+		var preset := terrain.current_texture_preset
+		if preset.quick_paints.size() > 0:
+			qp_selection_button.add_separator()  # Visual separator
+			for quick_paint in preset.quick_paints:
+				if quick_paint:
+					qp_selection_button.add_item(quick_paint.paint_name)
+					qp_selection_button.set_item_metadata(qp_selection_button.item_count - 1, quick_paint)
+	
+	qp_selection_button.set_flat(true)
+	qp_selection_button.item_selected.connect(func(index):
+		var selected_quick_paint = qp_selection_button.get_item_metadata(index)
+		if selected_quick_paint is String:
+			selected_quick_paint = load(selected_quick_paint)
+		_on_setting_changed("quick_paint_selection", selected_quick_paint)
+	)
+	qp_selection_button.set_custom_minimum_size(Vector2(100, 35))
+	
+	# Sync dropdown selection with current plugin.current_quick_paint
+	var current_quick_paint = _get_setting_value("quick_paint_selection")
+	if current_quick_paint == null:
+		qp_selection_button.select(0)  # Select "None"
+	else:
+		# Find matching quick paint in dropdown
+		for i in range(qp_selection_button.item_count):
+			var item_meta = qp_selection_button.get_item_metadata(i)
+			var matches_current := false
+			if item_meta is String:
+				matches_current = current_quick_paint is Resource and item_meta == current_quick_paint.resource_path
+			else:
+				matches_current = item_meta == current_quick_paint
+			if matches_current:
+				qp_selection_button.select(i)
+				break
+	
 	chunk_button.set_flat(true)
 	chunk_button.item_selected.connect(func(chunk): _on_chunk_selected(option_button, grass_mode_button, chunk_button.get_item_text(chunk)))
 	var mult_apply_button := Button.new()
@@ -1109,6 +1174,16 @@ func _create_chunk_configuration_page() -> Control:
 	apply_container.add_theme_constant_override("margin_bottom", 3)
 	apply_container.add_child(mult_apply_button, true)
 	row.add_child(apply_container, true)
+	row.add_child(VSeparator.new(), true)
+	var height_container := CenterContainer.new()
+	height_container.custom_minimum_size = Vector2(65, 35)
+	height_container.add_child(height_button, true)
+	row.add_child(height_container, true)
+	row.add_child(VSeparator.new(), true)
+	var qp_container := CenterContainer.new()
+	qp_container.custom_minimum_size = Vector2(65, 35)
+	qp_container.add_child(qp_selection_button, true)
+	row.add_child(qp_container, true)
 	var row_center := CenterContainer.new()
 	row_center.add_child(row, true)
 	page.add_child(row_center, true)

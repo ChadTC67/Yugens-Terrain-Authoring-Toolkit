@@ -1134,12 +1134,12 @@ surface_effects = Array[Resource]([SubResource("Resource_j2hbo"), null, null, nu
 overlay_effects = Array[Resource]([SubResource("Resource_54x3k"), null, null, null, null])
 metadata/_custom_type_script = "uid://cddg1xr5hye1d"
 
-[node name="Chunk (0, 0)" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/MarchingSquaresTerrain" unique_id=2109162598 node_paths=PackedStringArray("terrain_system")]
+[node name="Chunk (0, 0)" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/MarchingSquaresTerrain" unique_id=1654618878 node_paths=PackedStringArray("terrain_system")]
 cast_shadow = 0
 extra_cull_margin = 4.0
 script = ExtResource("8_h78w1")
 terrain_system = NodePath("..")
 navmesh_permission = PackedByteArray()
 
-[node name="GrassPlanter" type="Node3D" parent="SubViewportContainer/SubViewport/MarchingSquaresTerrain/Chunk (0, 0)" unique_id=2057747128]
+[node name="GrassPlanter" type="Node3D" parent="SubViewportContainer/SubViewport/MarchingSquaresTerrain/Chunk (0, 0)" unique_id=846027972]
 script = ExtResource("9_bvinl")
