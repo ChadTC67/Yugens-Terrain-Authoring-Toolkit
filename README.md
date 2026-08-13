@@ -1,7 +1,10 @@
 # Yūgen's Terrain Authoring Toolkit
+
+<img width="1920" height="1080" alt="terrain 1 3 screenshot unfinished" src="https://github.com/user-attachments/assets/6703322e-b8cf-4601-9179-556962b9bc52" />
+
 The public version of the Marching Squares Terrain plugin for the [Godot Engine](https://godotengine.org/).
 
-This project is an effort to create a simple to use and powerfull terrain authoring tool inside godot aimed at 3D pixel art games. However, the plugin featured in this project can be used for a wide variety of games and experimentation is encouraged!
+> This project is an effort to create a simple to use and powerful terrain authoring tool inside godot aimed at 3D pixel art games. However, the plugin featured in this project can be used for a wide variety of games and experimentation is encouraged!
 
 ## Features
 
@@ -17,6 +20,10 @@ What is a terrain plugin without its terraforming tools! As the terrain is heigh
 
 * **BRIDGE TOOL** → Create a bridge between two points by drawing a straight or curved line between them.
 
+[![Terraforming Brushes Demo](https://img.youtube.com/vi/8Q0xqQpThbI/maxresdefault.jpg)](https://youtu.be/8Q0xqQpThbI)
+
+> Watch the demo video on YouTube ↑
+
 ### Visual Brushes
 
 To enhance the visuals of your terrain and game the plugin currently features a set of 3 visual-based brushes that each alter the terrain in a different way.
@@ -27,17 +34,23 @@ To enhance the visuals of your terrain and game the plugin currently features a 
 
 * **POPULATOR TOOL** → Spawn flowers onto the terrain via the custom `MarchingSquaresFlowerPlanter` node.
 
+[![Visual Brushes Demo](https://img.youtube.com/vi/u4wuOT68hZs/maxresdefault.jpg)](https://youtu.be/u4wuOT68hZs)
+
+> Watch the demo video on YouTube ↑
+
 ### Plugin Management Tools
 
 These custom tabs and brushes allow you to change and debug terrain, chunk and heightmap settings. They offer a wide variety of customisability so you can create your dream terrain and game feel!
 
 * **DEBUG BRUSH TOOL** → By selecting terrain cells you can print certain information about them in the in-editor output terminal;
 
-* **CHUNK MANAGEMENT TOOL** → Here you can change not only global chunk settings but also manage the smoothing algorithm of individual chunks;
+* **CHUNK MANAGEMENT TOOL** → Here you can change not only global chunk settings but also manage the smoothing algorithm of individual chunks and add `NavMesh` sections to the terrain;
 
 * **HEIGHTMAP TOOL** → This tool comes in three parts: 1) terrain importing; 2) terrain exporting; 3) heightmap extraction and linked brush placement. These tools are all focussed on creating a faster terrain workflow;
 
 * **TERRAIN SETTINGS TOOL** → This final tool allows for terrain wide changes that do not only affect the chunks themselves but also the tool-related meshes inside it. A couple examples are global wind, post-processing effects, texture blend settings and cell shading.
+
+<img width="1279" height="195" alt="terrain_settings_demo_picture" src="https://github.com/user-attachments/assets/b8aa7fbf-f67c-4748-9685-d73d70d66976" />
 
 ___
 
