@@ -130,6 +130,10 @@ var build_phase : BuildPhase = BuildPhase.IDLE
 var _defer_mesh_regeneration := false
 var _initial_build_tile_queue : Array[Vector2i] = []
 var _baked_mesh_is_complete := false
+# Set when an old persisted mesh was discarded during a 1.2.4 -> 1.3 load.
+# The editor normally skips initial regeneration, so this flag requests one
+# rebuild without making every new editor chunk regenerate on scene open.
+var _legacy_mesh_rebuild_pending := false
 
 #region blend option vars
 # Terrain blend options to allow for smooth color and height blend influence at transitions and at different heights
@@ -279,6 +283,8 @@ func initialize_terrain(should_regenerate_mesh: bool =  true, defer_grass_setup:
 	
 	if should_regenerate_mesh and (mesh == null or _mesh_tiles.is_empty()):
 		regenerate_mesh(true)
+		if mesh != null or not _mesh_tiles.is_empty():
+			_legacy_mesh_rebuild_pending = false
 	elif mesh or not _mesh_tiles.is_empty():
 		if terrain_system:
 			_apply_chunk_surface_material()

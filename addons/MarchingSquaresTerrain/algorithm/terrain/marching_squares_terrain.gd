@@ -105,6 +105,9 @@ var _data_directory : String = ""
 @export_category("Performance")
 ## Number of worker threads used when generating terrain cells concurrently.
 @export_range(1, 8, 1) var terrain_generation_threads: int = 4
+## Main-thread time budget used while publishing deferred mesh tiles.
+## Keeping this small prevents large batch builds from freezing the editor.
+@export_range(1.0, 33.0, 1.0, "suffix: ms") var initial_mesh_tile_budget_msec: float = 8.0
 
 @export_category("Texture Arrays")
 # ---------------- Texture2DArray baking / library ----------------
@@ -463,6 +466,11 @@ var _is_syncing_wind_state := false
 @export_custom(PROPERTY_HINT_RANGE, "0.0, 1.0, 0.01", PROPERTY_USAGE_STORAGE) var wind_speed : float = 0.08:
 	set(value):
 		wind_speed = clampf(float(value), 0.0, 1.0)
+		_sync_wind_state()
+
+@export var wind_tip_color : Color = Color(1.0, 1.0, 1.0, 0.0):
+	set(value):
+		wind_tip_color = value
 		_sync_wind_state()
 
 @export_custom(PROPERTY_HINT_RANGE, "0.0, 2.0, 0.01", PROPERTY_USAGE_STORAGE) var wind_strength : float = 1.0:
@@ -994,6 +1002,7 @@ var chunks : Dictionary = {}
 var collision_triangle_count_debug: int = 0
 var _visibility_detail_settings_dirty := true
 var _grass_random_scale_apply_queued := false
+var _batch_chunk_creation_in_progress := false
 var navmesh_painting_enabled : bool = false
 const POST_PROCESS_SLOT_COUNT := 5
 @export_storage var surface_effects : Array[Resource] = []
@@ -1293,6 +1302,7 @@ func _validate_property(property: Dictionary) -> void:
 		"overlay_effects",
 		"surface_effect_slot_count",
 		"overlay_effect_slot_count",
+		"wind_tip_color",
 	]:
 		property.usage = PROPERTY_USAGE_NO_EDITOR
 	if property.name in ["enable_runtime_texture_baking", "polygon_texture_resolution", "bake_material_override"]:
@@ -1578,6 +1588,11 @@ func _restore_runtime_texture_arrays_after_scene_save() -> void:
 
 func _ensure_default_texture_preset_bound() -> void:
 	if current_texture_preset != null:
+		# A 1.2.4 scene can deserialize its old preset successfully while its
+		# 1.3 texture_slots remain empty. Import the old 15-texture list once so
+		# the rebuilt meshes do not use the white placeholder layers.
+		if _needs_legacy_preset_texture_migration(current_texture_preset):
+			load_from_preset(current_texture_preset)
 		return
 	var default_preset := ResourceLoader.load(DEFAULT_TEXTURE_PRESET_PATH) as MarchingSquaresTexturePreset
 	if default_preset == null:
@@ -1585,6 +1600,20 @@ func _ensure_default_texture_preset_bound() -> void:
 		return
 	current_texture_preset = default_preset
 	load_from_preset(default_preset)
+
+
+func _needs_legacy_preset_texture_migration(preset: MarchingSquaresTexturePreset) -> bool:
+	if preset == null or preset.new_textures == null:
+		return false
+	if preset.new_textures.terrain_textures.size() < 15:
+		return false
+	for i in range(mini(MAX_TEXTURE_SLOTS, texture_slots.size())):
+		if texture_slots[i] != null and MarchingSquaresTerrainHelpers.is_valid_texture2d(texture_slots[i].texture):
+			return false
+	for legacy_tex in preset.new_textures.terrain_textures:
+		if MarchingSquaresTerrainHelpers.is_valid_texture2d(legacy_tex):
+			return true
+	return false
 
 
 func _is_default_empty_texture_preset(preset: MarchingSquaresTexturePreset) -> bool:
@@ -1787,8 +1816,9 @@ func _deferred_enter_tree() -> void:
 	
 	for chunk : MarchingSquaresTerrainChunk in chunks.values():
 		# Runtime regenerates immediately because generated mesh resources are ephemeral.
-		# Editor recovery is deferred below so scene reopen does not stall at "Reopening Scenes".
-		var regenerate_on_load := not EngineWrapper.instance.is_editor()
+		# The editor normally defers this, except for a legacy 1.2.4 mesh that the
+		# persistence loader explicitly discarded and must rebuild automatically.
+		var regenerate_on_load := not EngineWrapper.instance.is_editor() or chunk._legacy_mesh_rebuild_pending
 		chunk.initialize_terrain(regenerate_on_load)
 		if force_regen_for_wall_fixes:
 			chunk.regenerate_mesh(true)
@@ -1810,6 +1840,10 @@ func _deferred_enter_tree() -> void:
 				child.rebuild_cell_data()
 				if child is MarchingSquaresFlowerPlanter:
 					child.regenerate_flowers()
+	# Runtime grass planters may have been created or hydrated during chunk
+	# initialization. Sync the live materials after that work, not only during
+	# terrain _init(), so editor wind settings are preserved at runtime.
+	_sync_global_noise_to_grass()
 	_sync_wind_state(false)
 	
 	_grass_regen_pending = false
@@ -1882,7 +1916,7 @@ func has_chunk(x: int, z: int) -> bool:
 	return chunks.has(Vector2i(x, z))
 
 
-func add_new_chunk(chunk_x: int, chunk_z: int, plugin):
+func add_new_chunk(chunk_x: int, chunk_z: int, plugin, regenerate_mesh: bool = true):
 	var chunk_coords := Vector2i(chunk_x, chunk_z)
 	var new_chunk := MarchingSquaresTerrainChunk.new()
 	new_chunk.name = "Chunk "+str(chunk_coords)
@@ -1930,8 +1964,58 @@ func add_new_chunk(chunk_x: int, chunk_z: int, plugin):
 	
 		plugin.draw_pattern(self) # Apply the current selected quick paint after seam heights are finalized
 		plugin.current_draw_pattern.clear()
-	else:
+	elif regenerate_mesh:
 		new_chunk.regenerate_mesh()
+
+
+## Adds missing chunks in a rectangle, yielding between chunks so the editor
+## remains responsive and mesh generation does not start for the whole batch at once.
+func add_chunk_batch(start_coords: Vector2i, size: Vector2i, plugin) -> void:
+	if _batch_chunk_creation_in_progress:
+		push_warning("[MST] A batch chunk creation is already in progress.")
+		return
+	if size.x <= 0 or size.y <= 0:
+		return
+	_batch_chunk_creation_in_progress = true
+	_add_chunk_batch_deferred(start_coords, size, plugin)
+
+
+func _add_chunk_batch_deferred(start_coords: Vector2i, size: Vector2i, plugin) -> void:
+	var created := 0
+	var skipped := 0
+	var active_builds: Array[MarchingSquaresTerrainChunk] = []
+	# Four background builds reduce total batch time while leaving enough CPU
+	# headroom for Godot's editor and avoiding one worker per chunk.
+	const MAX_ACTIVE_BUILDS := 4
+	for z in range(start_coords.y, start_coords.y + size.y):
+		for x in range(start_coords.x, start_coords.x + size.x):
+			var coords := Vector2i(x, z)
+			if chunks.has(coords):
+				skipped += 1
+				continue
+			add_new_chunk(x, z, plugin, false)
+			created += 1
+			var chunk := chunks.get(coords) as MarchingSquaresTerrainChunk
+			if chunk != null:
+				# Build cells on the chunk's background thread. The publication path
+				# is frame-budgeted, and limiting concurrency avoids oversubscribing
+				# the editor when a large rectangle is selected.
+				chunk.begin_deferred_initial_build()
+				active_builds.append(chunk)
+			while active_builds.size() >= MAX_ACTIVE_BUILDS:
+				await get_tree().process_frame
+				for active_chunk in active_builds.duplicate():
+					if not is_instance_valid(active_chunk) or not active_chunk._initial_build_pending:
+						active_builds.erase(active_chunk)
+	while not active_builds.is_empty():
+		await get_tree().process_frame
+		for active_chunk in active_builds.duplicate():
+			if not is_instance_valid(active_chunk) or not active_chunk._initial_build_pending:
+				active_builds.erase(active_chunk)
+	_batch_chunk_creation_in_progress = false
+	print("[MST] Batch chunk creation complete: created=%d skipped=%d" % [created, skipped])
+	if plugin != null and is_instance_valid(plugin) and plugin.ui != null:
+		plugin.ui.tool_attributes.show_tool_attributes(plugin.TerrainToolMode.CHUNK_MANAGEMENT)
 
 
 func remove_chunk(x: int, z: int, plugin):

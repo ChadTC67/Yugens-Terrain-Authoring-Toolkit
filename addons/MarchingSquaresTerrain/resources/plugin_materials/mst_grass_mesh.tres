@@ -26,6 +26,7 @@ shader_parameter/use_base_color_5 = false
 shader_parameter/use_base_color_6 = false
 shader_parameter/animate_active = true
 shader_parameter/fps = 0.0
+shader_parameter/wind_tip_color = Color(1, 1, 1, 0)
 shader_parameter/is_merge_round = false
 shader_parameter/blade_variation = 1.0
 shader_parameter/wall_threshold = 0.0

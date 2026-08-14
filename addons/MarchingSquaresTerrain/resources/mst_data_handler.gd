@@ -422,12 +422,24 @@ static func import_chunk_data(chunk: MarchingSquaresTerrainChunk, data: MSTChunk
 	chunk.height_map = data.height_map.duplicate(true)
 	chunk.navmesh_permission = data.navmesh_permission.duplicate()
 	
-	# Restore baked assets if present
+	# Restore baked assets if present. 1.2.4 stored the whole chunk as one
+	# surface, while 1.3 requires a complete tiled mesh. Keeping that legacy
+	# mesh assigned prevents initialize_terrain() from entering the rebuild path
+	# and can also leave it using the old material/texture layout.
 	if data.mesh:
-		chunk.mesh = data.mesh
-		chunk._baked_mesh_is_complete = data.mesh_is_tiled_complete and chunk.is_persisted_mesh_complete(data.mesh)
-		if chunk._baked_mesh_is_complete:
+		var persisted_mesh_complete := data.mesh_is_tiled_complete and chunk.is_persisted_mesh_complete(data.mesh)
+		if persisted_mesh_complete:
+			chunk.mesh = data.mesh
+			chunk._baked_mesh_is_complete = true
 			chunk.hydrate_mesh_tiles_from_persisted_mesh(data.mesh)
+		else:
+			chunk.mesh = null
+			chunk._mesh_tiles.clear()
+			chunk._dirty_mesh_tiles.clear()
+			chunk._baked_mesh_is_complete = false
+			chunk._legacy_mesh_rebuild_pending = true
+			chunk._data_dirty = true
+			push_warning("[MST Persistence] Discarding legacy/incomplete baked mesh for chunk %s; rebuilding with the 1.3 tiled format." % str(chunk.chunk_coords))
 	elif chunk.terrain_system.storage_mode == MarchingSquaresTerrain.StorageMode.BAKED:
 		push_warning("Baking enabled, but terrain-resource does not contain mesh data")
 	
