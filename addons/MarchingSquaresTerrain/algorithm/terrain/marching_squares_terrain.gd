@@ -1578,6 +1578,11 @@ func _restore_runtime_texture_arrays_after_scene_save() -> void:
 
 func _ensure_default_texture_preset_bound() -> void:
 	if current_texture_preset != null:
+		# A 1.2.4 scene can deserialize its old preset successfully while its
+		# 1.3 texture_slots remain empty. Import the old 15-texture list once so
+		# the rebuilt meshes do not use the white placeholder layers.
+		if _needs_legacy_preset_texture_migration(current_texture_preset):
+			load_from_preset(current_texture_preset)
 		return
 	var default_preset := ResourceLoader.load(DEFAULT_TEXTURE_PRESET_PATH) as MarchingSquaresTexturePreset
 	if default_preset == null:
@@ -1585,6 +1590,20 @@ func _ensure_default_texture_preset_bound() -> void:
 		return
 	current_texture_preset = default_preset
 	load_from_preset(default_preset)
+
+
+func _needs_legacy_preset_texture_migration(preset: MarchingSquaresTexturePreset) -> bool:
+	if preset == null or preset.new_textures == null:
+		return false
+	if preset.new_textures.terrain_textures.size() < 15:
+		return false
+	for i in range(mini(MAX_TEXTURE_SLOTS, texture_slots.size())):
+		if texture_slots[i] != null and MarchingSquaresTerrainHelpers.is_valid_texture2d(texture_slots[i].texture):
+			return false
+	for legacy_tex in preset.new_textures.terrain_textures:
+		if MarchingSquaresTerrainHelpers.is_valid_texture2d(legacy_tex):
+			return true
+	return false
 
 
 func _is_default_empty_texture_preset(preset: MarchingSquaresTexturePreset) -> bool:
@@ -1787,8 +1806,9 @@ func _deferred_enter_tree() -> void:
 	
 	for chunk : MarchingSquaresTerrainChunk in chunks.values():
 		# Runtime regenerates immediately because generated mesh resources are ephemeral.
-		# Editor recovery is deferred below so scene reopen does not stall at "Reopening Scenes".
-		var regenerate_on_load := not EngineWrapper.instance.is_editor()
+		# The editor normally defers this, except for a legacy 1.2.4 mesh that the
+		# persistence loader explicitly discarded and must rebuild automatically.
+		var regenerate_on_load := not EngineWrapper.instance.is_editor() or chunk._legacy_mesh_rebuild_pending
 		chunk.initialize_terrain(regenerate_on_load)
 		if force_regen_for_wall_fixes:
 			chunk.regenerate_mesh(true)
