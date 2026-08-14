@@ -33,6 +33,7 @@ func apply_global_wind(material: ShaderMaterial) -> void:
 	material.set_shader_parameter("wind_gust_strength", terrain.wind_gust_strength)
 	material.set_shader_parameter("wind_gust_speed", terrain.wind_gust_speed)
 	material.set_shader_parameter("wind_mode", terrain.wind_mode)
+	material.set_shader_parameter("wind_tip_color", terrain.wind_tip_color)
 
 
 func get_flower_planter_material(planter) -> ShaderMaterial:
@@ -75,10 +76,24 @@ func sync_flower_wind_materials() -> void:
 func sync_wind_state(refresh_chunks: bool = true) -> void:
 	apply_global_wind(terrain.terrain_material)
 	if terrain.grass_mesh != null and terrain.grass_mesh.material is ShaderMaterial:
-		apply_global_wind(terrain.grass_mesh.material as ShaderMaterial)
+		apply_grass_wind_profile(terrain.grass_mesh.material as ShaderMaterial)
+	for chunk in terrain.chunks.values():
+		if chunk == null or not is_instance_valid(chunk) or chunk.grass_planter == null:
+			continue
+		var multimesh: MultiMesh = chunk.grass_planter.multimesh
+		if multimesh != null and multimesh.mesh != null and multimesh.mesh.material is ShaderMaterial:
+			apply_grass_wind_profile(multimesh.mesh.material as ShaderMaterial)
 	sync_flower_wind_materials()
 	if refresh_chunks and terrain.is_inside_tree():
 		terrain.refresh_chunk_surface_materials()
+
+
+func apply_grass_wind_profile(material: ShaderMaterial) -> void:
+	if material == null:
+		return
+	apply_global_wind(material)
+	material.set_shader_parameter("fps", terrain.animation_fps)
+	material.set_shader_parameter("animate_active", true)
 
 
 func sync_global_noise_to_grass() -> void:
@@ -91,15 +106,14 @@ func sync_global_noise_to_grass() -> void:
 	grass_mat.set_shader_parameter("chunk_size", terrain.dimensions)
 	grass_mat.set_shader_parameter("cell_size", terrain.cell_size)
 	grass_mat.set_shader_parameter("blade_variation", terrain.grass_random_scale)
-	grass_mat.set_shader_parameter("fps", terrain.animation_fps)
-	grass_mat.set_shader_parameter("animate_active", true)
+	apply_grass_wind_profile(grass_mat)
 	grass_mat.set_shader_parameter("vc_floor_tex_array", terrain._runtime_texture_array)
 	grass_mat.set_shader_parameter("use_floor_tex_array", terrain._runtime_texture_array != null)
 	for parameter_name in ["global_noise_scale", "global_noise_strength", "global_noise_scroll"]:
 		var value = terrain.terrain_material.get_shader_parameter(parameter_name)
 		if value != null:
 			grass_mat.set_shader_parameter(parameter_name, value)
-	apply_global_wind(grass_mat)
+	apply_grass_wind_profile(grass_mat)
 	sync_prefab_material_state()
 
 

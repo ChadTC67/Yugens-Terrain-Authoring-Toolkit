@@ -468,6 +468,11 @@ var _is_syncing_wind_state := false
 		wind_speed = clampf(float(value), 0.0, 1.0)
 		_sync_wind_state()
 
+@export var wind_tip_color : Color = Color(1.0, 1.0, 1.0, 0.0):
+	set(value):
+		wind_tip_color = value
+		_sync_wind_state()
+
 @export_custom(PROPERTY_HINT_RANGE, "0.0, 2.0, 0.01", PROPERTY_USAGE_STORAGE) var wind_strength : float = 1.0:
 	set(value):
 		wind_strength = clampf(float(value), 0.0, 2.0)
@@ -1297,6 +1302,7 @@ func _validate_property(property: Dictionary) -> void:
 		"overlay_effects",
 		"surface_effect_slot_count",
 		"overlay_effect_slot_count",
+		"wind_tip_color",
 	]:
 		property.usage = PROPERTY_USAGE_NO_EDITOR
 	if property.name in ["enable_runtime_texture_baking", "polygon_texture_resolution", "bake_material_override"]:
@@ -1834,6 +1840,10 @@ func _deferred_enter_tree() -> void:
 				child.rebuild_cell_data()
 				if child is MarchingSquaresFlowerPlanter:
 					child.regenerate_flowers()
+	# Runtime grass planters may have been created or hydrated during chunk
+	# initialization. Sync the live materials after that work, not only during
+	# terrain _init(), so editor wind settings are preserved at runtime.
+	_sync_global_noise_to_grass()
 	_sync_wind_state(false)
 	
 	_grass_regen_pending = false

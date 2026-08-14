@@ -53,6 +53,7 @@ group_uniforms;
 group_uniforms Animations.Settings;
 uniform bool animate_active = true;
 uniform float fps : hint_range(0.0, 30.0, 1.0) = 0.0;
+uniform vec4 wind_tip_color : source_color = vec4(1.0, 1.0, 1.0, 0.0);
 group_uniforms;
 
 group_uniforms Effects.Experimental;
@@ -95,6 +96,7 @@ varying float v_grass_wet_mask;
 varying flat int instance_id;
 varying float v_wind_perspective;
 varying float v_wind_tip_bend;
+varying float v_wind_amount;
 
 // ------------- Wind Choices --------------
 
@@ -402,6 +404,7 @@ void vertex() {
 	vec3 wind_world_offset = vec3(0.0);
 	float wind_perspective = 0.0;
 	float wind_tip_bend = 0.0;
+	float wind_amount_for_color = 0.0;
 	// Animation FPS steps the shared wind sample clock. 0 = no frames / no motion.
 	if (animate_active && scaled_local.y > 0.0 && fps > 0.0) {
 		float bend_factor = clamp(scaled_local.y / max(sloty, 0.0001), 0.0, 1.0);
@@ -412,6 +415,7 @@ void vertex() {
 		float stepped_time = floor((TIME + seed) * fps) / fps;
 		vec2 wind_vec = mst_sample_wind_vector_at_time(instance_origin.xz, seed, stepped_time);
 		float wind_amount = length(wind_vec);
+		wind_amount_for_color = wind_amount;
 		vec2 wind_dir = (wind_amount > 0.0001) ? (wind_vec / wind_amount) : vec2(0.0, 0.0);
 		vec2 cross_dir = vec2(-wind_dir.y, wind_dir.x);
 		float flutter = sin(
@@ -474,6 +478,7 @@ void vertex() {
 	v_grass_wet_mask = 0.0;
 	v_wind_perspective = wind_perspective;
 	v_wind_tip_bend = wind_tip_bend;
+	v_wind_amount = wind_amount_for_color;
 	if (_palette_wet_enabled(slot) > 0.5) {
 		float top_half_mask = smoothstep(0.70, 0.98, 1.0 - UV.y);
 		v_grass_wet_mask = clamp(_palette_grass_wetness(slot), 0.0, 1.0) * top_half_mask;
@@ -521,6 +526,14 @@ void fragment() {
 	}
 
 	ALBEDO = grass_color;
+	// Highlight only the upper blade tips during the strongest wind samples.
+	// The color alpha controls the effect opacity, so a translucent white can
+	// be used as a subtle light-catching wind cue.
+	// Restrict the tint to the upper 30% of the blade. Wind deformation still
+	// affects the full blade independently of this visual highlight.
+	float wind_color_tip_mask = smoothstep(0.70, 1.0, 1.0 - grass_uv.y);
+	float wind_strength_mask = smoothstep(0.18, 0.75, v_wind_amount) * wind_color_tip_mask;
+	ALBEDO = mix(ALBEDO, wind_tip_color.rgb, wind_strength_mask * wind_tip_color.a);
 
 	vec3 floor_noise = _palette_floor_noise_settings(slot);
 	float floor_noise_strength = clamp(floor_noise.r, 0.0, 1.0) * step(0.5, floor_noise.b);

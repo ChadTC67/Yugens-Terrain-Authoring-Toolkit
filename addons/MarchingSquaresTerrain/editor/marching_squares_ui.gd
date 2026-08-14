@@ -406,6 +406,9 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 			terrain.wind_direction_degrees = float(p_value)
 		"wind_speed":
 			terrain.wind_speed = float(p_value)
+		"wind_tip_color":
+			if p_value is Color:
+				terrain.wind_tip_color = p_value
 		"wind_strength":
 			terrain.wind_strength = float(p_value)
 		"wind_scale":
@@ -430,6 +433,12 @@ func _on_terrain_setting_changed(p_setting_name: String, p_value: Variant) -> vo
 					terrain.prefab_set = p_value
 			elif p_value == null:
 				terrain.prefab_set = null
+
+	# Tool-panel settings are assigned directly to the live node rather than
+	# through the Inspector, so explicitly mark the scene dirty. Without this,
+	# wind/FPS can appear in the editor but runtime reloads the old defaults.
+	if terrain != null and Engine.is_editor_hint():
+		EditorInterface.mark_scene_as_unsaved()
 
 
 func _on_texture_setting_changed(p_setting_name: String, p_value: Variant) -> void:
