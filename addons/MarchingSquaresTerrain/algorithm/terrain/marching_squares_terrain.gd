@@ -105,6 +105,9 @@ var _data_directory : String = ""
 @export_category("Performance")
 ## Number of worker threads used when generating terrain cells concurrently.
 @export_range(1, 8, 1) var terrain_generation_threads: int = 4
+## Main-thread time budget used while publishing deferred mesh tiles.
+## Keeping this small prevents large batch builds from freezing the editor.
+@export_range(1.0, 33.0, 1.0, "suffix: ms") var initial_mesh_tile_budget_msec: float = 8.0
 
 @export_category("Texture Arrays")
 # ---------------- Texture2DArray baking / library ----------------
@@ -994,6 +997,7 @@ var chunks : Dictionary = {}
 var collision_triangle_count_debug: int = 0
 var _visibility_detail_settings_dirty := true
 var _grass_random_scale_apply_queued := false
+var _batch_chunk_creation_in_progress := false
 var navmesh_painting_enabled : bool = false
 const POST_PROCESS_SLOT_COUNT := 5
 @export_storage var surface_effects : Array[Resource] = []
@@ -1902,7 +1906,7 @@ func has_chunk(x: int, z: int) -> bool:
 	return chunks.has(Vector2i(x, z))
 
 
-func add_new_chunk(chunk_x: int, chunk_z: int, plugin):
+func add_new_chunk(chunk_x: int, chunk_z: int, plugin, regenerate_mesh: bool = true):
 	var chunk_coords := Vector2i(chunk_x, chunk_z)
 	var new_chunk := MarchingSquaresTerrainChunk.new()
 	new_chunk.name = "Chunk "+str(chunk_coords)
@@ -1950,8 +1954,58 @@ func add_new_chunk(chunk_x: int, chunk_z: int, plugin):
 	
 		plugin.draw_pattern(self) # Apply the current selected quick paint after seam heights are finalized
 		plugin.current_draw_pattern.clear()
-	else:
+	elif regenerate_mesh:
 		new_chunk.regenerate_mesh()
+
+
+## Adds missing chunks in a rectangle, yielding between chunks so the editor
+## remains responsive and mesh generation does not start for the whole batch at once.
+func add_chunk_batch(start_coords: Vector2i, size: Vector2i, plugin) -> void:
+	if _batch_chunk_creation_in_progress:
+		push_warning("[MST] A batch chunk creation is already in progress.")
+		return
+	if size.x <= 0 or size.y <= 0:
+		return
+	_batch_chunk_creation_in_progress = true
+	_add_chunk_batch_deferred(start_coords, size, plugin)
+
+
+func _add_chunk_batch_deferred(start_coords: Vector2i, size: Vector2i, plugin) -> void:
+	var created := 0
+	var skipped := 0
+	var active_builds: Array[MarchingSquaresTerrainChunk] = []
+	# Four background builds reduce total batch time while leaving enough CPU
+	# headroom for Godot's editor and avoiding one worker per chunk.
+	const MAX_ACTIVE_BUILDS := 4
+	for z in range(start_coords.y, start_coords.y + size.y):
+		for x in range(start_coords.x, start_coords.x + size.x):
+			var coords := Vector2i(x, z)
+			if chunks.has(coords):
+				skipped += 1
+				continue
+			add_new_chunk(x, z, plugin, false)
+			created += 1
+			var chunk := chunks.get(coords) as MarchingSquaresTerrainChunk
+			if chunk != null:
+				# Build cells on the chunk's background thread. The publication path
+				# is frame-budgeted, and limiting concurrency avoids oversubscribing
+				# the editor when a large rectangle is selected.
+				chunk.begin_deferred_initial_build()
+				active_builds.append(chunk)
+			while active_builds.size() >= MAX_ACTIVE_BUILDS:
+				await get_tree().process_frame
+				for active_chunk in active_builds.duplicate():
+					if not is_instance_valid(active_chunk) or not active_chunk._initial_build_pending:
+						active_builds.erase(active_chunk)
+	while not active_builds.is_empty():
+		await get_tree().process_frame
+		for active_chunk in active_builds.duplicate():
+			if not is_instance_valid(active_chunk) or not active_chunk._initial_build_pending:
+				active_builds.erase(active_chunk)
+	_batch_chunk_creation_in_progress = false
+	print("[MST] Batch chunk creation complete: created=%d skipped=%d" % [created, skipped])
+	if plugin != null and is_instance_valid(plugin) and plugin.ui != null:
+		plugin.ui.tool_attributes.show_tool_attributes(plugin.TerrainToolMode.CHUNK_MANAGEMENT)
 
 
 func remove_chunk(x: int, z: int, plugin):

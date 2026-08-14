@@ -290,6 +290,10 @@ var last_bridge_point : Vector3
 
 # True if the mouse is currently held down to draw
 var is_drawing : bool
+var chunk_batch_dragging := false
+var chunk_batch_drag_removing := false
+var chunk_batch_drag_start := Vector2i.ZERO
+var chunk_batch_drag_end := Vector2i.ZERO
 
 # When the brush draws, if the gizmo sees the draw height is not set, it will set the draw height
 var draw_height_set : bool
@@ -867,43 +871,64 @@ func handle_mouse(camera: Camera3D, event: InputEvent) -> int:
 		
 		current_hovered_chunk = chunk_coords
 		is_chunk_plane_hovered = true
+		if chunk_batch_dragging:
+			chunk_batch_drag_end = chunk_coords
 		if mode == TerrainToolMode.CHUNK_MANAGEMENT and chunk != null:
 			selected_chunk = chunk
 			if ui != null and ui.tool_attributes != null:
 				ui.tool_attributes.selected_chunk = chunk
 		
-		# On click, add or remove chunk if in chunk_management mode
-		if mode == TerrainToolMode.CHUNK_MANAGEMENT and event is InputEventMouseButton and event.is_pressed() and event.button_index == MouseButton.MOUSE_BUTTON_LEFT:
-			# Early return for height selecting.
-			if Input.is_key_pressed(KEY_CTRL):
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			
-			# Select chunk
-			if Input.is_key_pressed(KEY_ALT):
-				selected_chunk = terrain.chunks.get(current_hovered_chunk)
-				ui.tool_attributes.show_tool_attributes(TerrainToolMode.CHUNK_MANAGEMENT)
-				ui.tool_attributes.selected_chunk = selected_chunk
-			
-			# Remove chunk
-			elif chunk:
-				var removed_chunk = terrain.chunks[chunk_coords]
-				get_undo_redo().create_action("remove chunk")
-				get_undo_redo().add_do_method(terrain, "remove_chunk_from_tree", chunk_x, chunk_z, self)
-				get_undo_redo().add_undo_method(terrain, "add_chunk", chunk_coords, removed_chunk, self)
-				get_undo_redo().commit_action()
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			
-			# Add new chunk
-			elif not chunk:
-				# Can add a new chunk here if there is a neighbouring non-empty chunk
-				# Also add if there are no chunks at all in the current terrain system
-				var can_add_empty : bool = terrain.chunks.is_empty() or terrain.has_chunk(chunk_x-1, chunk_z) or terrain.has_chunk(chunk_x+1, chunk_z) or terrain.has_chunk(chunk_x, chunk_z-1) or terrain.has_chunk(chunk_x, chunk_z+1)
-				if can_add_empty:
-					get_undo_redo().create_action("add chunk")
-					get_undo_redo().add_do_method(terrain, "add_new_chunk", chunk_x, chunk_z, self)
-					get_undo_redo().add_undo_method(terrain, "remove_chunk", chunk_x, chunk_z, self)
+		# Physical click-drag fill for chunk management. Ctrl and Alt retain
+		# their existing shortcuts and do not start a batch selection.
+		if mode == TerrainToolMode.CHUNK_MANAGEMENT and event is InputEventMouseButton and event.button_index == MouseButton.MOUSE_BUTTON_LEFT and event.is_pressed() and not Input.is_key_pressed(KEY_CTRL) and not Input.is_key_pressed(KEY_ALT):
+			chunk_batch_dragging = true
+			chunk_batch_drag_removing = terrain.chunks.has(chunk_coords)
+			chunk_batch_drag_start = chunk_coords
+			chunk_batch_drag_end = chunk_coords
+			gizmo_plugin.trigger_redraw(terrain)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+		if mode == TerrainToolMode.CHUNK_MANAGEMENT and event is InputEventMouseButton and event.button_index == MouseButton.MOUSE_BUTTON_LEFT and not event.is_pressed() and chunk_batch_dragging:
+			chunk_batch_dragging = false
+			chunk_batch_drag_end = chunk_coords
+			var min_coords := Vector2i(mini(chunk_batch_drag_start.x, chunk_batch_drag_end.x), mini(chunk_batch_drag_start.y, chunk_batch_drag_end.y))
+			var max_coords := Vector2i(maxi(chunk_batch_drag_start.x, chunk_batch_drag_end.x), maxi(chunk_batch_drag_start.y, chunk_batch_drag_end.y))
+			var selection_size := max_coords - min_coords + Vector2i.ONE
+			if selection_size == Vector2i.ONE:
+				if chunk:
+					var removed_chunk = terrain.chunks[chunk_coords]
+					get_undo_redo().create_action("remove chunk")
+					get_undo_redo().add_do_method(terrain, "remove_chunk_from_tree", chunk_x, chunk_z, self)
+					get_undo_redo().add_undo_method(terrain, "add_chunk", chunk_coords, removed_chunk, self)
 					get_undo_redo().commit_action()
-					return EditorPlugin.AFTER_GUI_INPUT_STOP
+				else:
+					var can_add_empty : bool = terrain.chunks.is_empty() or terrain.has_chunk(chunk_x-1, chunk_z) or terrain.has_chunk(chunk_x+1, chunk_z) or terrain.has_chunk(chunk_x, chunk_z-1) or terrain.has_chunk(chunk_x, chunk_z+1)
+					if can_add_empty:
+						get_undo_redo().create_action("add chunk")
+						get_undo_redo().add_do_method(terrain, "add_new_chunk", chunk_x, chunk_z, self)
+						get_undo_redo().add_undo_method(terrain, "remove_chunk", chunk_x, chunk_z, self)
+						get_undo_redo().commit_action()
+			elif chunk_batch_drag_removing:
+				var remove_action := "remove chunk area"
+				get_undo_redo().create_action(remove_action)
+				for area_z in range(min_coords.y, max_coords.y + 1):
+					for area_x in range(min_coords.x, max_coords.x + 1):
+						var area_coords := Vector2i(area_x, area_z)
+						var existing_chunk = terrain.chunks.get(area_coords)
+						if existing_chunk == null:
+							continue
+						get_undo_redo().add_do_method(terrain, "remove_chunk_from_tree", area_coords.x, area_coords.y, self)
+						get_undo_redo().add_undo_method(terrain, "add_chunk", area_coords, existing_chunk, self)
+				get_undo_redo().commit_action()
+			else:
+				terrain.add_chunk_batch(min_coords, selection_size, self)
+			gizmo_plugin.trigger_redraw(terrain)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+		if mode == TerrainToolMode.CHUNK_MANAGEMENT and event is InputEventMouseButton and event.is_pressed() and event.button_index == MouseButton.MOUSE_BUTTON_LEFT and Input.is_key_pressed(KEY_ALT):
+			selected_chunk = terrain.chunks.get(current_hovered_chunk)
+			ui.tool_attributes.show_tool_attributes(TerrainToolMode.CHUNK_MANAGEMENT)
+			ui.tool_attributes.selected_chunk = selected_chunk
 		
 		gizmo_plugin.trigger_redraw(terrain)
 	else:

@@ -79,6 +79,9 @@ func _redraw():
 			try_add_chunk(terrain_system, chunks, Vector2i(chunk_coords.x, chunk_coords.y-1))
 			try_add_chunk(terrain_system, chunks, Vector2i(chunk_coords.x, chunk_coords.y+1))
 			try_add_chunk(terrain_system, chunks, chunk_coords)
+	if terrain_plugin.mode == terrain_plugin.TerrainToolMode.CHUNK_MANAGEMENT and terrain_plugin.chunk_batch_dragging:
+		var selection_material := removechunk_material if terrain_plugin.chunk_batch_drag_removing else addchunk_material
+		add_chunk_selection_lines(terrain_system, terrain_plugin.chunk_batch_drag_start, terrain_plugin.chunk_batch_drag_end, selection_material)
 	
 	var pos : Vector3 = terrain_plugin.brush_position
 	var cursor_chunk_coords : Vector2i
@@ -527,4 +530,22 @@ func add_chunk_lines(terrain_system, chunks: Dictionary, coords: Vector2i, mater
 		lines.append(Vector3(lerp(x, dx, 0.25), 0, lerp(z, dz, 0.75)))
 		lines.append(Vector3(lerp(x, dx, 0.75), 0, lerp(z, dz, 0.75)))
 	
+	add_lines(lines, material, false)
+
+
+func add_chunk_selection_lines(terrain_system, start_coords: Vector2i, end_coords: Vector2i, material: Material) -> void:
+	var dims: Vector3i = terrain_system.get("dimensions")
+	var cell_size: Vector2 = terrain_system.get("cell_size")
+	var min_coords := Vector2i(mini(start_coords.x, end_coords.x), mini(start_coords.y, end_coords.y))
+	var max_coords := Vector2i(maxi(start_coords.x, end_coords.x), maxi(start_coords.y, end_coords.y))
+	var chunk_width := float(dims.x - 1) * cell_size.x
+	var chunk_depth := float(dims.z - 1) * cell_size.y
+	var x0 := float(min_coords.x) * chunk_width
+	var z0 := float(min_coords.y) * chunk_depth
+	var x1 := float(max_coords.x + 1) * chunk_width
+	var z1 := float(max_coords.y + 1) * chunk_depth
+	lines.append(Vector3(x0, 0, z0)); lines.append(Vector3(x1, 0, z0))
+	lines.append(Vector3(x1, 0, z0)); lines.append(Vector3(x1, 0, z1))
+	lines.append(Vector3(x1, 0, z1)); lines.append(Vector3(x0, 0, z1))
+	lines.append(Vector3(x0, 0, z1)); lines.append(Vector3(x0, 0, z0))
 	add_lines(lines, material, false)
