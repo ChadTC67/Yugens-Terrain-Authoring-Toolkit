@@ -106,7 +106,15 @@ void vertex() {
 	vec3 cam_x = normalize(cross(cam_y, cam_z));
 	mat3 spherical_billboard = mat3(cam_x, cam_y, cam_z);
 
-	vec3 billboarded_vertex = spherical_billboard * VERTEX;
+	// Manual billboarding replaces MODEL_MATRIX's basis, so preserve its scale
+	// explicitly. This keeps grass matched to a scaled terrain parent while still
+	// making each sprite face the camera.
+	vec3 model_scale = vec3(
+		length(MODEL_MATRIX[0].xyz),
+		length(MODEL_MATRIX[1].xyz),
+		length(MODEL_MATRIX[2].xyz)
+	);
+	vec3 billboarded_vertex = spherical_billboard * (VERTEX * model_scale);
 
 	vec3 instance_origin = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	vec3 world_position = instance_origin + billboarded_vertex;

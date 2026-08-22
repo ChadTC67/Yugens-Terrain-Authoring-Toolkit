@@ -5,6 +5,7 @@ class_name MarchingSquaresGrassPlanter
 
 # Alpha values for grass sprites by texture ID (1-6)
 const GRASS_ALPHA_VALUES := [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+const HIDDEN_GRASS_POSITION := Vector3(0.0, -1000.0, 0.0)
 
 var _chunk : MarchingSquaresTerrainChunk
 var terrain_system : MarchingSquaresTerrain
@@ -334,8 +335,14 @@ func _create_grass_instance(index: int, world_pos: Vector3, a: Vector3, b: Vecto
 	multimesh.set_instance_custom_data(index, instance_color)
 
 
-## Hides a grass instance by scaling it to zero.
+## Hides a grass instance below the local terrain with an invertible transform.
+## A zero-scale basis is invalid in Godot and can leave instances rendered at the
+## MultiMesh origin, especially when the terrain parent is moved or scaled.
 func _hide_grass_instance(index: int) -> void:
-	multimesh.set_instance_transform(index, Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO))
+	multimesh.set_instance_transform(index, _get_hidden_grass_transform())
+
+
+static func _get_hidden_grass_transform() -> Transform3D:
+	return Transform3D(Basis.IDENTITY, HIDDEN_GRASS_POSITION)
 
 #endregion
